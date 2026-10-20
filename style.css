@@ -1,0 +1,155 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #05050a;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+/* panel de archivos y transporte (el panel de sliders lo dibuja Tweakpane aparte) */
+#ui {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 10;
+  background: rgba(10, 10, 16, 0.55);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #eee;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 280px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.fileBtn,
+button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #eee;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fileBtn:hover,
+button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+#status {
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+#recInfo {
+  opacity: 0.55;
+  font-size: 10px;
+}
+
+#recBtn.recording {
+  background: rgba(220, 40, 60, 0.35);
+  border-color: rgba(255, 90, 110, 0.8);
+}
+
+/* el panel de sliders (Tweakpane) es más alto que la pantalla cuando hay
+   carpetas abiertas: se le da scroll propio para poder llegar a todo */
+.tp-dfwv {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tp-dfwv::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tp-dfwv::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+}
+
+.mediaListTitle {
+  font-size: 10px;
+  opacity: 0.55;
+  margin-top: 2px;
+}
+
+.mediaList {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  max-width: 260px;
+  padding-bottom: 2px;
+}
+
+.mediaChip {
+  position: relative;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 40px;
+  border-radius: 6px;
+  background-color: #1c1c26;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  overflow: hidden;
+}
+
+.mediaChip:active {
+  cursor: grabbing;
+}
+
+.mediaChip.active {
+  border-color: #7ecbff;
+  box-shadow: 0 0 0 1px #7ecbff;
+}
+
+.mediaChip .chipLabel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 8px;
+  line-height: 1.4;
+  padding: 0 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* se prende cuando estás arrastrando una miniatura por encima del canvas */
+#stage.dropping {
+  outline: 3px dashed rgba(255, 255, 255, 0.5);
+  outline-offset: -10px;
+}

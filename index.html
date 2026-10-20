@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visualizador de sonido</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <div id="ui">
+    <div class="row">
+      <label class="fileBtn">
+        Cargar audio(s)
+        <input type="file" id="audioInput" accept="audio/*" multiple hidden />
+      </label>
+      <button id="playBtn">Reproducir</button>
+    </div>
+    <div class="row">
+      <label class="fileBtn">
+        Cargar video(s)
+        <input type="file" id="videoInput" accept="video/*" multiple hidden />
+      </label>
+      <button id="prevVideo">◀</button>
+      <button id="nextVideo">▶</button>
+    </div>
+    <div class="row">
+      <button id="recBtn">● Grabar</button>
+      <span id="recInfo">sin mouse ni panel en el video</span>
+    </div>
+    <div id="status">Sin archivos cargados todavía</div>
+
+    <div class="mediaListTitle">Audios (arrastrá al centro para activar)</div>
+    <div id="audioList" class="mediaList"></div>
+
+    <div class="mediaListTitle">Videos (arrastrá al centro para activar)</div>
+    <div id="videoList" class="mediaList"></div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
