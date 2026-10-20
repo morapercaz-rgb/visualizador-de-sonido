@@ -136,7 +136,8 @@ export function createDefaultParams() {
     echoLag: 0.6, // retraso de cada copia respecto a la anterior (0 = rígidas, cerca de 1 = muy fluidas)
     echoFollowMove: true, // la cola se acomoda detrás de la dirección del movimiento
     echoReturn: 0, // 0 = la cola se queda donde la dejó; más = vuelve al ángulo fijo
-    echoTurn: 0.12, // qué tan rápido gira la cola para acomodarse
+    echoTurn: 0.06, // qué tan rápido gira la cola para acomodarse (bajo = gira de a poco)
+    echoSpin: 0, // giro propio de la cola (°/seg); 0 = no gira sola
     echoStyle: "fill",
     echoOpacity: 1,
 
@@ -406,6 +407,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   echoesF.addInput(params, "echoFollowMove", { label: "cola detrás del movimiento" });
   echoesF.addInput(params, "echoTurn", { min: 0.02, max: 0.5, label: "qué tan rápido gira la cola" });
   echoesF.addInput(params, "echoReturn", { min: 0, max: 1, label: "volver al ángulo fijo" });
+  echoesF.addInput(params, "echoSpin", { min: -360, max: 360, label: "giro de la cola (°/seg)" });
   echoesF.addInput(params, "echoStyle", { options: STYLE, label: "estilo" });
   echoesF.addInput(params, "echoOpacity", { min: 0, max: 1, label: "opacidad" });
 

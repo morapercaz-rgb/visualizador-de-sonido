@@ -43,7 +43,9 @@ Cada conjunto tiene su propia transformación (carpetas "Transformar y mover", "
 
 ## Ecos de aura: la cola sigue el movimiento
 
-Con "cola detrás del movimiento" (carpeta "Copias (ecos de aura)"), la fila de copias chicas se acomoda **detrás de la dirección en que movés la copia grande**, como la cola de un cometa, y **se queda ahí** cuando frenás. "qué tan rápido gira la cola" regula cuánto tarda en acomodarse; "volver al ángulo fijo" (en 0 no vuelve nunca) hace que regrese sola al ángulo de "dirección (ecos)". Apagando "cola detrás del movimiento", la fila apunta siempre al ángulo fijo.
+**La copia grande está anclada a tu mouse:** el punto que agarrás es siempre el centro del movimiento y no se corre aunque la cola gire; la cola gira *alrededor* de la copia grande, no al revés.
+
+Con "cola detrás del movimiento" (carpeta "Copias (ecos de aura)"), la fila de copias chicas se acomoda **detrás de la dirección en que movés la copia grande**, como la cola de un cometa, y **se queda ahí** cuando frenás. Solo reacciona a movimientos claros y gira de a poco; "qué tan rápido gira la cola" regula cuánto tarda en acomodarse (más bajo = más suave). "volver al ángulo fijo" (en 0 no vuelve nunca) hace que regrese sola al ángulo de "dirección (ecos)". Apagando "cola detrás del movimiento", la fila apunta siempre al ángulo fijo. **La cola no gira sola**; si querés que gire, "giro de la cola (°/seg)" (en 0 por defecto) la hace girar alrededor de la copia grande. La "rotación" de "Formas generativas" ya no afecta a los ecos.
 
 ## Lienzo, grabación y exportación
 

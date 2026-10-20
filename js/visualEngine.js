@@ -55,13 +55,20 @@ export class VisualEngine {
     // anterior con retraso (ver drawEchoes)
     this.echoChain = [];
     this.echoDir = null; // hacia dónde apunta la fila de ecos ahora (radianes)
+    this.echoSpin = 0; // cuánto giró la cola por su cuenta (radianes), ver params.echoSpin
   }
 
   // dónde está el centro de la pieza ahora (con lo que el usuario la corrió).
   // Lo usa scene.js para que "girar sobre su propio eje" gire alrededor de ESTE punto.
   pieceCenter(w, h, params) {
-    const moves = MOVABLE_MODES.has(params.visualMode) || params.visualMode === "echoes";
-    return moves ? { x: w / 2 + this.centerOffset.x, y: h / 2 + this.centerOffset.y } : { x: w / 2, y: h / 2 };
+    if (params.visualMode === "echoes") {
+      // en los ecos el "centro" es la copia grande
+      const b = echoHeadBase(w, h, params);
+      return { x: b.x + this.centerOffset.x, y: b.y + this.centerOffset.y };
+    }
+    return MOVABLE_MODES.has(params.visualMode)
+      ? { x: w / 2 + this.centerOffset.x, y: h / 2 + this.centerOffset.y }
+      : { x: w / 2, y: h / 2 };
   }
 
   draw(ctx, w, h, audioData, params, dt = 0.016) {
@@ -258,6 +265,7 @@ export class VisualEngine {
     this.lights = []; // las luces del aura de colores vuelven a arrancar juntas
     this.echoChain = []; // las copias de los ecos vuelven a ponerse en fila
     this.echoDir = null;
+    this.echoSpin = 0;
   }
 
   // dónde tiene que estar el núcleo "a" o "b" (en coordenadas de la pieza).
@@ -992,6 +1000,16 @@ function blobPath(ctx, x, y, R, spectrum, time, wobble, phase) {
   ctx.closePath();
 }
 
+// dónde está la copia grande de los ecos cuando nadie la movió: un poco al
+// costado del centro de la pantalla (del lado contrario al ángulo fijo), para
+// que la pieza entera quede más o menos centrada. No depende del audio ni de
+// hacia dónde apunte la cola.
+function echoHeadBase(w, h, params) {
+  const a = (params.echoAngle * Math.PI) / 180;
+  const d = Math.min(w, h) * 0.9 * 0.7 * 0.4;
+  return { x: w / 2 - Math.cos(a) * d, y: h / 2 - Math.sin(a) * d };
+}
+
 // ecos de aura: una forma grande con degradado que se repite hacia un lado,
 // cada copia más chica y más tenue, como la estela de una luz que se mueve.
 // La forma puede ser mancha blanda, medio círculo o círculo (params.echoShape).
@@ -1003,24 +1021,31 @@ function blobPath(ctx, x, y, R, spectrum, time, wobble, phase) {
 // demás llegan una después de otra, como una cola que se arrastra, en vez de
 // moverse todas juntas y duras. Con echoLag en 0 vuelven a moverse rígidas.
 function drawEchoes(ctx, w, h, audioData, params, time, engine) {
-  // el centro incluye cuánto se corrió la pieza (acá no se mueve con un
-  // translate del canvas: el corrimiento entra por la copia principal, y las
-  // demás lo reciben tarde)
-  const cx = w / 2 + engine.centerOffset.x;
-  const cy = h / 2 + engine.centerOffset.y;
+  // LA COPIA GRANDE ESTÁ ANCLADA: queda siempre en el mismo punto (más lo que
+  // la hayas arrastrado), sin importar hacia dónde apunte la cola. Si gira la
+  // cola, gira ALREDEDOR de la copia grande; la copia grande no se corre. Así
+  // el punto que agarrás con el mouse es siempre el centro del movimiento.
+  const base = echoHeadBase(w, h, params);
+  const hx = base.x + engine.centerOffset.x;
+  const hy = base.y + engine.centerOffset.y;
   const n = Math.max(2, Math.round(params.echoCount));
   const baseR = params.baseRadius * 0.5 + 20 + audioData.bass * params.bassReactivity * 90;
-  const baseAngle = (params.echoAngle * Math.PI) / 180 + time * params.rotationSpeed * 0.3;
 
-  // Hacia dónde apunta la fila de ecos. Con "los ecos siguen el movimiento" la
-  // cola se acomoda DETRÁS de la dirección en que se mueve la copia principal
-  // (como la cola de un cometa) y se queda ahí cuando frenás; solo vuelve al
-  // ángulo fijo si "volver al ángulo fijo" es mayor que 0. Sin esa opción,
-  // la fila apunta siempre al ángulo fijo.
+  // giro propio de la cola (°/seg): por defecto 0, o sea que no gira sola
+  const spinStep = (params.echoSpin * Math.PI * 0.016 * engine.k) / 180;
+  engine.echoSpin += spinStep;
+  const baseAngle = (params.echoAngle * Math.PI) / 180 + engine.echoSpin;
+
+  // Hacia dónde apunta la fila de ecos. Con "cola detrás del movimiento" la
+  // cola se acomoda DETRÁS de la dirección en que movés la copia grande (como
+  // la cola de un cometa) y se queda ahí cuando frenás; solo vuelve al ángulo
+  // fijo si "volver al ángulo fijo" es mayor que 0. Sin esa opción, la fila
+  // apunta siempre al ángulo fijo. Solo reacciona a movimientos claros (no a
+  // temblores chicos del mouse) y gira de a poco, para que no se sacuda.
   if (!params.echoFollowMove || engine.echoDir === null) engine.echoDir = baseAngle;
   if (params.echoFollowMove) {
     const vx = engine.centerOffset.vx, vy = engine.centerOffset.vy;
-    const moving = Math.hypot(vx, vy) > 0.5;
+    const moving = Math.hypot(vx, vy) > 1;
     const target = moving ? Math.atan2(-vy, -vx) : params.echoReturn > 0 ? baseAngle : null;
     if (target !== null) {
       let d = target - engine.echoDir;
@@ -1029,17 +1054,18 @@ function drawEchoes(ctx, w, h, audioData, params, time, engine) {
       const rate = moving ? params.echoTurn : params.echoReturn * 0.1;
       engine.echoDir += d * (1 - Math.pow(1 - Math.min(0.95, rate), engine.k));
     }
-    engine.echoDir += params.rotationSpeed * 0.3 * 0.016 * engine.k; // la rotación sigue andando
+    engine.echoDir += spinStep;
   }
   const angle = engine.echoDir;
   const ux = Math.cos(angle), uy = Math.sin(angle);
   const reach = Math.min(w, h) * 0.9 * (0.7 + audioData.mid * params.midReactivity * 0.5);
 
-  // dónde le tocaría a cada copia si todas se movieran juntas (la fila rígida)
+  // dónde le tocaría a cada copia si todas se movieran juntas (la fila rígida,
+  // saliendo de la copia grande hacia donde apunte la cola)
   const ideal = [];
   for (let k = 0; k < n; k++) {
-    const dist = reach * Math.pow(k / n, 1.15) - reach * 0.4;
-    ideal.push({ x: cx + ux * dist, y: cy + uy * dist });
+    const dist = reach * Math.pow(k / n, 1.15);
+    ideal.push({ x: hx + ux * dist, y: hy + uy * dist });
   }
 
   // la cadena: la principal va directo a su lugar; cada una de las otras
