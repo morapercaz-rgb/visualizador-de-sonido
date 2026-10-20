@@ -7,16 +7,13 @@ import { VideoLayer } from "./videoLayer.js";
 import { Scene } from "./scene.js";
 import { createControls, createDefaultParams, getOpenState } from "./controls.js";
 import { ScreenRecorder } from "./recorder.js";
+import { exportPngSequence } from "./exporter.js";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
 
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resize);
-resize();
+const recorder = new ScreenRecorder();
+let exporting = false; // mientras se exporta la secuencia de PNG, el dibujo en vivo se pausa
 
 const audio = new AudioEngine();
 const videoLayer = new VideoLayer();
@@ -37,7 +34,8 @@ function buildPanel() {
     scrollTop = document.querySelector(".tp-dfwv")?.scrollTop ?? 0;
     pane.dispose();
   }
-  pane = createControls({
+  ({ pane } = createControls({
+    scene,
     conjunto: scene.selected,
     conjuntos: scene.conjuntos,
     globalParams,
@@ -47,17 +45,60 @@ function buildPanel() {
     actions: {
       resetPiece: () => scene.selected.engine.resetPiece(),
       rebuild: () => setTimeout(buildPanel, 0),
+      refreshPanel: () => pane.refresh(),
+      applyCanvas: () => applyCanvasSize(),
+      exportPng: () => startPngExport(),
       selectSet: (id) => { scene.select(id); setTimeout(buildPanel, 0); },
       addSet: () => { scene.add(); setTimeout(buildPanel, 0); },
       duplicateSet: () => { scene.duplicate(); setTimeout(buildPanel, 0); },
       removeSet: () => { scene.remove(); setTimeout(buildPanel, 0); },
       bringToFront: () => { scene.bringToFront(); setTimeout(buildPanel, 0); },
+      addKey: () => { scene.addKey(); setTimeout(buildPanel, 0); },
+      removeKey: () => { scene.removeKey(); setTimeout(buildPanel, 0); },
+      clearKeys: () => { scene.clearKeys(); setTimeout(buildPanel, 0); },
     },
-  });
+  }));
   const root = document.querySelector(".tp-dfwv");
   if (root) root.scrollTop = scrollTop;
 }
 buildPanel();
+
+// ---------- tamaño del lienzo ----------
+// El canvas tiene un tamaño fijo (el de la "composición": es lo que se graba y
+// se exporta) y se MUESTRA achicado para que entre en la ventana. Con el
+// preset "ventana" el tamaño sigue al de la ventana, como antes.
+let pendingResize = false;
+function applyCanvasSize() {
+  if (recorder.isRecording || exporting) {
+    pendingResize = true; // se aplica apenas termine, para no romper el video
+    recInfo.textContent = "el nuevo tamaño se aplica cuando termine de grabar";
+    return;
+  }
+  const g = globalParams;
+  let W = window.innerWidth, H = window.innerHeight;
+  if (g.canvasPreset !== "window") {
+    W = Math.min(7680, Math.max(64, Math.round(g.canvasW)));
+    H = Math.min(4320, Math.max(64, Math.round(g.canvasH)));
+  }
+  W -= W % 2; // el video H.264 necesita medidas pares
+  H -= H % 2;
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width = W;
+    canvas.height = H;
+  }
+  const fit = g.canvasPreset === "window" ? 1 : Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = `${W * fit}px`;
+  canvas.style.height = `${H * fit}px`;
+  canvas.classList.toggle("artboard", g.canvasPreset !== "window");
+}
+window.addEventListener("resize", applyCanvasSize);
+applyCanvasSize();
+
+// el mouse viene en píxeles de la ventana; el dibujo está en píxeles del lienzo
+function toCanvas(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: ((e.clientX - r.left) * canvas.width) / r.width, y: ((e.clientY - r.top) * canvas.height) / r.height };
+}
 
 const audioInput = document.getElementById("audioInput");
 const videoInput = document.getElementById("videoInput");
@@ -156,28 +197,91 @@ playBtn.addEventListener("click", () => {
 });
 
 // grabación: graba el canvas (sin mouse ni paneles) y al detener descarga el video
-const recorder = new ScreenRecorder();
 const recBtn = document.getElementById("recBtn");
 const recInfo = document.getElementById("recInfo");
 let recTimer = null;
+let exportCancel = false;
 
 recBtn.addEventListener("click", () => {
+  if (exporting) {
+    exportCancel = true;
+    return;
+  }
   if (recorder.isRecording) {
     recorder.stop();
     clearInterval(recTimer);
     recBtn.classList.remove("recording");
     recBtn.textContent = "● Grabar";
     recInfo.textContent = "listo: se descargó el video";
+    if (pendingResize) {
+      pendingResize = false;
+      applyCanvasSize();
+    }
     return;
   }
-  recorder.start(canvas, audio.recordingStream);
+  const wanted = globalParams.recFormat;
+  const used = recorder.start(canvas, audio.recordingStream, {
+    format: wanted,
+    fps: globalParams.recFps,
+    bitrate: globalParams.recBitrate,
+  });
   recBtn.classList.add("recording");
   recBtn.textContent = "■ Detener";
+  const note = used !== wanted ? ` (este navegador no puede ${wanted}: usa ${used})` : "";
   recTimer = setInterval(() => {
     const s = Math.floor(recorder.elapsed);
-    recInfo.textContent = `grabando ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    recInfo.textContent = `grabando ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${canvas.width}×${canvas.height}${note}`;
   }, 250);
 });
+
+// exportar secuencia de PNG (cuadro a cuadro, ver exporter.js)
+async function startPngExport() {
+  if (exporting || recorder.isRecording) return;
+
+  // La carpeta se pide ANTES de cualquier otra cosa: el navegador solo deja
+  // abrir el selector justo después de un click. Sin esa función (Safari,
+  // Firefox) se arma un ZIP.
+  let dirHandle = null;
+  if (window.showDirectoryPicker) {
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+    } catch (e) {
+      if (e.name === "AbortError") return; // cerró el selector: no se exporta nada
+    }
+  }
+
+  exporting = true;
+  exportCancel = false;
+  recBtn.classList.add("recording");
+  recBtn.textContent = "■ Cancelar exportación";
+  try {
+    const r = await exportPngSequence({
+      scene,
+      videoLayer,
+      globalParams,
+      audioFile: audio.tracks[audio.currentIndex]?.file ?? null,
+      width: canvas.width,
+      height: canvas.height,
+      seconds: globalParams.pngSeconds,
+      fps: globalParams.pngFps,
+      transparent: globalParams.pngTransparent,
+      dirHandle,
+      onProgress: ({ phase, i, total }) => (recInfo.textContent = `${phase} ${i}/${total}`),
+      isCancelled: () => exportCancel,
+    });
+    recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}`;
+  } catch (e) {
+    recInfo.textContent = e.message === "cancelado" ? "exportación cancelada" : `error: ${e.message}`;
+  } finally {
+    exporting = false;
+    recBtn.classList.remove("recording");
+    recBtn.textContent = "● Grabar";
+    if (pendingResize) {
+      pendingResize = false;
+      applyCanvasSize();
+    }
+  }
+}
 
 nextVideoBtn.addEventListener("click", () => videoLayer.next());
 prevVideoBtn.addEventListener("click", () => videoLayer.prev());
@@ -187,23 +291,27 @@ prevVideoBtn.addEventListener("click", () => videoLayer.prev());
 // un círculo libre lo borra; en otro lado, recentra la pieza.
 canvas.style.touchAction = "none";
 canvas.addEventListener("pointerdown", (e) => {
-  if (scene.pointerDown(e.clientX, e.clientY)) {
+  const p = toCanvas(e);
+  if (scene.pointerDown(p.x, p.y, e.altKey)) {
     canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = "grabbing";
   }
 });
 canvas.addEventListener("pointermove", (e) => {
-  scene.pointerMove(e.clientX, e.clientY);
-  if (!scene.isDragging) canvas.style.cursor = scene.hover(e.clientX, e.clientY) ? "grab" : "default";
+  const p = toCanvas(e);
+  scene.pointerMove(p.x, p.y);
+  if (!scene.isDragging) canvas.style.cursor = scene.hover(p.x, p.y) ? "grab" : "default";
 });
 function endDrag(e) {
+  const p = toCanvas(e);
   scene.pointerUp();
-  canvas.style.cursor = scene.hover(e.clientX, e.clientY) ? "grab" : "default";
+  canvas.style.cursor = scene.hover(p.x, p.y) ? "grab" : "default";
 }
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
 canvas.addEventListener("dblclick", (e) => {
-  scene.doubleClick(e.clientX, e.clientY);
+  const p = toCanvas(e);
+  scene.doubleClick(p.x, p.y);
   // si se borró un círculo libre, el slider "círculos libres" de ese conjunto
   // tiene que bajar con él: se refresca el panel
   pane.refresh();
@@ -228,9 +336,37 @@ canvas.addEventListener("drop", (e) => {
   }
 });
 
-function loop() {
+// Los sliders del panel solo se redibujan cuando se los refresca. Se hace unas
+// 10 veces por segundo (no en cada cuadro) cuando los valores cambian solos:
+// al reproducir la animación, o cuando las manijas de la pantalla los mueven.
+let frameCount = 0;
+let paramsDirty = false;
+scene.onParamsChanged = () => {
+  paramsDirty = true;
+};
+
+let lastTime = performance.now();
+
+function loop(now = performance.now()) {
   const w = canvas.width;
   const h = canvas.height;
+
+  // segundos reales desde el cuadro anterior. Se limita a 50 ms: si la
+  // pestaña estuvo en segundo plano y vuelve, no se salta de golpe un rato largo.
+  const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+  lastTime = now;
+
+  if (exporting) {
+    // la exportación usa la escena para dibujar sus propios cuadros: el dibujo en vivo espera
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  frameCount++;
+  if (frameCount % 6 === 0 && (paramsDirty || scene.timeline.playing)) {
+    pane.refresh();
+    paramsDirty = false;
+  }
 
   ctx.globalCompositeOperation = "source-over";
   ctx.globalAlpha = 1;
@@ -242,9 +378,9 @@ function loop() {
   // conjunto lo ajusta después a su propia cantidad de picos/barras
   const audioData = audio.analyze(128);
 
-  videoLayer.draw(ctx, w, h, globalParams, audioData);
-  scene.draw(ctx, w, h, audioData);
+  videoLayer.draw(ctx, w, h, globalParams, audioData, dt);
+  scene.draw(ctx, w, h, audioData, dt);
 
   requestAnimationFrame(loop);
 }
-loop();
+requestAnimationFrame(loop);

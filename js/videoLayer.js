@@ -27,6 +27,7 @@ export class VideoLayer {
     // estado del efecto de flash (destello): se prende de golpe con un salto
     // de graves y decae solo, frame a frame.
     this.bassSmooth = 0;
+    this.k = 1; // cuántos "cuadros de 1/60 s" duró el último cuadro
     this.flashLevel = 0;
 
     // caché de la tabla de colores del duotono: se recalcula solo cuando
@@ -112,11 +113,14 @@ export class VideoLayer {
     this.onLibraryChange?.();
   }
 
-  draw(ctx, w, h, params, audioData) {
+  draw(ctx, w, h, params, audioData, dt = 0.016) {
     const v = this.active?.el;
     if (!v || v.readyState < 2) return; // todavía no hay frame para dibujar
 
-    this.time += 0.016; // ~1 frame a 60fps
+    // tiempo real entre cuadros (ver visualEngine.draw): así los efectos se
+    // mueven igual en una pantalla de 60 Hz que en una de 120 Hz
+    this.time += dt;
+    this.k = dt * 60;
 
     resize(this.frame, w, h);
     const fctx = this.frame.getContext("2d");
@@ -147,7 +151,7 @@ export class VideoLayer {
     ctx.restore();
 
     if (params.fxGlitch && params.glitchAmount > 0) {
-      drawGlitch(ctx, w, h, params.glitchAmount);
+      drawGlitch(ctx, w, h, params.glitchAmount, this.k);
     }
 
     if (params.fxFlash) {
@@ -329,7 +333,7 @@ export class VideoLayer {
   _trails(source, w, h, amount) {
     resize(this.trailBuffer, w, h);
     const tctx = this.trailBuffer.getContext("2d");
-    const decay = Math.min(Math.max(amount, 0), 0.95);
+    const decay = Math.pow(Math.min(Math.max(amount, 0), 0.95), this.k);
 
     tctx.globalCompositeOperation = "destination-out";
     tctx.fillStyle = `rgba(0, 0, 0, ${1 - decay})`;
@@ -345,9 +349,9 @@ export class VideoLayer {
   // dispara el flash; después lo deja decaer solo cada frame.
   _updateFlash(bass) {
     const jump = bass - this.bassSmooth;
-    this.bassSmooth += (bass - this.bassSmooth) * 0.2;
+    this.bassSmooth += (bass - this.bassSmooth) * (1 - Math.pow(0.8, this.k));
     if (jump > 0.12) this.flashLevel = 1;
-    else this.flashLevel *= 0.82;
+    else this.flashLevel *= Math.pow(0.82, this.k);
   }
 }
 
@@ -382,11 +386,11 @@ function buildFilter(params) {
 // corta franjas horizontales al azar y las desplaza lateralmente: el típico
 // efecto "glitch" de señal cortada. amount (0-1) controla qué tan seguido
 // y qué tan lejos se desplazan.
-function drawGlitch(ctx, w, h, amount) {
+function drawGlitch(ctx, w, h, amount, k = 1) {
   const sliceH = 8;
   const slices = Math.floor(h / sliceH);
   for (let i = 0; i < slices; i++) {
-    if (Math.random() < 0.05 * amount) {
+    if (Math.random() < 0.05 * amount * k) {
       const y = i * sliceH;
       const shift = (Math.random() - 0.5) * 60 * amount;
       const imgData = ctx.getImageData(0, y, w, sliceH);

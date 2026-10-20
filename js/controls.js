@@ -52,6 +52,31 @@ export function createDefaultParams() {
     echoAngle: 0, // ecos: hacia dónde se abren (grados)
     echoShape: "blob", // blob | half | circle
 
+    // --- transformación del conjunto entero ---
+    posX: 0, // desplazamiento fijo (px)
+    posY: 0,
+    rotation: 0, // ángulo fijo (grados)
+    scale: 1,
+    pivotX: 0, // pivote: el punto alrededor del cual rota y escala (px desde el centro de la pantalla)
+    pivotY: 0,
+    pivotMode: "own", // eje de giro: own (su propio centro) | canvas (centro del lienzo, orbita) | manual
+    tOpacity: 1, // opacidad de todo el conjunto
+
+    // --- movimiento continuo (se suma a lo de arriba) ---
+    spinSpeed: 0, // giro: grados por segundo (negativo = al revés)
+    spinAudio: 0, // giro extra con los graves (grados por segundo)
+    swingAmp: 0, // vaivén de rotación: cuántos grados para cada lado
+    swingSpeed: 0.5, // vaivenes por segundo
+    orbitRX: 0, // órbita: radio horizontal (px)
+    orbitRY: 0, // radio vertical (px)
+    orbitSpeed: 0.1, // vueltas por segundo (negativo = al revés)
+    orbitPhase: 0, // en qué punto de la órbita arranca (grados)
+    driftAmount: 0, // deriva: cuánto vaga (px)
+    driftSpeed: 0.5,
+    pulseScale: 0, // pulso de tamaño (± proporción)
+    pulseSpeed: 0.5, // pulsos por segundo
+    pulseAudio: 0, // cuánto crece con los graves
+
     // --- física al agarrar y mover (mouse) ---
     physFollow: 0.82, // 0 = pegado al mouse · cerca de 1 = lo persigue con mucho retraso
     physInertia: 0.94, // 0 = frena en seco al soltar · cerca de 1 = se desliza mucho
@@ -82,6 +107,7 @@ export function createDefaultParams() {
     deformWobble: 0, // ondulación irregular del borde
     deformWobbleAudio: 0, // cuánto suma el volumen del audio a esa ondulación
     deformSpeed: 1, // velocidad de la ondulación
+    deformSpin: 0, // cada elemento gira sobre su propio eje (°/seg); se nota si no es redondo
     deformDots: true, // a qué cosas se aplica
     deformAuras: true,
     deformVortex: true,
@@ -106,6 +132,9 @@ export function createDefaultParams() {
 
     echoCount: 8, // copias de los ecos
     echoLag: 0.6, // retraso de cada copia respecto a la anterior (0 = rígidas, cerca de 1 = muy fluidas)
+    echoFollowMove: true, // la cola se acomoda detrás de la dirección del movimiento
+    echoReturn: 0, // 0 = la cola se queda donde la dejó; más = vuelve al ángulo fijo
+    echoTurn: 0.12, // qué tan rápido gira la cola para acomodarse
     echoStyle: "fill",
     echoOpacity: 1,
 
@@ -165,6 +194,21 @@ export function createDefaultParams() {
 
     // fondo
     bgColor: "#05050a",
+
+    // lienzo (el tamaño de lo que se ve y se graba)
+    canvasPreset: "window", // window | 1920x1080 | 1280x720 | 3840x2160 | 1080x1920 | 1080x1080 | 1080x1350 | custom
+    canvasW: 1920,
+    canvasH: 1080,
+
+    // grabación
+    recFormat: "mp4", // mp4 (lo lee After Effects) | webm9 | webm8
+    recFps: 30,
+    recBitrate: 12, // megabits por segundo
+
+    // exportar secuencia de PNG (cuadro a cuadro, sin perder calidad)
+    pngSeconds: 10,
+    pngFps: 30,
+    pngTransparent: true, // fondo transparente (sin color de fondo)
   };
 }
 
@@ -174,7 +218,7 @@ export function createDefaultParams() {
 //   globalParams → parámetros de video y fondo
 //   actions      → qué hacer con los botones (los conecta main.js)
 //   openState    → qué carpetas estaban abiertas (para no perderlo al rearmar)
-export function createControls({ conjunto, conjuntos, globalParams, actions = {}, openState = null }) {
+export function createControls({ scene, conjunto, conjuntos, globalParams, actions = {}, openState = null }) {
   const params = conjunto.params;
   const gp = globalParams;
 
@@ -196,6 +240,74 @@ export function createControls({ conjunto, conjuntos, globalParams, actions = {}
   setsF.addButton({ title: "duplicar este conjunto" }).on("click", () => actions.duplicateSet?.());
   setsF.addButton({ title: "traer al frente" }).on("click", () => actions.bringToFront?.());
   setsF.addButton({ title: "eliminar este conjunto" }).on("click", () => actions.removeSet?.());
+
+  // ---- transformar, mover y animar el conjunto seleccionado ----
+  const xfF = pane.addFolder({ title: "Transformar y mover" });
+  xfF.addInput(scene.settings, "gizmo", { label: "manijas en pantalla" });
+  xfF.addInput(params, "posX", { min: -1500, max: 1500, step: 1, label: "posición X" });
+  xfF.addInput(params, "posY", { min: -1000, max: 1000, step: 1, label: "posición Y" });
+  xfF.addInput(params, "rotation", { min: -720, max: 720, step: 0.5, label: "rotación (°)" });
+  xfF.addInput(params, "scale", { min: 0.05, max: 5, label: "escala" });
+  xfF.addInput(params, "tOpacity", { min: 0, max: 1, label: "opacidad del conjunto" });
+  xfF.addInput(params, "pivotMode", {
+    options: {
+      "su propio eje (centro de la pieza)": "own",
+      "centro del lienzo (orbita)": "canvas",
+      "pivote manual": "manual",
+    },
+    label: "gira sobre",
+  });
+  xfF.addInput(params, "pivotX", { min: -1000, max: 1000, step: 1, label: "pivote X" });
+  xfF.addInput(params, "pivotY", { min: -700, max: 700, step: 1, label: "pivote Y" });
+  xfF.addButton({ title: "volver a 0 (posición, rotación, escala, pivote)" }).on("click", () => {
+    Object.assign(params, { posX: 0, posY: 0, rotation: 0, scale: 1, pivotX: 0, pivotY: 0, tOpacity: 1 });
+    actions.rebuild?.();
+  });
+
+  const moveF = pane.addFolder({ title: "Movimiento continuo" });
+  moveF.addInput(params, "spinSpeed", { min: -360, max: 360, label: "giro (°/seg)" });
+  moveF.addInput(params, "spinAudio", { min: -360, max: 360, label: "giro con graves (°/seg)" });
+  moveF.addInput(params, "swingAmp", { min: 0, max: 180, label: "vaivén: amplitud (°)" });
+  moveF.addInput(params, "swingSpeed", { min: 0, max: 4, label: "vaivén: velocidad" });
+  moveF.addInput(params, "orbitRX", { min: 0, max: 800, label: "órbita: radio X" });
+  moveF.addInput(params, "orbitRY", { min: 0, max: 800, label: "órbita: radio Y" });
+  moveF.addInput(params, "orbitSpeed", { min: -2, max: 2, label: "órbita: vueltas/seg" });
+  moveF.addInput(params, "orbitPhase", { min: 0, max: 360, label: "órbita: arranque (°)" });
+  moveF.addInput(params, "driftAmount", { min: 0, max: 400, label: "deriva: cuánto" });
+  moveF.addInput(params, "driftSpeed", { min: 0, max: 3, label: "deriva: velocidad" });
+  moveF.addInput(params, "pulseScale", { min: 0, max: 1, label: "pulso de tamaño" });
+  moveF.addInput(params, "pulseSpeed", { min: 0, max: 4, label: "pulso: velocidad" });
+  moveF.addInput(params, "pulseAudio", { min: 0, max: 2, label: "crece con graves" });
+
+  // línea de tiempo: una sola para todos los conjuntos. Cada conjunto guarda sus
+  // propios keyframes (posición, rotación, escala, opacidad); al reproducir o mover
+  // el tiempo, los valores se interpolan entre keyframes.
+  const tl = scene.timeline;
+  const tlF = pane.addFolder({ title: "Animación (keyframes)" });
+  tlF.addInput(tl, "playing", { label: "▶ reproducir" });
+  // El tiempo actual se MUESTRA con un indicador de solo lectura, y se MUEVE con
+  // un slider aparte ("ir a"). No se ata un slider al tiempo "vivo" porque
+  // Tweakpane, al redibujarlo mientras la animación corre, escribe de vuelta
+  // su valor y le suma tiempo de más (hacía que la animación fuera ~20% rápida).
+  tlF.addMonitor(tl, "time", { label: "tiempo actual (s)", interval: 80 });
+  const scrub = { t: tl.time };
+  tlF.addInput(scrub, "t", { min: 0, max: tl.duration, step: 0.01, label: "ir a (s)" }).on("change", (ev) => {
+    tl.time = ev.value;
+    // al mover el tiempo los valores animados cambian solos: se refrescan los demás sliders
+    setTimeout(() => actions.refreshPanel?.(), 30);
+  });
+  tlF.addButton({ title: "⏮ volver al inicio" }).on("click", () => {
+    tl.time = 0;
+    scrub.t = 0;
+    setTimeout(() => actions.refreshPanel?.(), 30);
+  });
+  tlF.addInput(tl, "duration", { min: 1, max: 120, step: 0.5, label: "duración (s)" }).on("change", () => actions.rebuild?.());
+  tlF.addInput(tl, "loop", { label: "repetir" });
+  tlF.addInput(tl, "ease", { options: { "suave (arranca y frena)": "smooth", lineal: "linear" }, label: "interpolación" });
+  tlF.addButton({ title: `+ keyframe de "${conjunto.name}" ahora` }).on("click", () => actions.addKey?.());
+  tlF.addButton({ title: "− borrar el keyframe más cercano" }).on("click", () => actions.removeKey?.());
+  tlF.addButton({ title: "limpiar todos sus keyframes" }).on("click", () => actions.clearKeys?.());
+  tlF.addMonitor({ keys: scene.keysInfo(conjunto) }, "keys", { label: "keyframes" });
 
   const audioF = pane.addFolder({ title: "Reactividad audio" });
   audioF.addInput(params, "bassReactivity", { min: 0, max: 3, label: "graves" });
@@ -253,6 +365,7 @@ export function createControls({ conjunto, conjuntos, globalParams, actions = {}
   deformF.addInput(params, "deformWobble", { min: 0, max: 0.9, label: "ondulación" });
   deformF.addInput(params, "deformWobbleAudio", { min: 0, max: 1, label: "ondulación x audio" });
   deformF.addInput(params, "deformSpeed", { min: 0, max: 4, label: "velocidad" });
+  deformF.addInput(params, "deformSpin", { min: -360, max: 360, label: "giro propio (°/seg)" });
   deformF.addInput(params, "deformDots", { label: "aplicar: círculos" });
   deformF.addInput(params, "deformAuras", { label: "aplicar: gotas / auras" });
   deformF.addInput(params, "deformVortex", { label: "aplicar: aros remolino" });
@@ -288,6 +401,9 @@ export function createControls({ conjunto, conjuntos, globalParams, actions = {}
   const echoesF = eachF.addFolder({ title: "Copias (ecos de aura)" });
   echoesF.addInput(params, "echoCount", { min: 2, max: 30, step: 1, label: "cantidad" });
   echoesF.addInput(params, "echoLag", { min: 0, max: 0.95, label: "retraso entre copias" });
+  echoesF.addInput(params, "echoFollowMove", { label: "cola detrás del movimiento" });
+  echoesF.addInput(params, "echoTurn", { min: 0.02, max: 0.5, label: "qué tan rápido gira la cola" });
+  echoesF.addInput(params, "echoReturn", { min: 0, max: 1, label: "volver al ángulo fijo" });
   echoesF.addInput(params, "echoStyle", { options: STYLE, label: "estilo" });
   echoesF.addInput(params, "echoOpacity", { min: 0, max: 1, label: "opacidad" });
 
@@ -409,6 +525,72 @@ export function createControls({ conjunto, conjuntos, globalParams, actions = {}
   const bgF = pane.addFolder({ title: "Fondo" });
   bgF.addInput(gp, "bgColor", { label: "color" });
 
+  // ---- lienzo: el tamaño de lo que se ve y se graba ----
+  // Es como la "composición" de After: un tamaño fijo, que se muestra achicado
+  // para que entre en la ventana. Todo (grabación, exportación, posiciones en
+  // píxeles) está en ESE tamaño. "ventana" lo adapta al tamaño de la ventana.
+  const canvasF = pane.addFolder({ title: "Lienzo (tamaño de lo que se graba)" });
+  canvasF
+    .addInput(gp, "canvasPreset", {
+      options: {
+        "ventana (se adapta)": "window",
+        "Full HD 1920 × 1080 (16:9)": "1920x1080",
+        "HD 1280 × 720 (16:9)": "1280x720",
+        "4K 3840 × 2160 (16:9, pesado)": "3840x2160",
+        "vertical 1080 × 1920 (9:16, reels)": "1080x1920",
+        "cuadrado 1080 × 1080 (1:1)": "1080x1080",
+        "vertical 1080 × 1350 (4:5)": "1080x1350",
+        "personalizado (usa ancho y alto)": "custom",
+      },
+      label: "tamaño",
+    })
+    .on("change", (ev) => {
+      // al elegir un preset se copian sus medidas a ancho/alto, para poder retocarlas
+      const m = /^(\d+)x(\d+)$/.exec(ev.value);
+      if (m) {
+        gp.canvasW = +m[1];
+        gp.canvasH = +m[2];
+      }
+      actions.applyCanvas?.();
+      setTimeout(() => actions.refreshPanel?.(), 30);
+    });
+  canvasF.addInput(gp, "canvasW", { min: 64, max: 7680, step: 2, label: "ancho (px)" }).on("change", () => {
+    gp.canvasPreset = "custom";
+    actions.applyCanvas?.();
+    setTimeout(() => actions.refreshPanel?.(), 30);
+  });
+  canvasF.addInput(gp, "canvasH", { min: 64, max: 4320, step: 2, label: "alto (px)" }).on("change", () => {
+    gp.canvasPreset = "custom";
+    actions.applyCanvas?.();
+    setTimeout(() => actions.refreshPanel?.(), 30);
+  });
+  canvasF.addButton({ title: "⇄ girar (intercambiar ancho y alto)" }).on("click", () => {
+    [gp.canvasW, gp.canvasH] = [gp.canvasH, gp.canvasW];
+    gp.canvasPreset = "custom";
+    actions.applyCanvas?.();
+    setTimeout(() => actions.refreshPanel?.(), 30);
+  });
+
+  // ---- grabación en vivo (video) ----
+  const recF = pane.addFolder({ title: "Grabación: formato y calidad" });
+  recF.addInput(gp, "recFormat", {
+    options: {
+      "MP4 H.264 (After Effects, Premiere, redes)": "mp4",
+      "WebM VP9 (liviano, solo navegador)": "webm9",
+      "WebM VP8 (compatible)": "webm8",
+    },
+    label: "formato",
+  });
+  recF.addInput(gp, "recFps", { options: { "24 cuadros/seg (cine)": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
+  recF.addInput(gp, "recBitrate", { min: 2, max: 80, step: 1, label: "calidad (Mbps)" });
+
+  // ---- exportar secuencia de PNG: cuadro por cuadro, sin perder calidad ----
+  const pngF = pane.addFolder({ title: "Exportar secuencia de PNG (para After)" });
+  pngF.addInput(gp, "pngSeconds", { min: 1, max: 120, step: 1, label: "duración (s)" });
+  pngF.addInput(gp, "pngFps", { options: { "24 cuadros/seg": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
+  pngF.addInput(gp, "pngTransparent", { label: "fondo transparente" });
+  pngF.addButton({ title: "▶ exportar secuencia de PNG" }).on("click", () => actions.exportPng?.());
+
   // Carpetas abiertas/cerradas. Al arrancar: todo cerrado menos "Conjuntos" y
   // "Formas generativas" (con tantas carpetas abiertas el panel es larguísimo).
   // Cuando el panel se rearma (por ejemplo al elegir otro conjunto) se respeta
@@ -423,7 +605,7 @@ export function createControls({ conjunto, conjuntos, globalParams, actions = {}
   };
   apply(pane, "");
 
-  return pane;
+  return { pane };
 }
 
 // qué carpetas están abiertas ahora (para pasárselo a createControls al rearmar)

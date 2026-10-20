@@ -30,6 +30,36 @@ El mouse recorre los conjuntos de arriba hacia abajo: si agarrás algo, se mueve
 
 Al cambiar de conjunto el panel se rearma pero **conserva qué carpetas tenías abiertas** y la posición del scroll.
 
+## Transformar, mover y animar un conjunto
+
+Cada conjunto tiene su propia transformación (carpetas "Transformar y mover", "Movimiento continuo" y "Animación (keyframes)"):
+
+- **Posición, rotación, escala, opacidad y pivote.** Con **"manijas en pantalla"** aparece un gizmo sobre el conjunto seleccionado: la cruz lo mueve (con **Alt** mueve solo el pivote, sin que el dibujo se desplace), el círculo lo rota y el cuadradito lo escala.
+- **"gira sobre"** elige el eje de giro: **su propio eje** (el centro de la pieza, aunque la hayas arrastrado), **el centro del lienzo** (si el conjunto está corrido, orbita alrededor del centro) o **pivote manual** (el que pongas con pivote X / Y).
+- **Movimiento continuo:** giro en °/seg (positivo o negativo, o con los graves), vaivén, órbita elíptica, deriva y pulso de tamaño.
+- **Giro propio de cada elemento** (carpeta "Deformar" → "giro propio"): cada círculo/mancha deformado gira sobre su propio eje. Se nota solo si el elemento no es redondo (estirar distinto de 1 u ondulación mayor que 0).
+- **Keyframes** al estilo After: "+ keyframe" guarda posición, rotación, escala y opacidad en el momento actual; al reproducir o mover "ir a (s)" se interpola entre ellos ("suave" arranca y frena despacio, "lineal" va parejo). Mientras está en pausa podés editar libremente; los valores solo se pisan cuando el tiempo cambia.
+- Toda la animación usa **tiempo real**: dura lo mismo en una pantalla de 60 Hz que en una de 120 Hz.
+
+## Ecos de aura: la cola sigue el movimiento
+
+Con "cola detrás del movimiento" (carpeta "Copias (ecos de aura)"), la fila de copias chicas se acomoda **detrás de la dirección en que movés la copia grande**, como la cola de un cometa, y **se queda ahí** cuando frenás. "qué tan rápido gira la cola" regula cuánto tarda en acomodarse; "volver al ángulo fijo" (en 0 no vuelve nunca) hace que regrese sola al ángulo de "dirección (ecos)". Apagando "cola detrás del movimiento", la fila apunta siempre al ángulo fijo.
+
+## Lienzo, grabación y exportación
+
+**Lienzo (carpeta "Lienzo")** — el tamaño de lo que se ve y se graba, como la composición de After. Presets: ventana (se adapta), Full HD 1920×1080, HD 1280×720, 4K 3840×2160, vertical 1080×1920 (reels), cuadrado 1080×1080 y 4:5 1080×1350, o medidas personalizadas, y un botón para girarlo (intercambiar ancho y alto). Se puede cambiar sobre la marcha; se muestra achicado para que entre en la ventana, pero todo (posiciones en píxeles, grabación, exportación) está en el tamaño real. No se puede cambiar mientras graba: se aplica al terminar. El 4K en vivo puede ir pesado.
+
+**Grabar en vivo (botón ● Grabar)** — carpeta "Grabación: formato y calidad":
+- **MP4 H.264**: lo abren After Effects, Premiere y las redes.
+- **WebM VP9** (liviano) y **WebM VP8** (compatible): solo navegador; After no los abre.
+- **cuadros/seg** (24, 30 o 60) y **calidad** en Mbps. Si el navegador no soporta el formato pedido, avisa cuál usa.
+- Graba el canvas: sin mouse, sin panel y sin manijas del gizmo (las manijas del aura de colores sí salen si no las apagás).
+
+**Exportar secuencia de PNG** — carpeta "Exportar secuencia de PNG (para After)": una imagen por cuadro, **con fondo transparente** si querés. No es en vivo: cada cuadro se arma con el tiempo exacto (1/fps), así que sale perfecto aunque la compu tarde, y el audio se analiza cuadro por cuadro sin reproducirlo. Se exporta lo que determinan la línea de tiempo, el movimiento continuo y el audio; **lo que movés con el mouse en vivo no se graba**.
+- En **Chrome** te pide una carpeta y escribe ahí los PNG. En otros navegadores descarga un **ZIP**.
+- Incluye un `LEEME.txt` con el tamaño, los cuadros por segundo y cómo importarlo en After (Archivo > Importar > Archivo, marcar "PNG Sequence"). El audio se importa aparte, con el archivo original.
+- Mientras exporta, el dibujo en vivo se pausa; el mismo botón pasa a "■ Cancelar exportación".
+
 ## Cómo correrlo
 
 No hace falta instalar nada (no usa Node). Solo necesita un servidor local

@@ -22,25 +22,28 @@ export class ScreenRecorder {
     return this.isRecording ? (performance.now() - this.startedAt) / 1000 : 0;
   }
 
-  start(canvas, audioStream) {
-    const stream = canvas.captureStream(60);
+  // options:
+  //   format  "mp4" (H.264: lo leen After Effects y Premiere) | "webm9" (VP9) | "webm8" (VP8)
+  //   fps     cuántos cuadros por segundo se graban
+  //   bitrate calidad en megabits por segundo
+  // Si el navegador no soporta el formato pedido, se usa el que sí.
+  // Devuelve el formato que realmente se usó (para avisarle al usuario).
+  start(canvas, audioStream, { format = "mp4", fps = 30, bitrate = 12 } = {}) {
+    const stream = canvas.captureStream(fps);
     if (audioStream) {
       for (const track of audioStream.getAudioTracks()) stream.addTrack(track);
     }
 
-    // cada navegador soporta formatos distintos: se prueba en orden de preferencia
-    const candidates = [
-      "video/webm;codecs=vp9,opus",
-      "video/webm;codecs=vp8,opus",
-      "video/webm",
-      "video/mp4",
-    ];
-    this.mimeType = candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+    const mp4 = ["video/mp4;codecs=avc1,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4"];
+    const vp9 = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp9", "video/webm"];
+    const vp8 = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp8", "video/webm"];
+    const order = format === "mp4" ? [mp4, vp9, vp8] : format === "webm8" ? [vp8, vp9, mp4] : [vp9, vp8, mp4];
+    this.mimeType = order.flat().find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
 
     this.chunks = [];
     this.recorder = new MediaRecorder(stream, {
       ...(this.mimeType ? { mimeType: this.mimeType } : {}),
-      videoBitsPerSecond: 8_000_000,
+      videoBitsPerSecond: Math.round(bitrate * 1_000_000),
     });
     this.recorder.ondataavailable = (e) => {
       if (e.data.size > 0) this.chunks.push(e.data);
@@ -48,6 +51,7 @@ export class ScreenRecorder {
     this.recorder.onstop = () => this._download();
     this.recorder.start(1000); // junta un pedazo por segundo, así no se pierde todo si algo falla
     this.startedAt = performance.now();
+    return this.mimeType.includes("mp4") ? "mp4" : this.mimeType.includes("vp8") ? "webm8" : "webm9";
   }
 
   stop() {

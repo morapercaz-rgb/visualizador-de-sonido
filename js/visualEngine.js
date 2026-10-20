@@ -20,6 +20,8 @@ const MOVABLE_MODES = new Set(["ring", "spikes", "spiral", "vortex"]);
 export class VisualEngine {
   constructor() {
     this.time = 0;
+    this.k = 1; // cuántos "cuadros de 1/60 s" duró el último cuadro (ver draw)
+    // (ver también videoLayer.js: la capa de video hace lo mismo con su propio dt)
 
     // estado del modo "auras": la lista de burbujas vivas en pantalla, y un
     // promedio suavizado de graves para poder detectar un salto (un golpe).
@@ -52,14 +54,25 @@ export class VisualEngine {
     // posición actual de cada copia de los ecos: cada una persigue a la
     // anterior con retraso (ver drawEchoes)
     this.echoChain = [];
+    this.echoDir = null; // hacia dónde apunta la fila de ecos ahora (radianes)
   }
 
-  draw(ctx, w, h, audioData, params) {
+  // dónde está el centro de la pieza ahora (con lo que el usuario la corrió).
+  // Lo usa scene.js para que "girar sobre su propio eje" gire alrededor de ESTE punto.
+  pieceCenter(w, h, params) {
+    const moves = MOVABLE_MODES.has(params.visualMode) || params.visualMode === "echoes";
+    return moves ? { x: w / 2 + this.centerOffset.x, y: h / 2 + this.centerOffset.y } : { x: w / 2, y: h / 2 };
+  }
+
+  draw(ctx, w, h, audioData, params, dt = 0.016) {
     // el audio se analiza una sola vez por cuadro para todos los conjuntos;
     // acá se lo ajusta a la cantidad de picos/barras de ESTE conjunto
     audioData = withSpectrumBins(audioData, Math.round(params.spectrumBins));
 
-    this.time += 0.016; // ~1 frame a 60fps
+    // dt = segundos reales desde el cuadro anterior; k = cuántos "cuadros de
+    // 1/60 s" son (1 en una pantalla de 60 Hz, 0.5 en una de 120 Hz)
+    this.k = dt * 60;
+    this.time += dt;
     this.targets = [];
     FRAME = { audio: audioData, time: this.time };
 
@@ -199,22 +212,28 @@ export class VisualEngine {
   // a ese punto: physFollow 0 = pegado al mouse, cerca de 1 = lo persigue con
   // mucho retraso. Si lo soltaron, sigue con su velocidad y la va perdiendo
   // (physInertia 0 = frena en seco, cerca de 1 = se desliza mucho).
+  //
+  // Todo está pensado por "cuadro de 1/60 s" y se ajusta con this.k (cuántos
+  // cuadros de 1/60 s pasaron realmente), así se mueve igual en una pantalla de
+  // 60 Hz que en una de 120 Hz. La velocidad (vx, vy) está en píxeles por 1/60 s.
   _glide(state, desired, dragging, params) {
+    const s = this.k;
     if (dragging && desired) {
-      const k = 1 - Math.min(0.97, Math.max(0, params.physFollow));
-      const nx = state.x + (desired.x - state.x) * k;
-      const ny = state.y + (desired.y - state.y) * k;
-      state.vx = nx - state.x;
-      state.vy = ny - state.y;
+      const keep = Math.pow(Math.min(0.97, Math.max(0, params.physFollow)), s);
+      const nx = state.x + (desired.x - state.x) * (1 - keep);
+      const ny = state.y + (desired.y - state.y) * (1 - keep);
+      state.vx = (nx - state.x) / s;
+      state.vy = (ny - state.y) / s;
       state.x = nx;
       state.y = ny;
     } else {
-      state.vx *= Math.min(0.995, Math.max(0, params.physInertia));
-      state.vy *= Math.min(0.995, Math.max(0, params.physInertia));
+      const inertia = Math.pow(Math.min(0.995, Math.max(0, params.physInertia)), s);
+      state.vx *= inertia;
+      state.vy *= inertia;
       if (Math.abs(state.vx) < 0.02) state.vx = 0;
       if (Math.abs(state.vy) < 0.02) state.vy = 0;
-      state.x += state.vx;
-      state.y += state.vy;
+      state.x += state.vx * s;
+      state.y += state.vy * s;
     }
   }
 
@@ -238,6 +257,7 @@ export class VisualEngine {
     this.coreOffsets = { a: newMover(), b: newMover() };
     this.lights = []; // las luces del aura de colores vuelven a arrancar juntas
     this.echoChain = []; // las copias de los ecos vuelven a ponerse en fila
+    this.echoDir = null;
   }
 
   // dónde tiene que estar el núcleo "a" o "b" (en coordenadas de la pieza).
@@ -334,8 +354,8 @@ export class VisualEngine {
       const grabbed = this.drag?.t.ref === l;
       this._glide(l, grabbed ? { x: this.pointer.x - this.drag.gx, y: this.pointer.y - this.drag.gy } : null, grabbed, params);
       if (!grabbed && n > 1) {
-        l.vx += (gx - l.x) * params.mixPull * 0.01;
-        l.vy += (gy - l.y) * params.mixPull * 0.01;
+        l.vx += (gx - l.x) * params.mixPull * 0.01 * this.k;
+        l.vy += (gy - l.y) * params.mixPull * 0.01 * this.k;
       }
       l.x = Math.min(w, Math.max(0, l.x));
       l.y = Math.min(h, Math.max(0, l.y));
@@ -391,7 +411,7 @@ export class VisualEngine {
       const grabbed = this.drag?.t.ref === c;
       this._glide(c, grabbed ? { x: this.pointer.x - this.drag.gx, y: this.pointer.y - this.drag.gy } : null, grabbed, params);
       if (!grabbed) {
-        c.vy += params.physGravity * 0.35;
+        c.vy += params.physGravity * 0.35 * this.k;
         const bounce = params.physBounce;
         if (c.x < size) { c.x = size; c.vx = Math.abs(c.vx) * bounce; }
         if (c.x > w - size) { c.x = w - size; c.vx = -Math.abs(c.vx) * bounce; }
@@ -466,7 +486,7 @@ export class VisualEngine {
   // van agrandando y desvaneciendo de a poco, como ondas en el agua.
   _drawAuras(ctx, w, h, audioData, params) {
     const jump = audioData.bass - this.auraBassSmooth;
-    this.auraBassSmooth += (audioData.bass - this.auraBassSmooth) * 0.15;
+    this.auraBassSmooth += (audioData.bass - this.auraBassSmooth) * (1 - Math.pow(0.85, this.k));
 
     const maxAuras = Math.round(params.auraMax);
     if (jump > 0.12 && this.auras.length < maxAuras) {
@@ -485,8 +505,8 @@ export class VisualEngine {
 
     for (let i = this.auras.length - 1; i >= 0; i--) {
       const a = this.auras[i];
-      a.r += growSpeed;
-      a.alpha -= 0.006;
+      a.r += growSpeed * this.k;
+      a.alpha -= 0.006 * this.k;
       if (a.alpha <= 0) {
         this.auras.splice(i, 1);
         continue;
@@ -655,7 +675,9 @@ function deformState(params, enabled) {
   const s = Math.max(0.2, params.deformStretch);
   const wob = Math.min(0.9, params.deformWobble + params.deformWobbleAudio * (FRAME.audio?.overall ?? 0) * params.overallReactivity);
   if (Math.abs(s - 1) < 0.01 && wob < 0.005) return null;
-  const ang = (params.deformAngle * Math.PI) / 180;
+  // deformSpin: cada elemento gira sobre SU PROPIO eje (el estiramiento rota
+  // con el tiempo). Solo se nota si el elemento no es perfectamente redondo.
+  const ang = ((params.deformAngle + params.deformSpin * FRAME.time) * Math.PI) / 180;
   return { sx: Math.sqrt(s), sy: 1 / Math.sqrt(s), cos: Math.cos(ang), sin: Math.sin(ang), ang, wob, speed: params.deformSpeed };
 }
 
@@ -986,7 +1008,28 @@ function drawEchoes(ctx, w, h, audioData, params, time, engine) {
   const cy = h / 2 + engine.centerOffset.y;
   const n = Math.max(2, Math.round(params.echoCount));
   const baseR = params.baseRadius * 0.5 + 20 + audioData.bass * params.bassReactivity * 90;
-  const angle = (params.echoAngle * Math.PI) / 180 + time * params.rotationSpeed * 0.3;
+  const baseAngle = (params.echoAngle * Math.PI) / 180 + time * params.rotationSpeed * 0.3;
+
+  // Hacia dónde apunta la fila de ecos. Con "los ecos siguen el movimiento" la
+  // cola se acomoda DETRÁS de la dirección en que se mueve la copia principal
+  // (como la cola de un cometa) y se queda ahí cuando frenás; solo vuelve al
+  // ángulo fijo si "volver al ángulo fijo" es mayor que 0. Sin esa opción,
+  // la fila apunta siempre al ángulo fijo.
+  if (!params.echoFollowMove || engine.echoDir === null) engine.echoDir = baseAngle;
+  if (params.echoFollowMove) {
+    const vx = engine.centerOffset.vx, vy = engine.centerOffset.vy;
+    const moving = Math.hypot(vx, vy) > 0.5;
+    const target = moving ? Math.atan2(-vy, -vx) : params.echoReturn > 0 ? baseAngle : null;
+    if (target !== null) {
+      let d = target - engine.echoDir;
+      while (d > Math.PI) d -= TAU;
+      while (d < -Math.PI) d += TAU;
+      const rate = moving ? params.echoTurn : params.echoReturn * 0.1;
+      engine.echoDir += d * (1 - Math.pow(1 - Math.min(0.95, rate), engine.k));
+    }
+    engine.echoDir += params.rotationSpeed * 0.3 * 0.016 * engine.k; // la rotación sigue andando
+  }
+  const angle = engine.echoDir;
   const ux = Math.cos(angle), uy = Math.sin(angle);
   const reach = Math.min(w, h) * 0.9 * (0.7 + audioData.mid * params.midReactivity * 0.5);
 
@@ -1003,7 +1046,7 @@ function drawEchoes(ctx, w, h, audioData, params, time, engine) {
   const chain = engine.echoChain;
   while (chain.length < n) chain.push({ x: ideal[chain.length].x, y: ideal[chain.length].y });
   chain.length = n;
-  const follow = 1 - Math.min(0.95, Math.max(0, params.echoLag));
+  const follow = 1 - Math.pow(Math.min(0.95, Math.max(0, params.echoLag)), engine.k);
   chain[0].x = ideal[0].x;
   chain[0].y = ideal[0].y;
   for (let k = 1; k < n; k++) {

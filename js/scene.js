@@ -3,13 +3,25 @@
 //   - su propio objeto de parámetros (modo, cantidad, colores, estilo…)
 //   - su propio VisualEngine (con su estado: círculos libres, luces del aura,
 //     posición de la pieza, etc.)
+//   - su TRANSFORMACIÓN (posición, rotación, escala, pivote, opacidad), con
+//     movimiento continuo (giro, vaivén, órbita, deriva, pulso) y keyframes
 // así que un conjunto puede ser un remolino, otro un aura de colores y otro un
-// anillo, cada uno con su configuración, todos en pantalla al mismo tiempo.
+// anillo, cada uno con su configuración y su animación, todos a la vez.
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
 import { VisualEngine } from "./visualEngine.js";
 import { createDefaultParams } from "./controls.js";
+
+const TAU = Math.PI * 2;
+const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
+
+// los parámetros que se pueden animar con keyframes
+export const KEY_PARAMS = ["posX", "posY", "rotation", "scale", "tOpacity"];
+
+// distancias (en píxeles de pantalla) de las manijas del gizmo
+const ROT_HANDLE_DIST = 120;
+const HANDLE_HIT = 14;
 
 export class Scene {
   constructor() {
@@ -17,6 +29,16 @@ export class Scene {
     this.selectedId = null; // el que se está editando en el panel
     this._nextId = 1;
     this.active = null; // el conjunto cuyo elemento se está arrastrando con el mouse
+
+    this.clock = 0; // reloj global en segundos: lo usan todos los movimientos continuos
+
+    // línea de tiempo de keyframes (una sola para todos los conjuntos)
+    this.timeline = { time: 0, duration: 8, playing: false, loop: true, ease: "smooth" };
+
+    this.settings = { gizmo: false }; // mostrar las manijas de transformación
+    this.gdrag = null; // arrastre de una manija del gizmo
+    this.onParamsChanged = null; // se llama cuando el gizmo cambia parámetros (para refrescar el panel)
+
     this.add();
   }
 
@@ -27,7 +49,17 @@ export class Scene {
   // suma un conjunto nuevo (con valores iniciales) y lo deja seleccionado
   add() {
     const id = this._nextId++;
-    const c = { id, name: `Conjunto ${id}`, visible: true, params: createDefaultParams(), engine: new VisualEngine() };
+    const c = {
+      id,
+      name: `Conjunto ${id}`,
+      visible: true,
+      params: createDefaultParams(),
+      engine: new VisualEngine(),
+      keys: [], // keyframes: [{ t, v: { posX, posY, rotation, scale, tOpacity } }]
+      spinAngle: 0, // giro continuo acumulado (grados)
+      _lastT: null,
+      xf: null, // transformación del último cuadro dibujado
+    };
     this.conjuntos.push(c);
     this.selectedId = id;
     return c;
@@ -40,7 +72,9 @@ export class Scene {
     const c = this.add();
     c.name = `${src.name} (copia)`;
     c.params = structuredClone(src.params);
-    c.engine.centerOffset = { x: src.engine.centerOffset.x + 60, y: src.engine.centerOffset.y + 40, vx: 0, vy: 0 };
+    c.keys = structuredClone(src.keys);
+    c.params.posX += 60;
+    c.params.posY += 40;
     return c;
   }
 
@@ -56,25 +90,374 @@ export class Scene {
     if (this.conjuntos.some((c) => c.id === id)) this.selectedId = id;
   }
 
-  // lo pasa al final de la lista, o sea: arriba de todos los demás
+  // lo pasa al final de la lista, o sea: arriba de los demás
   bringToFront() {
     const c = this.selected;
     this.conjuntos = [...this.conjuntos.filter((x) => x !== c), c];
   }
 
-  draw(ctx, w, h, audioData) {
+  // ---------- keyframes ----------
+
+  // guarda un keyframe del conjunto seleccionado en el momento actual de la
+  // línea de tiempo, con los valores que tengan ahora sus parámetros
+  addKey() {
+    const c = this.selected;
+    const t = this.timeline.time;
+    const v = {};
+    for (const k of KEY_PARAMS) v[k] = c.params[k];
+    c.keys = c.keys.filter((k) => Math.abs(k.t - t) > 0.05); // si ya había uno ahí, se reemplaza
+    c.keys.push({ t, v });
+    c.keys.sort((a, b) => a.t - b.t);
+    c._lastT = t;
+  }
+
+  // borra el keyframe más cercano al momento actual
+  removeKey() {
+    const c = this.selected;
+    if (!c.keys.length) return;
+    const t = this.timeline.time;
+    let best = 0;
+    c.keys.forEach((k, i) => {
+      if (Math.abs(k.t - t) < Math.abs(c.keys[best].t - t)) best = i;
+    });
+    c.keys.splice(best, 1);
+  }
+
+  clearKeys() {
+    this.selected.keys = [];
+  }
+
+  // texto con los momentos de los keyframes del conjunto, para mostrar en el panel
+  keysInfo(c) {
+    return c.keys.length ? c.keys.map((k) => k.t.toFixed(1) + "s").join("  ·  ") : "(sin keyframes)";
+  }
+
+  // valores de los parámetros animados en el momento t (interpolando entre keyframes)
+  _valuesAt(keys, t) {
+    if (t <= keys[0].t) return keys[0].v;
+    const last = keys[keys.length - 1];
+    if (t >= last.t) return last.v;
+    let i = 0;
+    while (keys[i + 1].t <= t) i++;
+    const a = keys[i], b = keys[i + 1];
+    let u = (t - a.t) / (b.t - a.t);
+    if (this.timeline.ease === "smooth") u = u * u * (3 - 2 * u); // arranca y frena suave
+    const out = {};
+    for (const k of KEY_PARAMS) out[k] = a.v[k] + (b.v[k] - a.v[k]) * u;
+    return out;
+  }
+
+  // avanza la línea de tiempo y, si cambió el momento (porque está
+  // reproduciendo o porque la movieron), pone en cada conjunto los valores
+  // de sus keyframes. Si está en pausa y el momento no cambió, no se pisa
+  // nada: así se pueden editar los valores libremente antes de guardar un keyframe.
+  _tickTimeline(dt) {
+    const tl = this.timeline;
+    if (tl.playing) {
+      tl.time += dt;
+      if (tl.time > tl.duration) {
+        if (tl.loop) tl.time %= tl.duration;
+        else {
+          tl.time = tl.duration;
+          tl.playing = false;
+        }
+      }
+    }
+    if (tl.time > tl.duration) tl.time = tl.duration;
     for (const c of this.conjuntos) {
-      if (c.visible) c.engine.draw(ctx, w, h, audioData, c.params);
+      if (c.keys.length && c._lastT !== tl.time) {
+        Object.assign(c.params, this._valuesAt(c.keys, tl.time));
+        c._lastT = tl.time;
+      }
     }
   }
 
-  // ---------- mouse ----------
-  // Se recorre de arriba hacia abajo: gana el conjunto que está más arriba.
+  // ---------- transformación ----------
 
-  pointerDown(x, y) {
+  // calcula la transformación de un conjunto en este cuadro: lo que está
+  // fijo en los parámetros (posición, rotación, escala, pivote) más el
+  // movimiento continuo que se le suma encima (giro, vaivén, órbita, deriva, pulso)
+  _transform(c, w, h, audio, dt) {
+    const p = c.params;
+    const t = this.clock;
+
+    // órbita: recorre una elipse
+    const oa = (p.orbitPhase * Math.PI) / 180 + TAU * p.orbitSpeed * t;
+    const ox = Math.cos(oa) * p.orbitRX;
+    const oy = Math.sin(oa) * p.orbitRY;
+
+    // deriva: vagabundeo suave y sin patrón evidente
+    const dx = p.driftAmount * (Math.sin(t * p.driftSpeed * 1.3 + c.id) * 0.6 + Math.sin(t * p.driftSpeed * 2.7 + c.id * 2.1) * 0.4);
+    const dy = p.driftAmount * (Math.cos(t * p.driftSpeed * 1.1 + c.id * 1.7) * 0.6 + Math.sin(t * p.driftSpeed * 2.3 + c.id * 0.6) * 0.4);
+
+    // giro continuo (se acumula) + vaivén
+    c.spinAngle += (p.spinSpeed + p.spinAudio * (audio.bass ?? 0)) * dt;
+    const swing = p.swingAmp * Math.sin(TAU * p.swingSpeed * t);
+
+    // pulso de escala
+    const pulse = 1 + p.pulseScale * Math.sin(TAU * p.pulseSpeed * t) + p.pulseAudio * (audio.bass ?? 0);
+
+    // EJE DE GIRO (pivotMode): alrededor de qué punto rota y escala el conjunto
+    //   "own"    → su propio centro (el de la pieza, con lo que la hayas movido):
+    //              gira sobre sí mismo y la posición lo desplaza sin cambiar el eje
+    //   "canvas" → el centro del lienzo: la posición queda "adentro" de la
+    //              rotación, así que si el conjunto está corrido ORBITA alrededor del centro
+    //   "manual" → el pivote que pusiste con pivote X / Y, sin seguir a la pieza
+    // En los tres, pivote X / Y se suma al punto base.
+    let bx = w / 2, by = h / 2;
+    if (p.pivotMode === "own") {
+      const pc = c.engine.pieceCenter(w, h, p);
+      bx = pc.x;
+      by = pc.y;
+    }
+
+    return {
+      mode: p.pivotMode,
+      px: bx + p.pivotX, // el pivote: el punto alrededor del cual se rota y se escala
+      py: by + p.pivotY,
+      tx: p.posX + ox + dx,
+      ty: p.posY + oy + dy,
+      ang: ((p.rotation + c.spinAngle + swing) * Math.PI) / 180,
+      s: Math.max(0.01, p.scale * pulse),
+    };
+  }
+
+  // aplica la transformación al canvas. Se rota y se escala alrededor del
+  // pivote; la diferencia entre modos es si el desplazamiento (tx, ty) se
+  // aplica después de rotar (el dibujo se corre sin cambiar su eje) o antes
+  // (el dibujo queda corrido y la rotación lo hace orbitar: modo "canvas").
+  _apply(ctx, xf) {
+    if (xf.mode === "canvas") {
+      ctx.translate(xf.px, xf.py);
+      ctx.rotate(xf.ang);
+      ctx.scale(xf.s, xf.s);
+      ctx.translate(-xf.px + xf.tx, -xf.py + xf.ty);
+    } else {
+      ctx.translate(xf.px + xf.tx, xf.py + xf.ty);
+      ctx.rotate(xf.ang);
+      ctx.scale(xf.s, xf.s);
+      ctx.translate(-xf.px, -xf.py);
+    }
+  }
+
+  // un punto del conjunto → su lugar en la pantalla (con la transformación aplicada)
+  _map(f, q) {
+    const cos = Math.cos(f.ang) * f.s, sin = Math.sin(f.ang) * f.s;
+    if (f.mode === "canvas") {
+      const dx = q.x - f.px + f.tx, dy = q.y - f.py + f.ty;
+      return { x: f.px + dx * cos - dy * sin, y: f.py + dx * sin + dy * cos };
+    }
+    const dx = q.x - f.px, dy = q.y - f.py;
+    return { x: f.px + f.tx + dx * cos - dy * sin, y: f.py + f.ty + dx * sin + dy * cos };
+  }
+
+  // un punto de la pantalla → coordenadas del conjunto (deshace su transformación),
+  // para que el mouse caiga donde corresponde aunque el conjunto esté rotado/escalado
+  _unmap(f, p) {
+    const cos = Math.cos(-f.ang), sin = Math.sin(-f.ang);
+    if (f.mode === "canvas") {
+      const dx = p.x - f.px, dy = p.y - f.py;
+      return { x: (dx * cos - dy * sin) / f.s + f.px - f.tx, y: (dx * sin + dy * cos) / f.s + f.py - f.ty };
+    }
+    const dx = p.x - (f.px + f.tx), dy = p.y - (f.py + f.ty);
+    return { x: (dx * cos - dy * sin) / f.s + f.px, y: (dx * sin + dy * cos) / f.s + f.py };
+  }
+
+  _toLocal(c, x, y) {
+    return c.xf ? this._unmap(c.xf, { x, y }) : { x, y };
+  }
+
+  // dt = segundos reales desde el cuadro anterior (por defecto 1/60 s). Todo el
+  // movimiento y la línea de tiempo usan el tiempo real, así que la animación
+  // dura lo mismo en una pantalla de 60 Hz que en una de 120 Hz.
+  draw(ctx, w, h, audioData, dt = DT) {
+    this.clock += dt;
+    this._tickTimeline(dt);
+
+    for (const c of this.conjuntos) {
+      if (!c.visible) continue;
+      c.xf = this._transform(c, w, h, audioData, dt);
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, Math.max(0, c.params.tOpacity));
+      this._apply(ctx, c.xf);
+      c.engine.draw(ctx, w, h, audioData, c.params, dt);
+      ctx.restore();
+    }
+
+    if (this.settings.gizmo) this._drawGizmo(ctx);
+  }
+
+  // ---------- gizmo: manijas para mover / rotar / escalar el conjunto seleccionado ----------
+  //   cruz central        → mover (con Alt: mover el pivote sin que se mueva el dibujo)
+  //   círculo con línea   → rotar
+  //   cuadradito          → escalar
+
+  _gizmoPoints() {
+    const c = this.selected;
+    if (!c?.visible || !c.xf) return null;
+    const f = c.xf;
+    // la cruz del centro va sobre el punto de pivote del dibujo (donde cae en pantalla)
+    const { x: cx, y: cy } = this._map(f, { x: f.px, y: f.py });
+    const rd = f.ang - Math.PI / 2;
+    const sd = Math.min(500, Math.max(45, 70 * f.s));
+    return {
+      c,
+      center: { x: cx, y: cy },
+      rotate: { x: cx + Math.cos(rd) * ROT_HANDLE_DIST, y: cy + Math.sin(rd) * ROT_HANDLE_DIST },
+      scale: { x: cx + Math.cos(f.ang) * sd, y: cy + Math.sin(f.ang) * sd },
+    };
+  }
+
+  _gizmoHit(x, y) {
+    const g = this._gizmoPoints();
+    if (!g) return null;
+    const near = (p) => Math.hypot(x - p.x, y - p.y) <= HANDLE_HIT;
+    if (near(g.rotate)) return "rotate";
+    if (near(g.scale)) return "scale";
+    if (near(g.center)) return "move";
+    return null;
+  }
+
+  _drawGizmo(ctx) {
+    const g = this._gizmoPoints();
+    if (!g) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.filter = "none";
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+
+    // línea hacia cada manija
+    ctx.beginPath();
+    ctx.moveTo(g.center.x, g.center.y);
+    ctx.lineTo(g.rotate.x, g.rotate.y);
+    ctx.moveTo(g.center.x, g.center.y);
+    ctx.lineTo(g.scale.x, g.scale.y);
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // centro: cruz + aro
+    ctx.beginPath();
+    ctx.arc(g.center.x, g.center.y, 9, 0, TAU);
+    ctx.moveTo(g.center.x - 15, g.center.y);
+    ctx.lineTo(g.center.x + 15, g.center.y);
+    ctx.moveTo(g.center.x, g.center.y - 15);
+    ctx.lineTo(g.center.x, g.center.y + 15);
+    ctx.stroke();
+
+    // rotar: círculo
+    ctx.beginPath();
+    ctx.arc(g.rotate.x, g.rotate.y, 8, 0, TAU);
+    ctx.fillStyle = "rgba(20,20,30,0.7)";
+    ctx.fill();
+    ctx.stroke();
+
+    // escalar: cuadradito
+    ctx.beginPath();
+    ctx.rect(g.scale.x - 7, g.scale.y - 7, 14, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = "11px -apple-system, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillText(`${g.c.name} · mover ✛ · rotar ○ · escalar □ · Alt: mover pivote`, g.center.x + 18, g.center.y + 32);
+    ctx.restore();
+  }
+
+  _gizmoDown(x, y, altKey) {
+    const kind = this._gizmoHit(x, y);
+    if (!kind) return false;
+    const g = this._gizmoPoints();
+    const p = g.c.params;
+    this.gdrag = {
+      kind: kind === "move" && altKey ? "pivot" : kind,
+      c: g.c,
+      last: { x, y },
+      startScale: p.scale,
+      // distancia inicial al centro de giro (en modo "canvas" es un punto fijo del lienzo)
+      startDist: Math.max(
+        10,
+        g.c.xf.mode === "canvas"
+          ? Math.hypot(x - g.c.xf.px, y - g.c.xf.py)
+          : Math.hypot(x - g.center.x, y - g.center.y)
+      ),
+    };
+    return true;
+  }
+
+  _gizmoMove(x, y) {
+    const d = this.gdrag;
+    const f = d.c.xf;
+    if (!f) return;
+    const p = d.c.params;
+    const canvasMode = f.mode === "canvas";
+    // el centro de giro en pantalla: en modo "canvas" es un punto fijo del
+    // lienzo (el dibujo orbita a su alrededor); en los otros, el pivote del dibujo
+    const { x: cx, y: cy } = canvasMode ? { x: f.px, y: f.py } : this._map(f, { x: f.px, y: f.py });
+
+    if (d.kind === "move") {
+      let mx = x - d.last.x, my = y - d.last.y;
+      if (canvasMode) {
+        // el desplazamiento está "adentro" de la rotación: hay que deshacerla
+        const cos = Math.cos(-f.ang), sin = Math.sin(-f.ang);
+        [mx, my] = [(mx * cos - my * sin) / f.s, (mx * sin + my * cos) / f.s];
+      }
+      p.posX += mx;
+      p.posY += my;
+    } else if (d.kind === "rotate") {
+      const a1 = Math.atan2(d.last.y - cy, d.last.x - cx);
+      const a2 = Math.atan2(y - cy, x - cx);
+      let da = a2 - a1;
+      while (da > Math.PI) da -= TAU;
+      while (da < -Math.PI) da += TAU;
+      p.rotation += (da * 180) / Math.PI;
+    } else if (d.kind === "scale") {
+      p.scale = Math.min(20, Math.max(0.05, d.startScale * (Math.hypot(x - cx, y - cy) / d.startDist)));
+    } else if (d.kind === "pivot") {
+      // mover el pivote SIN que el dibujo se mueva: el pivote nuevo es el punto
+      // del dibujo que está bajo el mouse, y se compensa la posición para que
+      // todo quede donde estaba
+      const P2 = this._toLocal(d.c, x, y);
+      let T2x, T2y;
+      if (canvasMode) {
+        // acá el desplazamiento está adentro de la rotación: t2 = t − P + P2 + (R·S)⁻¹ (P − P2)
+        const icos = Math.cos(-f.ang) / f.s, isin = Math.sin(-f.ang) / f.s;
+        const vx = f.px - P2.x, vy = f.py - P2.y;
+        T2x = f.tx - f.px + P2.x + (vx * icos - vy * isin);
+        T2y = f.ty - f.py + P2.y + (vx * isin + vy * icos);
+      } else {
+        const cos = Math.cos(f.ang) * f.s, sin = Math.sin(f.ang) * f.s;
+        const rx = P2.x - f.px, ry = P2.y - f.py; // pivote nuevo menos pivote viejo
+        T2x = f.px + f.tx - P2.x + (rx * cos - ry * sin);
+        T2y = f.py + f.ty - P2.y + (rx * sin + ry * cos);
+      }
+      // el movimiento continuo (órbita, deriva) no es parte de la posición fija
+      const extraX = f.tx - p.posX, extraY = f.ty - p.posY;
+      const W = f.px - p.pivotX, H = f.py - p.pivotY; // el centro de la pantalla
+      p.pivotX = P2.x - W;
+      p.pivotY = P2.y - H;
+      p.posX = T2x - extraX;
+      p.posY = T2y - extraY;
+    }
+    d.last = { x, y };
+    this.onParamsChanged?.();
+  }
+
+  // ---------- mouse ----------
+  // Primero el gizmo (si está prendido); después se recorren los conjuntos de
+  // arriba hacia abajo: gana el que está más arriba. A cada motor se le pasa
+  // el mouse ya "deshecho" de la transformación de su conjunto.
+
+  pointerDown(x, y, altKey = false) {
+    if (this.settings.gizmo && this._gizmoDown(x, y, altKey)) return true;
     for (let i = this.conjuntos.length - 1; i >= 0; i--) {
       const c = this.conjuntos[i];
-      if (c.visible && c.engine.pointerDown(x, y)) {
+      if (!c.visible) continue;
+      const p = this._toLocal(c, x, y);
+      if (c.engine.pointerDown(p.x, p.y)) {
         this.active = c;
         return true;
       }
@@ -83,20 +466,33 @@ export class Scene {
   }
 
   pointerMove(x, y) {
-    this.active?.engine.pointerMove(x, y);
+    if (this.gdrag) {
+      this._gizmoMove(x, y);
+      return;
+    }
+    if (this.active) {
+      const p = this._toLocal(this.active, x, y);
+      this.active.engine.pointerMove(p.x, p.y);
+    }
   }
 
   pointerUp() {
+    this.gdrag = null;
     this.active?.engine.pointerUp();
     this.active = null;
   }
 
   get isDragging() {
-    return !!this.active;
+    return !!this.active || !!this.gdrag;
   }
 
   hover(x, y) {
-    return this.conjuntos.some((c) => c.visible && c.engine.hover(x, y));
+    if (this.settings.gizmo && this._gizmoHit(x, y)) return true;
+    return this.conjuntos.some((c) => {
+      if (!c.visible) return false;
+      const p = this._toLocal(c, x, y);
+      return c.engine.hover(p.x, p.y);
+    });
   }
 
   // doble click: sobre algo agarrable, lo que haga ese conjunto (borrar un
@@ -104,8 +500,10 @@ export class Scene {
   doubleClick(x, y) {
     for (let i = this.conjuntos.length - 1; i >= 0; i--) {
       const c = this.conjuntos[i];
-      if (c.visible && c.engine.hover(x, y)) {
-        c.engine.doubleClick(x, y);
+      if (!c.visible) continue;
+      const p = this._toLocal(c, x, y);
+      if (c.engine.hover(p.x, p.y)) {
+        c.engine.doubleClick(p.x, p.y);
         c.params.freeCount = c.engine.freeCircles.length; // el slider baja con el círculo borrado
         return;
       }

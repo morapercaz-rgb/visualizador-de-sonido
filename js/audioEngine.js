@@ -88,50 +88,60 @@ export class AudioEngine {
     return !!this.audioEl && !this.audioEl.paused;
   }
 
-  // analiza el frame actual de audio y devuelve varias cosas:
-  // - graves/medios/agudos promediados (0-1 cada uno), para reactividad general
-  // - "centroid": el "centro de brillo" del sonido en este instante (0 = todo
-  //   grave, 1 = todo agudo) — se usa para mover el color a lo largo de una
-  //   paleta según cómo suena la música en cada momento.
-  // - "spectrum": el espectro completo repartido en `spectrumBins` casilleros,
-  //   útil para modos visuales tipo ecualizador (barras, picos radiales) que
-  //   necesitan un valor por franja de frecuencia en vez de un solo promedio.
+  // analiza el frame actual de audio y devuelve (ver analyzeBytes):
+  // graves/medios/agudos, "centroid" (centro de brillo) y el espectro repartido.
   analyze(spectrumBins = 32) {
-    if (!this.analyser) {
-      return { bass: 0, mid: 0, treble: 0, overall: 0, centroid: 0, spectrum: new Array(spectrumBins).fill(0) };
-    }
-
+    if (!this.analyser) return silentAudio(spectrumBins);
     this.analyser.getByteFrequencyData(this.dataArray);
-    const n = this.dataArray.length;
-    const bassEnd = Math.floor(n * 0.1);
-    const midEnd = Math.floor(n * 0.4);
-
-    let bass = 0, mid = 0, treble = 0;
-    let weightedSum = 0, totalEnergy = 0;
-    for (let i = 0; i < n; i++) {
-      const v = this.dataArray[i];
-      if (i < bassEnd) bass += v;
-      else if (i < midEnd) mid += v;
-      else treble += v;
-      weightedSum += i * v;
-      totalEnergy += v;
-    }
-
-    bass /= bassEnd * 255;
-    mid /= (midEnd - bassEnd) * 255;
-    treble /= (n - midEnd) * 255;
-    const centroid = totalEnergy > 0 ? weightedSum / totalEnergy / (n - 1) : 0;
-
-    const bucketSize = Math.max(1, Math.floor(n / spectrumBins));
-    const spectrum = new Array(spectrumBins).fill(0);
-    for (let b = 0; b < spectrumBins; b++) {
-      const start = b * bucketSize;
-      const end = Math.min(start + bucketSize, n);
-      let sum = 0;
-      for (let i = start; i < end; i++) sum += this.dataArray[i];
-      spectrum[b] = sum / ((end - start) * 255 || 1);
-    }
-
-    return { bass, mid, treble, overall: (bass + mid + treble) / 3, centroid, spectrum };
+    return analyzeBytes(this.dataArray, spectrumBins);
   }
+}
+
+// audio "en silencio": lo que se usa cuando no hay nada sonando
+export function silentAudio(spectrumBins = 32) {
+  return { bass: 0, mid: 0, treble: 0, overall: 0, centroid: 0, spectrum: new Array(spectrumBins).fill(0) };
+}
+
+// Convierte las magnitudes de frecuencia de UN instante (lo que devuelve el
+// analizador de Web Audio: un Uint8Array con valores 0-255) en lo que usa el
+// resto del programa:
+// - graves/medios/agudos promediados (0-1 cada uno), para reactividad general
+// - "centroid": el "centro de brillo" del sonido en este instante (0 = todo
+//   grave, 1 = todo agudo) — mueve el color a lo largo de una paleta.
+// - "spectrum": el espectro completo repartido en `spectrumBins` casilleros,
+//   útil para modos tipo ecualizador (barras, picos radiales).
+// Es una función suelta (no depende de ningún analizador en vivo) para poder
+// usarla también al exportar cuadro por cuadro, analizando el audio sin tocarlo.
+export function analyzeBytes(data, spectrumBins = 32) {
+  const n = data.length;
+  const bassEnd = Math.floor(n * 0.1);
+  const midEnd = Math.floor(n * 0.4);
+
+  let bass = 0, mid = 0, treble = 0;
+  let weightedSum = 0, totalEnergy = 0;
+  for (let i = 0; i < n; i++) {
+    const v = data[i];
+    if (i < bassEnd) bass += v;
+    else if (i < midEnd) mid += v;
+    else treble += v;
+    weightedSum += i * v;
+    totalEnergy += v;
+  }
+
+  bass /= bassEnd * 255;
+  mid /= (midEnd - bassEnd) * 255;
+  treble /= (n - midEnd) * 255;
+  const centroid = totalEnergy > 0 ? weightedSum / totalEnergy / (n - 1) : 0;
+
+  const bucketSize = Math.max(1, Math.floor(n / spectrumBins));
+  const spectrum = new Array(spectrumBins).fill(0);
+  for (let b = 0; b < spectrumBins; b++) {
+    const start = b * bucketSize;
+    const end = Math.min(start + bucketSize, n);
+    let sum = 0;
+    for (let i = start; i < end; i++) sum += data[i];
+    spectrum[b] = sum / ((end - start) * 255 || 1);
+  }
+
+  return { bass, mid, treble, overall: (bass + mid + treble) / 3, centroid, spectrum };
 }
