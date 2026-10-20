@@ -147,11 +147,11 @@ Modo **"aura de colores (mezcla)"**: un aura grande hecha de varias luces de dis
 
 Carpeta "Agarrar y mover (mouse)". El cursor se vuelve una manito cuando estás sobre algo que se puede agarrar.
 
-**Movimiento suave (física).** Lo que agarrás no queda pegado al mouse: lo persigue con un poco de retraso, y al soltarlo sigue deslizando con su impulso hasta frenar.
-- **suavidad al arrastrar**: 0 = pegado al mouse (duro); cerca de 1 = lo persigue con mucho retraso.
-- **inercia al soltar**: 0 = frena en seco; cerca de 1 = se desliza mucho tiempo.
-- **gravedad** (solo círculos libres): los hace caer hacia abajo; **rebote** controla cuánto rebotan contra los bordes de la pantalla.
-Vale para los círculos libres, los núcleos del remolino, la pieza entera y las luces del aura de colores.
+**Por defecto, lo que agarrás queda pegado al mouse y frena en seco al soltarlo** (control total). Si querés un movimiento más suave, hay una física opcional que está apagada (en 0):
+- **suavidad al arrastrar**: 0 = pegado al mouse; cerca de 1 = lo persigue con retraso.
+- **inercia al soltar**: 0 = frena en seco; cerca de 1 = se desliza un rato.
+- **gravedad** (solo círculos libres): los hace caer hacia abajo; **rebote** controla cuánto rebotan contra los bordes. Sin gravedad ni inercia no hay bordes: el círculo queda donde lo sueltes.
+Vale para los círculos libres, los núcleos del remolino, la pieza entera y las luces del aura de colores. Aparte, en el aura de colores, **atracción al centro** (también en 0 por defecto) va juntando las luces después de soltarlas.
 
 - **Núcleos del remolino**: en el modo "remolino de círculos" agarrás cada núcleo de luz y lo llevás adonde quieras; toda la figura se reacomoda siguiéndolo.
 - **La pieza entera**: en anillo, picos, espiral, remolino y ecos podés agarrar la pieza (por el centro, o por la copia grande en los ecos) y moverla de lugar. En grilla, barras, aura envolvente y auras/gotas no hay nada para agarrar, porque ocupan toda la pantalla.

@@ -78,8 +78,10 @@ export function createDefaultParams() {
     pulseAudio: 0, // cuánto crece con los graves
 
     // --- física al agarrar y mover (mouse) ---
-    physFollow: 0.82, // 0 = pegado al mouse · cerca de 1 = lo persigue con mucho retraso
-    physInertia: 0.94, // 0 = frena en seco al soltar · cerca de 1 = se desliza mucho
+    // Por defecto todo está en 0: lo que agarrás queda PEGADO al mouse y frena en
+    // seco al soltarlo. Subir estos valores agrega suavidad e inercia (opcional).
+    physFollow: 0, // 0 = pegado al mouse · cerca de 1 = lo persigue con mucho retraso
+    physInertia: 0, // 0 = frena en seco al soltar · cerca de 1 = se desliza mucho
     physGravity: 0, // caída hacia abajo (círculos libres)
     physBounce: 0.6, // rebote contra los bordes de la pantalla
 
@@ -88,7 +90,7 @@ export function createDefaultParams() {
     mixSize: 220,
     mixOpacity: 0.9,
     mixBlend: "source-over", // cómo se mezclan los colores: source-over | screen | lighter
-    mixPull: 0.3, // atracción hacia el centro del grupo (para que se sigan mezclando)
+    mixPull: 0, // atracción hacia el centro del grupo (0 = cada luz se queda donde la soltás)
     mixDrift: 0.4, // flotar solas
     mixHandles: true, // mostrar las manijas para agarrar cada luz
     deformMix: true,

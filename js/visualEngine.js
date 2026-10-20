@@ -410,7 +410,9 @@ export class VisualEngine {
       // gravedad y rebota contra los bordes de la pantalla
       const grabbed = this.drag?.t.ref === c;
       this._glide(c, grabbed ? { x: this.pointer.x - this.drag.gx, y: this.pointer.y - this.drag.gy } : null, grabbed, params);
-      if (!grabbed) {
+      // la gravedad y los rebotes contra los bordes solo existen si se los pidió
+      // (gravedad o inercia mayores que 0); si no, el círculo queda donde lo soltaste
+      if (!grabbed && (params.physGravity > 0 || params.physInertia > 0)) {
         c.vy += params.physGravity * 0.35 * this.k;
         const bounce = params.physBounce;
         if (c.x < size) { c.x = size; c.vx = Math.abs(c.vx) * bounce; }
