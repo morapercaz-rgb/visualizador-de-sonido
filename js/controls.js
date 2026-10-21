@@ -209,7 +209,7 @@ export function createDefaultParams() {
     recBitrate: 12, // megabits por segundo
 
     // exportar animación de un solo archivo (PNG animado o GIF)
-    animSeconds: 4,
+    animSeconds: 10,
     animFps: 20,
     animWidth: 640, // ancho del archivo (se achica desde el lienzo, si no pesaría muchísimo)
     gifTransparent: false, // el GIF tiene transparencia de todo o nada: se ve mejor con fondo
@@ -602,7 +602,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   const exportF = pane.addFolder({ title: "Exportar animación (PNG animado, GIF, secuencia)" });
 
   const animF = exportF.addFolder({ title: "Un solo archivo que se mueve (PNG animado / GIF)" });
-  animF.addInput(gp, "animSeconds", { min: 1, max: 30, step: 0.5, label: "duración (s)" });
+  animF.addInput(gp, "animSeconds", { min: 1, max: 120, step: 0.5, label: "duración (s)" }).on("change", () => actions.syncAnimDuration?.());
   animF.addInput(gp, "animFps", { options: { "12 cuadros/seg": 12, "15 cuadros/seg": 15, "20 cuadros/seg": 20, "24 cuadros/seg": 24, "30 cuadros/seg": 30 }, label: "cuadros/seg" });
   animF.addInput(gp, "animWidth", { min: 160, max: 1920, step: 10, label: "ancho del archivo (px)" });
   animF.addInput(gp, "pngTransparent", { label: "fondo transparente (PNG animado y secuencia)" });

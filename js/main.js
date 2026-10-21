@@ -2,12 +2,12 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261021160448";
-import { VideoLayer } from "./videoLayer.js?v=20261021160448";
-import { Scene } from "./scene.js?v=20261021160448";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021160448";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021160448";
-import { exportPngSequence, exportApng, exportGif } from "./exporter.js?v=20261021160448";
+import { AudioEngine } from "./audioEngine.js?v=20261021162345";
+import { VideoLayer } from "./videoLayer.js?v=20261021162345";
+import { Scene } from "./scene.js?v=20261021162345";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021162345";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021162345";
+import { exportPngSequence, exportApng, exportGif } from "./exporter.js?v=20261021162345";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -50,6 +50,7 @@ function buildPanel() {
       resetPiece: () => scene.selected.engine.resetPiece(),
       rebuild: () => setTimeout(buildPanel, 0),
       refreshPanel: () => pane.refresh(),
+      syncAnimDuration: () => syncAnimDurSelect(),
       applyCanvas: () => applyCanvasSize(),
       exportPng: () => startExport("seq"),
       exportApng: () => startExport("apng", { forceTransparent: false }),
@@ -312,6 +313,30 @@ recBtn.addEventListener("click", async () => {
 // Los dos primeros no se descargan solos: antes se muestra una vista previa
 // moviéndose, y se guarda con el botón "Guardar".
 const gifBtn = document.getElementById("gifBtn");
+
+// selector de duración (junto a los botones): es la misma "duración" del panel
+// ("Exportar animación"), solo que a mano para no tener que buscarla
+const animDur = document.getElementById("animDur");
+function syncAnimDurSelect() {
+  if (!animDur) return;
+  const secs = globalParams.animSeconds;
+  const presets = [4, 8, 10, 15, 20, 30, 45, 60];
+  if (!animDur.options.length) {
+    for (const v of presets) animDur.add(new Option(`${v} s`, String(v)));
+  }
+  // si en el panel pusieron un valor que no está en la lista, se agrega
+  if (![...animDur.options].some((o) => +o.value === secs)) {
+    const o = new Option(`${secs} s`, String(secs));
+    const at = [...animDur.options].findIndex((x) => +x.value > secs);
+    animDur.add(o, at < 0 ? null : animDur.options[at]);
+  }
+  animDur.value = String(secs);
+}
+animDur?.addEventListener("change", () => {
+  globalParams.animSeconds = +animDur.value;
+  pane.refresh();
+});
+syncAnimDurSelect();
 const animPreview = document.getElementById("animPreview");
 const animImg = document.getElementById("animImg");
 const animInfo = document.getElementById("animInfo");

@@ -82,6 +82,20 @@ button {
   transition: background 0.15s;
 }
 
+#animDur {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #eee;
+  padding: 6px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#animDur option {
+  color: #111;
+}
+
 .fileBtn:hover,
 button:hover {
   background: rgba(255, 255, 255, 0.18);
