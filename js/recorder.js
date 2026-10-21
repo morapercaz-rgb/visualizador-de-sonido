@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter } from "./exporter.js?v=20261021195400";
+import { ZipWriter } from "./exporter.js?v=20261021204241";
 
 export class ScreenRecorder {
   constructor() {
@@ -87,8 +87,13 @@ export class ScreenRecorder {
 //   rellena repitiendo el último, así la duración total queda bien.
 // - Se guardan en una carpeta (Chrome) o se arma un ZIP al detener.
 export class PngSequenceRecorder {
+  // tope de memoria para el modo ZIP (en bytes). Al llegar, deja de tomar cuadros
+  // y avisa (full = true) para que se guarde lo grabado hasta ahí.
+  static maxBytes = 1.5e9;
+
   constructor() {
     this.active = false;
+    this.full = false;
   }
 
   get frames() {
@@ -109,12 +114,13 @@ export class PngSequenceRecorder {
     this.inflight = 0;
     this.chain = Promise.resolve();
     this.error = null;
+    this.full = false;
     this.t0 = performance.now();
     this.active = true;
   }
 
   tick(now) {
-    if (!this.active || this.error) return;
+    if (!this.active || this.error || this.full) return;
     const due = Math.floor(((now - this.t0) / 1000) * this.fps) + 1; // cuántos cuadros tendrían que existir ya
     if (due <= this.slots || this.inflight >= 6) return; // todavía no toca, o la compu está atrasada: se junta con el próximo
 
@@ -144,7 +150,7 @@ export class PngSequenceRecorder {
         await w.close();
       } else {
         this.zip.add(`${this.name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
-        if (this.zip.bytes > 1.5e9) throw new Error("se llenó la memoria para el ZIP: grabá menos tiempo, bajá el tamaño del lienzo o usá Chrome para guardar en una carpeta");
+        if (this.zip.bytes > PngSequenceRecorder.maxBytes) this.full = true; // se corta acá, sin perder lo grabado
       }
     }
   }

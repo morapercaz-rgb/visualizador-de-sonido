@@ -111,7 +111,8 @@ button:hover {
   font-size: 10px;
 }
 
-#recBtn.recording {
+#recBtn.recording,
+#recPngBtn.recording {
   background: rgba(220, 40, 60, 0.35);
   border-color: rgba(255, 90, 110, 0.8);
 }

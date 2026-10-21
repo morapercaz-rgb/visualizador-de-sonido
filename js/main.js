@@ -2,12 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261021195400";
-import { VideoLayer } from "./videoLayer.js?v=20261021195400";
-import { Scene } from "./scene.js?v=20261021195400";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021195400";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021195400";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261021195400";
+import { AudioEngine } from "./audioEngine.js?v=20261021204241";
+import { VideoLayer } from "./videoLayer.js?v=20261021204241";
+import { Scene } from "./scene.js?v=20261021204241";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021204241";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021204241";
+import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261021204241";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261021204241";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -61,6 +62,43 @@ function buildPanel() {
       duplicateSet: () => { scene.duplicate(); setTimeout(buildPanel, 0); },
       removeSet: () => { scene.remove(); setTimeout(buildPanel, 0); },
       bringToFront: () => { scene.bringToFront(); setTimeout(buildPanel, 0); },
+      savePreset: (name) => {
+        const r = savePreset(name, scene.selected);
+        recInfo.textContent = r.ok
+          ? `${r.replaced ? "actualicé" : "guardé"} "${r.name}" en tus conjuntos guardados: va a estar ahí la próxima vez que entres`
+          : "no pude guardar: el navegador no deja guardar datos (¿ventana privada?). Probá con \"exportar a un archivo\"";
+        setTimeout(buildPanel, 0);
+      },
+      addPreset: (name) => {
+        const p = getPreset(name);
+        if (!p) return;
+        scene.addFromPreset(p);
+        recInfo.textContent = `sumé "${p.name}" a la escena`;
+        setTimeout(buildPanel, 0);
+      },
+      replacePreset: (name) => {
+        const p = getPreset(name);
+        if (!p) return;
+        scene.replaceFromPreset(p);
+        recInfo.textContent = `el conjunto que editabas ahora es "${p.name}"`;
+        setTimeout(buildPanel, 0);
+      },
+      deletePreset: (name) => {
+        if (!name || !confirm(`¿Borrar "${name}" de tus conjuntos guardados? (los que ya tenés en la escena no se tocan)`)) return;
+        deletePreset(name);
+        recInfo.textContent = `borré "${name}" de tus guardados`;
+        setTimeout(buildPanel, 0);
+      },
+      exportPresets: () => {
+        if (!listPresets().length) { recInfo.textContent = "no hay conjuntos guardados para exportar"; return; }
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([exportPresetsText()], { type: "application/json" }));
+        a.download = "mis-conjuntos.json";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+        recInfo.textContent = "descargué mis-conjuntos.json (se puede importar en otro navegador o pasárselo a una amiga)";
+      },
+      importPresets: () => document.getElementById("presetInput")?.click(),
       addKey: () => { scene.addKey(); setTimeout(buildPanel, 0); },
       removeKey: () => { scene.removeKey(); setTimeout(buildPanel, 0); },
       clearKeys: () => { scene.clearKeys(); setTimeout(buildPanel, 0); },
@@ -70,6 +108,16 @@ function buildPanel() {
   if (root) root.scrollTop = scrollTop;
 }
 buildPanel();
+
+// importar conjuntos de un archivo exportado
+document.getElementById("presetInput")?.addEventListener("change", async (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = "";
+  if (!f) return;
+  const n = importPresetsText(await f.text());
+  recInfo.textContent = n < 0 ? "ese archivo no es de conjuntos (o no se pudo guardar)" : `importé ${n} conjunto${n === 1 ? "" : "s"}: están en "Mis conjuntos guardados"`;
+  buildPanel();
+});
 
 // ---------- tamaño del lienzo ----------
 // El canvas tiene un tamaño fijo (el de la "composición": es lo que se graba y
@@ -220,33 +268,109 @@ const pngBtn = document.getElementById("pngBtn");
 let recTimer = null;
 let exportCancel = false;
 
+const recPngBtn = document.getElementById("recPngBtn");
+const FOLDER_TIP =
+  "elegí o creá una carpeta NUEVA (Chrome no deja usar Escritorio, Descargas ni Documentos directamente), o cambiá \"guardar en\" a ZIP en el panel";
+
+// Pide la carpeta donde guardar las secuencias de PNG. Devuelve:
+//   { dirHandle, note } → listo (dirHandle null = se usa ZIP)
+//   null               → el usuario canceló: no se hace nada (y se le dice por qué)
+// Tiene que llamarse JUSTO después de un click: el navegador solo deja abrir
+// el selector de carpetas en ese momento.
+async function askSaveTarget() {
+  if (globalParams.pngSaveTo !== "folder") return { dirHandle: null, note: "" };
+  if (!window.showDirectoryPicker) {
+    return { dirHandle: null, note: " · este navegador no puede guardar en carpetas: va a un ZIP" };
+  }
+  try {
+    return { dirHandle: await window.showDirectoryPicker({ mode: "readwrite" }), note: "" };
+  } catch (e) {
+    if (e.name === "AbortError") {
+      recInfo.textContent = `no elegiste carpeta, así que no se hizo nada: ${FOLDER_TIP}`;
+      return null;
+    }
+    return { dirHandle: null, note: ` · no se pudo usar esa carpeta (${e.message}): va a un ZIP` };
+  }
+}
+
+// ---- grabar PNG en vivo ----
+async function startPngRecording() {
+  if (pngRec.active || recorder.isRecording || exporting) return;
+  const target = await askSaveTarget();
+  if (!target) return;
+  const opts = {
+    canvas,
+    fps: globalParams.recFps,
+    transparent: globalParams.pngTransparent,
+    includeVideo: !globalParams.pngTransparent || globalParams.pngIncludeVideo,
+  };
+  let note = target.note;
+  try {
+    await pngRec.start({ ...opts, dirHandle: target.dirHandle });
+  } catch (e) {
+    // la carpeta no se pudo usar (permiso, nombre…): se prueba con ZIP
+    try {
+      await pngRec.start({ ...opts, dirHandle: null });
+      note = ` · no se pudo escribir en esa carpeta (${e.message}): va a un ZIP`;
+    } catch (e2) {
+      recInfo.textContent = `error: ${e2.message}`;
+      return;
+    }
+  }
+  pngFullHandled = false;
+  // con fondo transparente se ve un damero detrás del lienzo
+  canvas.classList.toggle("transparent", globalParams.pngTransparent);
+  recBtn.classList.add("recording");
+  recBtn.textContent = "■ Detener";
+  if (recPngBtn) {
+    recPngBtn.classList.add("recording");
+    recPngBtn.textContent = "■ Detener PNG";
+  }
+  recTimer = setInterval(() => {
+    const s = Math.floor((performance.now() - pngRec.t0) / 1000);
+    recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.frames} cuadros · ${canvas.width}×${canvas.height}${note}`;
+  }, 250);
+}
+
+async function stopPngRecording() {
+  clearInterval(recTimer);
+  recBtn.textContent = "guardando…";
+  if (recPngBtn) recPngBtn.textContent = "guardando…";
+  try {
+    const r = await pngRec.stop();
+    recInfo.textContent =
+      `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado (descomprimilo antes de abrirlo en After)"}` +
+      (r.repeated ? ` · ${r.repeated} cuadros repetidos porque la compu no llegó (probá un lienzo más chico)` : "");
+  } catch (e) {
+    recInfo.textContent = `error: ${e.message}`;
+  }
+  recBtn.classList.remove("recording");
+  recBtn.textContent = "● Grabar";
+  if (recPngBtn) {
+    recPngBtn.classList.remove("recording");
+    recPngBtn.textContent = "● Grabar PNG";
+  }
+  canvas.classList.remove("transparent");
+  if (pendingResize) {
+    pendingResize = false;
+    applyCanvasSize();
+  }
+}
+let pngFullHandled = false;
+
+// el botón de al lado de "Grabar": graba PNG directo, sin tocar el panel
+recPngBtn?.addEventListener("click", () => {
+  if (pngRec.active) stopPngRecording();
+  else if (recorder.isRecording || exporting) recInfo.textContent = "ya hay otra grabación o exportación en curso";
+  else startPngRecording();
+});
+
 recBtn.addEventListener("click", async () => {
   if (exporting) {
     exportCancel = true;
     return;
   }
-
-  // ---- detener ----
-  if (pngRec.active) {
-    clearInterval(recTimer);
-    recBtn.textContent = "guardando…";
-    try {
-      const r = await pngRec.stop();
-      recInfo.textContent =
-        `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}` +
-        (r.repeated ? ` · ${r.repeated} cuadros repetidos porque la compu no llegó (probá un lienzo más chico)` : "");
-    } catch (e) {
-      recInfo.textContent = `error: ${e.message}`;
-    }
-    recBtn.classList.remove("recording");
-    recBtn.textContent = "● Grabar";
-    canvas.classList.remove("transparent");
-    if (pendingResize) {
-      pendingResize = false;
-      applyCanvasSize();
-    }
-    return;
-  }
+  if (pngRec.active) return stopPngRecording();
   if (recorder.isRecording) {
     recorder.stop();
     clearInterval(recTimer);
@@ -259,38 +383,10 @@ recBtn.addEventListener("click", async () => {
     }
     return;
   }
+  // si en el panel el formato elegido es "Secuencia de PNG", este botón graba PNG
+  if (globalParams.recFormat === "png") return startPngRecording();
 
-  // ---- empezar: secuencia de PNG en vivo ----
-  if (globalParams.recFormat === "png") {
-    // La carpeta se pide ANTES de cualquier otra cosa (el navegador solo deja
-    // abrir el selector justo después de un click). Sin esa función: ZIP.
-    let dirHandle = null;
-    if (window.showDirectoryPicker) {
-      try {
-        dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-      } catch (e) {
-        if (e.name === "AbortError") return;
-      }
-    }
-    await pngRec.start({
-      canvas,
-      fps: globalParams.recFps,
-      dirHandle,
-      transparent: globalParams.pngTransparent,
-      includeVideo: !globalParams.pngTransparent || globalParams.pngIncludeVideo,
-    });
-    // con fondo transparente se ve un damero detrás del lienzo
-    canvas.classList.toggle("transparent", globalParams.pngTransparent);
-    recBtn.classList.add("recording");
-    recBtn.textContent = "■ Detener";
-    recTimer = setInterval(() => {
-      const s = Math.floor((performance.now() - pngRec.t0) / 1000);
-      recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.frames} cuadros · ${canvas.width}×${canvas.height}`;
-    }, 250);
-    return;
-  }
-
-  // ---- empezar: video ----
+  // ---- video ----
   const wanted = globalParams.recFormat;
   const used = recorder.start(canvas, audio.recordingStream, {
     format: wanted,
@@ -394,16 +490,9 @@ convInput?.addEventListener("change", async () => {
   convInput.value = ""; // permite elegir el mismo archivo otra vez
   if (!file || exporting || recorder.isRecording || pngRec.active) return;
 
-  // La carpeta se intenta pedir apenas se elige el archivo. Si el navegador no
-  // lo permite en ese momento (o no tiene la función), se arma un ZIP.
-  let dirHandle = null;
-  if (window.showDirectoryPicker) {
-    try {
-      dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-    } catch (e) {
-      if (e.name === "AbortError") return;
-    }
-  }
+  const target = await askSaveTarget();
+  if (!target) return;
+  const dirHandle = target.dirHandle;
 
   exporting = true;
   exportCancel = false;
@@ -429,16 +518,14 @@ convInput?.addEventListener("change", async () => {
 async function startExport(kind, { forceTransparent = false } = {}) {
   if (exporting || recorder.isRecording) return;
 
-  // Para la secuencia, la carpeta se pide ANTES de cualquier otra cosa: el
-  // navegador solo deja abrir el selector justo después de un click. Sin esa
-  // función (Safari, Firefox) se arma un ZIP.
+  // Para la secuencia, la carpeta (si se eligió guardar en carpeta) se pide ANTES
+  // de cualquier otra cosa: el navegador solo deja abrir el selector justo
+  // después de un click.
   let dirHandle = null;
-  if (kind === "seq" && window.showDirectoryPicker) {
-    try {
-      dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-    } catch (e) {
-      if (e.name === "AbortError") return; // cerró el selector: no se exporta nada
-    }
+  if (kind === "seq") {
+    const target = await askSaveTarget();
+    if (!target) return;
+    dirHandle = target.dirHandle;
   }
 
   // El PNG animado "sin fondo" siempre es transparente. Con fondo transparente
@@ -601,6 +688,10 @@ function loop(now = performance.now()) {
   if (!pngRec.active || pngRec.includeVideo) videoLayer.draw(ctx, w, h, globalParams, audioData, dt);
   scene.draw(ctx, w, h, audioData, dt, octx);
   pngRec.tick(now); // si se está grabando PNG, toma la foto de este cuadro cuando toca
+  if (pngRec.active && pngRec.full && !pngFullHandled) {
+    pngFullHandled = true;
+    stopPngRecording().then(() => (recInfo.textContent += " · se llenó la memoria: se guardó lo grabado hasta ahí (probá un lienzo más chico, o guardar en una carpeta)"));
+  }
 
   requestAnimationFrame(loop);
 }

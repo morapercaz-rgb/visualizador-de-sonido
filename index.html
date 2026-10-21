@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Visualizador de sonido</title>
-  <link rel="stylesheet" href="style.css?v=20261021195400" />
+  <link rel="stylesheet" href="style.css?v=20261021204241" />
 </head>
 <body>
   <canvas id="stage"></canvas>
@@ -27,7 +27,8 @@
       <button id="nextVideo">▶</button>
     </div>
     <div class="row">
-      <button id="recBtn">● Grabar</button>
+      <button id="recBtn" title="Graba un video (el formato se elige en el panel, carpeta Grabación)">● Grabar</button>
+      <button id="recPngBtn" title="Graba una imagen PNG por cuadro, con fondo transparente, mientras movés las cosas">● Grabar PNG</button>
     </div>
     <div class="row">
       <button id="pngBtn" title="Un solo archivo PNG que se mueve, con fondo transparente (solo los colores)">⬇ PNG animado</button>
@@ -40,6 +41,7 @@
         <input type="file" id="convInput" accept="image/png,image/gif,image/webp,.png,.gif,.webp" hidden />
       </label>
     </div>
+    <input type="file" id="presetInput" accept="application/json,.json" hidden />
     <div id="recInfo">sin mouse ni panel en el video</div>
     <div id="status">Sin archivos cargados todavía</div>
 
@@ -62,6 +64,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=20261021195400"></script>
+  <script type="module" src="js/main.js?v=20261021204241"></script>
 </body>
 </html>

@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261021195400";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261021195400";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261021204241";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261021204241";
 
 export { crc32 };
 
@@ -243,7 +243,8 @@ export async function exportPngSequence(o) {
     `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${fps} cuadros/seg.\n` +
     `El audio no va en las imágenes: importá el archivo de audio original aparte.\n`;
 
-  const { frames } = await renderAnimation(o, async (canvas, i) => {
+  let frames = 0;
+  await renderAnimation(o, async (canvas, i) => {
     const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
     const file = `${name}_${pad(i + 1)}.png`;
     if (sub) {
@@ -253,8 +254,11 @@ export async function exportPngSequence(o) {
       await w.close();
     } else {
       zip.add(`${name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
-      if (zip.bytes > 1.5e9) throw new Error("demasiado grande para un ZIP en memoria: bajá el tamaño o la duración, o usá Chrome para guardar en una carpeta");
+      if (zip.bytes > 1.5e9) throw new Error("__lleno__"); // se corta y se guarda lo hecho hasta acá
     }
+    frames = i + 1;
+  }).catch((e) => {
+    if (e.message !== "__lleno__") throw e;
   });
 
   if (sub) {

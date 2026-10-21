@@ -10,8 +10,8 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261021195400";
-import { createDefaultParams } from "./controls.js?v=20261021195400";
+import { VisualEngine } from "./visualEngine.js?v=20261021204241";
+import { createDefaultParams } from "./controls.js?v=20261021204241";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -76,6 +76,31 @@ export class Scene {
     c.params.posX += 60;
     c.params.posY += 40;
     return c;
+  }
+
+  // suma un conjunto nuevo con la configuración guardada en un preset. Los
+  // parámetros que el preset no tenga (porque se agregaron después) quedan en su valor inicial.
+  addFromPreset(p) {
+    const c = this.add();
+    this._applyPreset(c, p);
+    c.name = p.name;
+    return c;
+  }
+
+  // reemplaza la configuración del conjunto seleccionado por la de un preset
+  replaceFromPreset(p) {
+    const c = this.selected;
+    this._applyPreset(c, p);
+    c.name = p.name;
+    return c;
+  }
+
+  _applyPreset(c, p) {
+    c.params = { ...createDefaultParams(), ...structuredClone(p.params) };
+    c.keys = structuredClone(p.keys ?? []);
+    c.engine = new VisualEngine(); // arranca limpio, sin restos del conjunto anterior
+    c.spinAngle = 0;
+    c._lastT = null;
   }
 
   // borra el seleccionado (siempre queda al menos uno)

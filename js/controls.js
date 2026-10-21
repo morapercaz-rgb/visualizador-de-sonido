@@ -9,6 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
+import { listPresets } from "./presets.js?v=20261021204241";
 
 export function createDefaultParams() {
   return {
@@ -208,6 +209,9 @@ export function createDefaultParams() {
     recFps: 30,
     recBitrate: 12, // megabits por segundo
 
+    // dónde se guardan las secuencias de PNG: "zip" (se descarga solo, sin permisos) o "folder" (una carpeta que elegís; solo Chrome)
+    pngSaveTo: "zip",
+
     // exportar animación de un solo archivo (PNG animado o GIF)
     animSeconds: 10,
     animFps: 20,
@@ -250,6 +254,25 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   setsF.addButton({ title: "duplicar este conjunto" }).on("click", () => actions.duplicateSet?.());
   setsF.addButton({ title: "traer al frente" }).on("click", () => actions.bringToFront?.());
   setsF.addButton({ title: "eliminar este conjunto" }).on("click", () => actions.removeSet?.());
+
+  // ---- biblioteca: conjuntos guardados que quedan para la próxima vez ----
+  const libF = pane.addFolder({ title: "Mis conjuntos guardados" });
+  const saved = listPresets();
+  const lib = { name: conjunto.name, pick: saved[0]?.name ?? "" };
+  libF.addInput(lib, "name", { label: "guardar como" });
+  libF.addButton({ title: "💾 guardar este conjunto" }).on("click", () => actions.savePreset?.(lib.name));
+  if (saved.length) {
+    const opts = {};
+    for (const p of saved) opts[p.name] = p.name;
+    libF.addInput(lib, "pick", { options: opts, label: "guardados" });
+    libF.addButton({ title: "+ agregar a la escena" }).on("click", () => actions.addPreset?.(lib.pick));
+    libF.addButton({ title: "reemplazar el que estoy editando" }).on("click", () => actions.replacePreset?.(lib.pick));
+    libF.addButton({ title: "borrar de mis guardados" }).on("click", () => actions.deletePreset?.(lib.pick));
+  } else {
+    libF.addMonitor({ txt: "todavía no guardaste ninguno" }, "txt", { label: "guardados" });
+  }
+  libF.addButton({ title: "⬇ exportar a un archivo" }).on("click", () => actions.exportPresets?.());
+  libF.addButton({ title: "⬆ importar de un archivo" }).on("click", () => actions.importPresets?.());
 
   // ---- transformar, mover y animar el conjunto seleccionado ----
   const xfF = pane.addFolder({ title: "Transformar y mover" });
@@ -595,6 +618,10 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   });
   recF.addInput(gp, "recFps", { options: { "24 cuadros/seg (cine)": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
   recF.addInput(gp, "recBitrate", { min: 2, max: 80, step: 1, label: "calidad (Mbps, solo video)" });
+  recF.addInput(gp, "pngSaveTo", {
+    options: { "un ZIP (se descarga solo)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
+    label: "PNG: guardar en",
+  });
 
   // ---- exportar la animación ----
   // Hay dos tipos: un SOLO ARCHIVO que se mueve (PNG animado o GIF), o una
@@ -614,6 +641,10 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   exportF.addButton({ title: "⇄ convertir un PNG animado / GIF ya hecho a secuencia…" }).on("click", () => actions.pickConvert?.());
 
   const pngF = exportF.addFolder({ title: "Secuencia de PNG (carpeta de imágenes, para After)" });
+  pngF.addInput(gp, "pngSaveTo", {
+    options: { "un ZIP (se descarga solo)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
+    label: "guardar en",
+  });
   pngF.addInput(gp, "pngSeconds", { min: 1, max: 120, step: 1, label: "duración (s)" });
   pngF.addInput(gp, "pngFps", { options: { "24 cuadros/seg": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
   pngF.addButton({ title: "▶ exportar secuencia de PNG" }).on("click", () => actions.exportPng?.());

@@ -22,6 +22,12 @@ Carpeta **"Conjuntos"** (arriba de todo en el panel):
 - **editando**: elegís qué conjunto estás modificando. Todas las demás carpetas del panel (Formas generativas, Cada cosa, Deformar, Aura de colores, Agarrar y mover, Paleta…) editan **ese** conjunto.
 - **nombre** y **visible** (ocultar un conjunto sin borrarlo).
 - **+ conjunto nuevo**, **duplicar este conjunto** (copia toda la configuración, un poco corrida), **eliminar este conjunto** (siempre queda al menos uno).
+
+**Mis conjuntos guardados** (carpeta justo debajo de "Conjuntos") — tu biblioteca de conjuntos pre-hechos, que **queda guardada en el navegador** y está ahí la próxima vez que entres, aunque cierres la pestaña o apagues la compu:
+- **guardar como** + **💾 guardar este conjunto**: guarda la configuración del conjunto que estás editando (modo, cantidades, colores, estilo, deformación, movimiento, transformación y keyframes). Si ya había uno con ese nombre, lo actualiza.
+- **guardados** (lista) con **+ agregar a la escena** (suma una copia como conjunto nuevo, sin tocar los demás), **reemplazar el que estoy editando** (le pone esa configuración al conjunto actual) y **borrar de mis guardados** (los que ya tenés en la escena no se tocan).
+- **⬇ exportar a un archivo / ⬆ importar de un archivo**: bajan y suben tus guardados como `mis-conjuntos.json`. Sirven para pasárselos a una amiga o para llevarlos a otro navegador.
+- Ojo: la biblioteca es **de cada navegador y de cada dirección**: la de la página publicada y la de `localhost` son distintas (para llevar de una a otra, exportá e importá), y si borrás los datos del sitio o usás una ventana privada se pierde. Lo que no se guarda es lo que está pasando en el momento (dónde quedaron las gotas, las estelas…): el conjunto arranca limpio.
 - **traer al frente**: el orden de la lista es el orden de dibujo (el último queda arriba); esto manda el seleccionado al final.
 
 El mouse recorre los conjuntos de arriba hacia abajo: si agarrás algo, se mueve en el conjunto que lo tiene más arriba, y los demás no se tocan. Doble click sobre algo agarrable actúa solo en ese conjunto; doble click en un lugar vacío recentra todos.
@@ -54,7 +60,7 @@ Con "cola detrás del movimiento" (carpeta "Copias (ecos de aura)"), la fila de 
 **Grabar en vivo (botón ● Grabar)** — carpeta "Grabación: formato y calidad". Graba **lo que hacés en el momento**: el mouse, el audio sonando, todo. Elegís el formato:
 - **MP4 H.264**: lo abren After Effects, Premiere y las redes.
 - **WebM VP9** (liviano) y **WebM VP8** (compatible): solo navegador; After no los abre.
-- **Secuencia de PNG, sin fondo (en vivo)**: mientras movés las cosas, se va guardando **una imagen PNG por cada cuadro, con fondo transparente** (se ve un damero detrás del lienzo mientras graba). Se guarda en una carpeta (Chrome te la pide al empezar) o en un ZIP al detener. Los cuadros que la compu no alcanza a codificar se rellenan repitiendo el anterior para que la duración quede bien (si pasa, te avisa: probá un lienzo más chico).
+- **Secuencia de PNG, sin fondo (en vivo)**: mientras movés las cosas, se va guardando **una imagen PNG por cada cuadro, con fondo transparente** (se ve un damero detrás del lienzo mientras graba). Se guarda en un **ZIP** al detener (lo que viene por defecto) o en una **carpeta** (elegís "PNG: guardar en" en la carpeta "Grabación: formato y calidad"; Chrome te la pide al empezar y no deja elegir Escritorio, Descargas ni Documentos: elegí una carpeta nueva adentro de alguna). Si la carpeta no se puede usar, graba igual y lo deja en un ZIP, avisando por qué. Hay un botón aparte, **"● Grabar PNG"**, al lado de "● Grabar", que graba directo en este formato sin tener que cambiar el desplegable; si cancelás la carpeta, avisa y no graba. Si se llena la memoria, **corta solo y guarda lo grabado hasta ahí**. Los cuadros que la compu no alcanza a codificar se rellenan repitiendo el anterior para que la duración quede bien (si pasa, te avisa: probá un lienzo más chico).
 - **cuadros/seg** (24, 30 o 60) y **calidad** en Mbps (solo para video).
 - **Lo que se graba es solo el canvas**: no salen el mouse, el panel, el **gizmo** ni las **manijas** del aura de colores. Esas manijas viven en una capa aparte encima del lienzo que se ve en pantalla pero nunca entra en la grabación ni en la exportación.
 
