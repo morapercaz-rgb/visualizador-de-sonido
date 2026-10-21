@@ -208,6 +208,12 @@ export function createDefaultParams() {
     recFps: 30,
     recBitrate: 12, // megabits por segundo
 
+    // exportar animación de un solo archivo (PNG animado o GIF)
+    animSeconds: 4,
+    animFps: 20,
+    animWidth: 640, // ancho del archivo (se achica desde el lienzo, si no pesaría muchísimo)
+    gifTransparent: false, // el GIF tiene transparencia de todo o nada: se ve mejor con fondo
+
     // exportar secuencia de PNG (cuadro a cuadro, sin perder calidad)
     pngSeconds: 10,
     pngFps: 30,
@@ -583,18 +589,31 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
       "MP4 H.264 (After Effects, Premiere, redes)": "mp4",
       "WebM VP9 (liviano, solo navegador)": "webm9",
       "WebM VP8 (compatible)": "webm8",
+      "Secuencia de PNG, sin fondo (en vivo)": "png",
     },
     label: "formato",
   });
   recF.addInput(gp, "recFps", { options: { "24 cuadros/seg (cine)": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
-  recF.addInput(gp, "recBitrate", { min: 2, max: 80, step: 1, label: "calidad (Mbps)" });
+  recF.addInput(gp, "recBitrate", { min: 2, max: 80, step: 1, label: "calidad (Mbps, solo video)" });
 
-  // ---- exportar secuencia de PNG: cuadro por cuadro, sin perder calidad ----
-  const pngF = pane.addFolder({ title: "Exportar secuencia de PNG (para After)" });
+  // ---- exportar la animación ----
+  // Hay dos tipos: un SOLO ARCHIVO que se mueve (PNG animado o GIF), o una
+  // SECUENCIA (carpeta con una imagen por cuadro, para After Effects).
+  const exportF = pane.addFolder({ title: "Exportar animación (PNG animado, GIF, secuencia)" });
+
+  const animF = exportF.addFolder({ title: "Un solo archivo que se mueve (PNG animado / GIF)" });
+  animF.addInput(gp, "animSeconds", { min: 1, max: 30, step: 0.5, label: "duración (s)" });
+  animF.addInput(gp, "animFps", { options: { "12 cuadros/seg": 12, "15 cuadros/seg": 15, "20 cuadros/seg": 20, "24 cuadros/seg": 24, "30 cuadros/seg": 30 }, label: "cuadros/seg" });
+  animF.addInput(gp, "animWidth", { min: 160, max: 1920, step: 10, label: "ancho del archivo (px)" });
+  animF.addInput(gp, "pngTransparent", { label: "fondo transparente (PNG animado y secuencia)" });
+  animF.addInput(gp, "gifTransparent", { label: "GIF: fondo transparente" });
+  animF.addInput(gp, "pngIncludeVideo", { label: "incluir el video cargado" });
+  animF.addButton({ title: "▶ exportar PNG animado" }).on("click", () => actions.exportApng?.());
+  animF.addButton({ title: "▶ exportar GIF" }).on("click", () => actions.exportGif?.());
+
+  const pngF = exportF.addFolder({ title: "Secuencia de PNG (carpeta de imágenes, para After)" });
   pngF.addInput(gp, "pngSeconds", { min: 1, max: 120, step: 1, label: "duración (s)" });
   pngF.addInput(gp, "pngFps", { options: { "24 cuadros/seg": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
-  pngF.addInput(gp, "pngTransparent", { label: "fondo transparente" });
-  pngF.addInput(gp, "pngIncludeVideo", { label: "incluir el video cargado" });
   pngF.addButton({ title: "▶ exportar secuencia de PNG" }).on("click", () => actions.exportPng?.());
 
   // Carpetas abiertas/cerradas. Al arrancar: todo cerrado menos "Conjuntos" y

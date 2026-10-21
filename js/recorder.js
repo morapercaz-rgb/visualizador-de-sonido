@@ -5,6 +5,8 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
+import { ZipWriter } from "./exporter.js?v=20261021160448";
+
 export class ScreenRecorder {
   constructor() {
     this.recorder = null;
@@ -70,5 +72,112 @@ export class ScreenRecorder {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
     this.chunks = [];
+  }
+}
+
+
+// Graba en vivo una SECUENCIA DE PNG: mientras vos movés las cosas, cada
+// 1/fps de segundo se guarda una foto del canvas. Sirve para sacar lo que
+// hacés en tiempo real (mouse, audio sonando) cuadro por cuadro y con
+// transparencia, para After Effects.
+//
+// - main.js llama a tick(ahora) en cada cuadro de pantalla, justo después de dibujar.
+// - Las fotos se codifican en segundo plano (toBlob es asíncrono). Si la compu
+//   no llega (lienzo grande), no se frena la pantalla: el cuadro que falta se
+//   rellena repitiendo el último, así la duración total queda bien.
+// - Se guardan en una carpeta (Chrome) o se arma un ZIP al detener.
+export class PngSequenceRecorder {
+  constructor() {
+    this.active = false;
+  }
+
+  get frames() {
+    return this.slots;
+  }
+
+  // opciones: canvas, fps, dirHandle (o null para ZIP), transparent, includeVideo
+  async start({ canvas, fps, dirHandle = null, transparent = true, includeVideo = false }) {
+    this.canvas = canvas;
+    this.fps = fps;
+    this.transparent = transparent;
+    this.includeVideo = includeVideo;
+    this.name = `grabacion-png-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}`;
+    this.sub = dirHandle ? await dirHandle.getDirectoryHandle(this.name, { create: true }) : null;
+    this.zip = this.sub ? null : new ZipWriter();
+    this.slots = 0; // cuántos cuadros ya tienen número (incluye los repetidos)
+    this.repeated = 0; // cuántos se rellenaron repitiendo el anterior
+    this.inflight = 0;
+    this.chain = Promise.resolve();
+    this.error = null;
+    this.t0 = performance.now();
+    this.active = true;
+  }
+
+  tick(now) {
+    if (!this.active || this.error) return;
+    const due = Math.floor(((now - this.t0) / 1000) * this.fps) + 1; // cuántos cuadros tendrían que existir ya
+    if (due <= this.slots || this.inflight >= 6) return; // todavía no toca, o la compu está atrasada: se junta con el próximo
+
+    const first = this.slots + 1;
+    const count = Math.min(due - this.slots, 90);
+    this.slots += count;
+    if (count > 1) this.repeated += count - 1;
+    this.inflight++;
+    // toBlob toma la foto del canvas JUSTO ahora y codifica después
+    this.canvas.toBlob((blob) => {
+      this.chain = this.chain
+        .then(() => this._save(blob, first, count))
+        .catch((e) => (this.error = e))
+        .finally(() => this.inflight--);
+    }, "image/png");
+  }
+
+  async _save(blob, first, count) {
+    if (!blob) return;
+    const pad = (n) => String(n).padStart(5, "0");
+    for (let k = 0; k < count; k++) {
+      const file = `${this.name}_${pad(first + k)}.png`;
+      if (this.sub) {
+        const fh = await this.sub.getFileHandle(file, { create: true });
+        const w = await fh.createWritable();
+        await w.write(blob);
+        await w.close();
+      } else {
+        this.zip.add(`${this.name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
+        if (this.zip.bytes > 1.5e9) throw new Error("se llenó la memoria para el ZIP: grabá menos tiempo, bajá el tamaño del lienzo o usá Chrome para guardar en una carpeta");
+      }
+    }
+  }
+
+  // detiene, espera a que se guarde todo lo pendiente y devuelve un resumen
+  async stop() {
+    this.active = false;
+    while (this.inflight > 0) await new Promise((r) => setTimeout(r, 25));
+    await this.chain;
+    if (this.error) throw this.error;
+
+    const readme =
+      `Secuencia de PNG grabada en vivo del Visualizador de sonido.\n\n` +
+      `Tamaño: ${this.canvas.width} x ${this.canvas.height} px\nCuadros por segundo: ${this.fps}\nCuadros: ${this.slots}\n` +
+      `Fondo: ${this.transparent ? "transparente (solo los colores)" : "con color de fondo"}\n\n` +
+      `Esto es una carpeta con UNA IMAGEN POR CUADRO: al reproducirlas en orden se ven en movimiento.\n\n` +
+      `Para abrirla en After Effects:\n` +
+      `  Archivo > Importar > Archivo... > elegí el primer PNG > marcá "PNG Sequence" > Importar.\n` +
+      `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${this.fps} cuadros/seg.\n`;
+
+    if (this.sub) {
+      const fh = await this.sub.getFileHandle("LEEME.txt", { create: true });
+      const w = await fh.createWritable();
+      await w.write(readme);
+      await w.close();
+    } else {
+      this.zip.add(`${this.name}/LEEME.txt`, new TextEncoder().encode(readme));
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(this.zip.finish());
+      a.download = `${this.name}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+    }
+    return { frames: this.slots, repeated: this.repeated, mode: this.sub ? "carpeta" : "zip", name: this.name };
   }
 }

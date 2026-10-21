@@ -2,17 +2,21 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261021155157";
-import { VideoLayer } from "./videoLayer.js?v=20261021155157";
-import { Scene } from "./scene.js?v=20261021155157";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021155157";
-import { ScreenRecorder } from "./recorder.js?v=20261021155157";
-import { exportPngSequence } from "./exporter.js?v=20261021155157";
+import { AudioEngine } from "./audioEngine.js?v=20261021160448";
+import { VideoLayer } from "./videoLayer.js?v=20261021160448";
+import { Scene } from "./scene.js?v=20261021160448";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021160448";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021160448";
+import { exportPngSequence, exportApng, exportGif } from "./exporter.js?v=20261021160448";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
+// capa de encima: manijas y gizmo. Nunca forma parte de lo que se graba o exporta.
+const overlay = document.getElementById("overlay");
+const octx = overlay?.getContext("2d") ?? null;
 
 const recorder = new ScreenRecorder();
+const pngRec = new PngSequenceRecorder(); // graba en vivo una secuencia de PNG (formato "png" de Grabar)
 let exporting = false; // mientras se exporta la secuencia de PNG, el dibujo en vivo se pausa
 
 const audio = new AudioEngine();
@@ -47,7 +51,9 @@ function buildPanel() {
       rebuild: () => setTimeout(buildPanel, 0),
       refreshPanel: () => pane.refresh(),
       applyCanvas: () => applyCanvasSize(),
-      exportPng: () => startPngExport(),
+      exportPng: () => startExport("seq"),
+      exportApng: () => startExport("apng", { forceTransparent: false }),
+      exportGif: () => startExport("gif"),
       selectSet: (id) => { scene.select(id); setTimeout(buildPanel, 0); },
       addSet: () => { scene.add(); setTimeout(buildPanel, 0); },
       duplicateSet: () => { scene.duplicate(); setTimeout(buildPanel, 0); },
@@ -69,7 +75,7 @@ buildPanel();
 // preset "ventana" el tamaño sigue al de la ventana, como antes.
 let pendingResize = false;
 function applyCanvasSize() {
-  if (recorder.isRecording || exporting) {
+  if (recorder.isRecording || pngRec.active || exporting) {
     pendingResize = true; // se aplica apenas termine, para no romper el video
     recInfo.textContent = "el nuevo tamaño se aplica cuando termine de grabar";
     return;
@@ -89,6 +95,14 @@ function applyCanvasSize() {
   const fit = g.canvasPreset === "window" ? 1 : Math.min(window.innerWidth / W, window.innerHeight / H);
   canvas.style.width = `${W * fit}px`;
   canvas.style.height = `${H * fit}px`;
+  if (overlay) {
+    if (overlay.width !== W || overlay.height !== H) {
+      overlay.width = W;
+      overlay.height = H;
+    }
+    overlay.style.width = canvas.style.width;
+    overlay.style.height = canvas.style.height;
+  }
   canvas.classList.toggle("artboard", g.canvasPreset !== "window");
 }
 window.addEventListener("resize", applyCanvasSize);
@@ -204,9 +218,31 @@ const pngBtn = document.getElementById("pngBtn");
 let recTimer = null;
 let exportCancel = false;
 
-recBtn.addEventListener("click", () => {
+recBtn.addEventListener("click", async () => {
   if (exporting) {
     exportCancel = true;
+    return;
+  }
+
+  // ---- detener ----
+  if (pngRec.active) {
+    clearInterval(recTimer);
+    recBtn.textContent = "guardando…";
+    try {
+      const r = await pngRec.stop();
+      recInfo.textContent =
+        `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}` +
+        (r.repeated ? ` · ${r.repeated} cuadros repetidos porque la compu no llegó (probá un lienzo más chico)` : "");
+    } catch (e) {
+      recInfo.textContent = `error: ${e.message}`;
+    }
+    recBtn.classList.remove("recording");
+    recBtn.textContent = "● Grabar";
+    canvas.classList.remove("transparent");
+    if (pendingResize) {
+      pendingResize = false;
+      applyCanvasSize();
+    }
     return;
   }
   if (recorder.isRecording) {
@@ -221,6 +257,38 @@ recBtn.addEventListener("click", () => {
     }
     return;
   }
+
+  // ---- empezar: secuencia de PNG en vivo ----
+  if (globalParams.recFormat === "png") {
+    // La carpeta se pide ANTES de cualquier otra cosa (el navegador solo deja
+    // abrir el selector justo después de un click). Sin esa función: ZIP.
+    let dirHandle = null;
+    if (window.showDirectoryPicker) {
+      try {
+        dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+      } catch (e) {
+        if (e.name === "AbortError") return;
+      }
+    }
+    await pngRec.start({
+      canvas,
+      fps: globalParams.recFps,
+      dirHandle,
+      transparent: globalParams.pngTransparent,
+      includeVideo: !globalParams.pngTransparent || globalParams.pngIncludeVideo,
+    });
+    // con fondo transparente se ve un damero detrás del lienzo
+    canvas.classList.toggle("transparent", globalParams.pngTransparent);
+    recBtn.classList.add("recording");
+    recBtn.textContent = "■ Detener";
+    recTimer = setInterval(() => {
+      const s = Math.floor((performance.now() - pngRec.t0) / 1000);
+      recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.frames} cuadros · ${canvas.width}×${canvas.height}`;
+    }, 250);
+    return;
+  }
+
+  // ---- empezar: video ----
   const wanted = globalParams.recFormat;
   const used = recorder.start(canvas, audio.recordingStream, {
     format: wanted,
@@ -236,21 +304,71 @@ recBtn.addEventListener("click", () => {
   }, 250);
 });
 
-// botón "PNG sin fondo": exporta la secuencia con fondo transparente (o cancela si ya está exportando)
-pngBtn?.addEventListener("click", () => {
-  if (exporting) exportCancel = true;
-  else startPngExport({ forceTransparent: true });
+// ---------- exportar la animación ----------
+// Tres formatos (ver exporter.js):
+//   "apng" → PNG animado: un solo archivo que se mueve, con transparencia
+//   "gif"  → GIF animado: se mueve en cualquier lado
+//   "seq"  → secuencia de PNG: una carpeta con una imagen por cuadro (para After)
+// Los dos primeros no se descargan solos: antes se muestra una vista previa
+// moviéndose, y se guarda con el botón "Guardar".
+const gifBtn = document.getElementById("gifBtn");
+const animPreview = document.getElementById("animPreview");
+const animImg = document.getElementById("animImg");
+const animInfo = document.getElementById("animInfo");
+let previewUrl = null;
+let previewResult = null;
+
+function closePreview() {
+  if (animPreview) animPreview.hidden = true;
+  animImg?.removeAttribute("src");
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null;
+  previewResult = null;
+}
+document.getElementById("animClose")?.addEventListener("click", closePreview);
+animPreview?.addEventListener("click", (e) => {
+  if (e.target === animPreview) closePreview(); // click afuera de la tarjeta
+});
+document.getElementById("animSave")?.addEventListener("click", () => {
+  if (!previewResult) return;
+  const a = document.createElement("a");
+  a.href = previewUrl;
+  a.download = `${previewResult.name}.${previewResult.ext}`;
+  a.click();
 });
 
-// exportar secuencia de PNG (cuadro a cuadro, ver exporter.js)
-async function startPngExport({ forceTransparent = false } = {}) {
+function showPreview(result, note) {
+  closePreview();
+  previewResult = result;
+  previewUrl = URL.createObjectURL(result.blob);
+  if (!animPreview) {
+    // sin la tarjeta de vista previa (HTML viejo en caché): se descarga directo
+    const a = document.createElement("a");
+    a.href = previewUrl;
+    a.download = `${result.name}.${result.ext}`;
+    a.click();
+    return;
+  }
+  animImg.src = previewUrl;
+  const kb = Math.round(result.blob.size / 1024);
+  const size = kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
+  animInfo.textContent =
+    `${result.ext === "gif" ? "GIF" : "PNG animado"} · ${result.width}×${result.height} px · ${result.frames} cuadros · ${size}${note}. ` +
+    (result.ext === "png" ? "Para verlo moverse abrilo en un navegador (Chrome, Safari…): el visor de imágenes de la Mac lo muestra quieto." : "");
+  animPreview.hidden = false;
+}
+
+pngBtn?.addEventListener("click", () => (exporting ? (exportCancel = true) : startExport("apng", { forceTransparent: true })));
+gifBtn?.addEventListener("click", () => (exporting ? (exportCancel = true) : startExport("gif")));
+
+async function startExport(kind, { forceTransparent = false } = {}) {
   if (exporting || recorder.isRecording) return;
 
-  // La carpeta se pide ANTES de cualquier otra cosa: el navegador solo deja
-  // abrir el selector justo después de un click. Sin esa función (Safari,
-  // Firefox) se arma un ZIP.
+  // Para la secuencia, la carpeta se pide ANTES de cualquier otra cosa: el
+  // navegador solo deja abrir el selector justo después de un click. Sin esa
+  // función (Safari, Firefox) se arma un ZIP.
   let dirHandle = null;
-  if (window.showDirectoryPicker) {
+  if (kind === "seq" && window.showDirectoryPicker) {
     try {
       dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
     } catch (e) {
@@ -258,9 +376,9 @@ async function startPngExport({ forceTransparent = false } = {}) {
     }
   }
 
-  // "PNG sin fondo" siempre es transparente. Con fondo transparente el video
-  // cargado solo entra si se lo pide; con fondo de color (no transparente) sí entra.
-  const transparent = forceTransparent || globalParams.pngTransparent;
+  // El PNG animado "sin fondo" siempre es transparente. Con fondo transparente
+  // el video cargado solo entra si se lo pide; con fondo de color sí entra.
+  const transparent = kind === "gif" ? globalParams.gifTransparent : forceTransparent || globalParams.pngTransparent;
   const includeVideo = !transparent || globalParams.pngIncludeVideo;
 
   exporting = true;
@@ -268,34 +386,42 @@ async function startPngExport({ forceTransparent = false } = {}) {
   recBtn.classList.add("recording");
   recBtn.textContent = "■ Cancelar exportación";
   if (pngBtn) pngBtn.textContent = "■ Cancelar";
+  if (gifBtn) gifBtn.textContent = "■ Cancelar";
   try {
     const audioFile = audio.tracks[audio.currentIndex]?.file ?? null;
     // Sin audio activo las formas no reaccionan al sonido: solo se mueve lo que
     // esté animado (keyframes, giro, órbita…). Se avisa para que no sorprenda.
     const note = audioFile ? "" : " · sin audio activo: no hay reacción al sonido";
-    const r = await exportPngSequence({
+    const common = {
       scene,
       videoLayer,
       globalParams,
       audioFile,
       width: canvas.width,
       height: canvas.height,
-      seconds: globalParams.pngSeconds,
-      fps: globalParams.pngFps,
       transparent,
       includeVideo,
-      dirHandle,
       onProgress: ({ phase, i, total }) => (recInfo.textContent = `${phase} ${i}/${total}${note}`),
       isCancelled: () => exportCancel,
-    });
-    recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}${note}`;
+    };
+
+    if (kind === "seq") {
+      const r = await exportPngSequence({ ...common, seconds: globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle });
+      recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}${note}`;
+    } else {
+      const run = kind === "gif" ? exportGif : exportApng;
+      const r = await run({ ...common, seconds: globalParams.animSeconds, fps: globalParams.animFps, outWidth: globalParams.animWidth });
+      recInfo.textContent = `listo: ${kind === "gif" ? "GIF" : "PNG animado"} de ${r.frames} cuadros${note}`;
+      showPreview(r, note);
+    }
   } catch (e) {
     recInfo.textContent = e.message === "cancelado" ? "exportación cancelada" : `error: ${e.message}`;
   } finally {
     exporting = false;
     recBtn.classList.remove("recording");
     recBtn.textContent = "● Grabar";
-    if (pngBtn) pngBtn.textContent = "⬇ PNG sin fondo";
+    if (pngBtn) pngBtn.textContent = "⬇ PNG animado";
+    if (gifBtn) gifBtn.textContent = "⬇ GIF";
     if (pendingResize) {
       pendingResize = false;
       applyCanvasSize();
@@ -391,15 +517,25 @@ function loop(now = performance.now()) {
   ctx.globalCompositeOperation = "source-over";
   ctx.globalAlpha = 1;
   ctx.filter = "none";
-  ctx.fillStyle = globalParams.bgColor;
-  ctx.fillRect(0, 0, w, h);
+  // Mientras se graba PNG con fondo transparente, el lienzo no se pinta de color
+  // (queda transparente, con el damero de CSS detrás) y el video cargado solo
+  // se dibuja si se pidió incluirlo.
+  const transparentLive = pngRec.active && pngRec.transparent;
+  if (transparentLive) {
+    ctx.clearRect(0, 0, w, h);
+  } else {
+    ctx.fillStyle = globalParams.bgColor;
+    ctx.fillRect(0, 0, w, h);
+  }
+  octx?.clearRect(0, 0, w, h);
 
   // el audio se analiza una sola vez (con la máxima cantidad de franjas); cada
   // conjunto lo ajusta después a su propia cantidad de picos/barras
   const audioData = audio.analyze(128);
 
-  videoLayer.draw(ctx, w, h, globalParams, audioData, dt);
-  scene.draw(ctx, w, h, audioData, dt);
+  if (!pngRec.active || pngRec.includeVideo) videoLayer.draw(ctx, w, h, globalParams, audioData, dt);
+  scene.draw(ctx, w, h, audioData, dt, octx);
+  pngRec.tick(now); // si se está grabando PNG, toma la foto de este cuadro cuando toca
 
   requestAnimationFrame(loop);
 }

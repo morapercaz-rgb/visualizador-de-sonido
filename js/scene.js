@@ -10,8 +10,8 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261021155157";
-import { createDefaultParams } from "./controls.js?v=20261021155157";
+import { VisualEngine } from "./visualEngine.js?v=20261021160448";
+import { createDefaultParams } from "./controls.js?v=20261021160448";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -270,7 +270,10 @@ export class Scene {
   // dt = segundos reales desde el cuadro anterior (por defecto 1/60 s). Todo el
   // movimiento y la línea de tiempo usan el tiempo real, así que la animación
   // dura lo mismo en una pantalla de 60 Hz que en una de 120 Hz.
-  draw(ctx, w, h, audioData, dt = DT) {
+  // overlay (opcional): el contexto de OTRA capa, encima del canvas, donde se
+  // dibujan las manijas y el gizmo. Así se ven en pantalla pero nunca quedan en
+  // lo que se graba. Sin overlay (por ejemplo al exportar) no se dibujan.
+  draw(ctx, w, h, audioData, dt = DT, overlay = null) {
     this.clock += dt;
     this._tickTimeline(dt);
 
@@ -282,9 +285,26 @@ export class Scene {
       this._apply(ctx, c.xf);
       c.engine.draw(ctx, w, h, audioData, c.params, dt);
       ctx.restore();
+
+      if (overlay) this._drawHandles(overlay, c);
     }
 
-    if (this.settings.gizmo) this._drawGizmo(ctx);
+    if (overlay && this.settings.gizmo) this._drawGizmo(overlay);
+  }
+
+  // las manijas que un motor anotó (ver visualEngine._drawMix), llevadas a la
+  // pantalla con la transformación del conjunto
+  _drawHandles(octx, c) {
+    for (const hd of c.engine.handles) {
+      const p = this._map(c.xf, hd);
+      octx.beginPath();
+      octx.arc(p.x, p.y, (hd.grabbed ? 11 : 8) * Math.min(1.5, Math.max(0.7, c.xf.s)), 0, TAU);
+      octx.fillStyle = hd.color;
+      octx.fill();
+      octx.lineWidth = 2;
+      octx.strokeStyle = `rgba(255,255,255,${hd.grabbed ? 1 : 0.7})`;
+      octx.stroke();
+    }
   }
 
   // ---------- gizmo: manijas para mover / rotar / escalar el conjunto seleccionado ----------

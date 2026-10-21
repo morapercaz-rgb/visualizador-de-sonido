@@ -13,27 +13,14 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261021155157";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261021160448";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261021160448";
+
+export { crc32 };
 
 // ---------- ZIP mínimo (sin compresión) ----------
 // Alcanza para empaquetar PNGs (que ya vienen comprimidos). Se usa cuando el
 // navegador no puede escribir en una carpeta (Safari, Firefox).
-
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-
-export function crc32(bytes) {
-  let c = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
 
 export class ZipWriter {
   constructor() {
@@ -141,7 +128,7 @@ export async function analyzeAudioFrames(file, seconds, fps, bins = 128) {
   return out;
 }
 
-// ---------- exportación ----------
+// ---------- render cuadro a cuadro (lo comparten todos los formatos) ----------
 
 function seek(video, t) {
   return new Promise((resolve) => {
@@ -156,20 +143,18 @@ function seek(video, t) {
 }
 
 const pad = (n, len = 5) => String(n).padStart(len, "0");
+const stampNow = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
-// opciones:
-//   scene, videoLayer, globalParams, audioFile (File o null)
-//   width, height, seconds, fps, transparent
-//   includeVideo → dibujar también el video de fondo cargado (false = solo lo generativo)
-//   dirHandle  → carpeta donde escribir (File System Access API); si es null, se arma un ZIP
-//   onProgress({ phase, i, total }), isCancelled()
-// Devuelve { frames, mode, name }.
-export async function exportPngSequence(o) {
+// Dibuja la animación cuadro por cuadro con tiempo exacto (1/fps) y le entrega
+// cada cuadro a onFrame(canvas, i). Se ocupa de todo lo común: analizar el
+// audio, arrancar desde el principio, sacar manijas y gizmo de la imagen,
+// buscar el cuadro del video, y dejar todo como estaba al terminar.
+// opciones: scene, videoLayer, globalParams, audioFile, width, height,
+//           seconds, fps, transparent, includeVideo, onProgress, isCancelled
+async function renderAnimation(o, onFrame) {
   const { scene, videoLayer, globalParams, width: W, height: H, seconds, fps, transparent } = o;
   const frames = Math.round(seconds * fps);
   const dt = 1 / fps;
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  const name = `secuencia-png-${stamp}`;
 
   o.onProgress?.({ phase: "analizando el audio", i: 0, total: frames });
   const audioFrames = await analyzeAudioFrames(o.audioFile, seconds, fps);
@@ -202,20 +187,6 @@ export async function exportPngSequence(o) {
   canvas.height = H;
   const ctx = canvas.getContext("2d");
 
-  let sub = null;
-  const zip = o.dirHandle ? null : new ZipWriter();
-  if (o.dirHandle) sub = await o.dirHandle.getDirectoryHandle(name, { create: true });
-
-  const readme =
-    `Secuencia de PNG exportada del Visualizador de sonido.\n\n` +
-    `Tamaño: ${W} x ${H} px\nCuadros por segundo: ${fps}\nCuadros: ${frames}\nDuración: ${seconds} s\n` +
-    `Fondo: ${transparent ? "transparente (solo los colores)" : "con color de fondo"}\n` +
-    `Video de fondo: ${o.includeVideo === false ? "no incluido" : "incluido"}\n\n` +
-    `Para abrirla en After Effects:\n` +
-    `  Archivo > Importar > Archivo... > elegí el primer PNG > marcá "PNG Sequence" > Importar.\n` +
-    `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${fps} cuadros/seg.\n` +
-    `El audio no va en las imágenes: importá el archivo de audio original aparte.\n`;
-
   try {
     for (let i = 0; i < frames; i++) {
       if (o.isCancelled?.()) throw new Error("cancelado");
@@ -231,33 +202,8 @@ export async function exportPngSequence(o) {
       if (o.includeVideo !== false) videoLayer.draw(ctx, W, H, globalParams, audioFrames[i], dt);
       scene.draw(ctx, W, H, audioFrames[i], dt);
 
-      const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-      const file = `${name}_${pad(i + 1)}.png`;
-      if (sub) {
-        const fh = await sub.getFileHandle(file, { create: true });
-        const w = await fh.createWritable();
-        await w.write(blob);
-        await w.close();
-      } else {
-        zip.add(`${name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
-        if (zip.bytes > 1.5e9) throw new Error("demasiado grande para un ZIP en memoria: bajá el tamaño o la duración, o usá Chrome para guardar en una carpeta");
-      }
+      await onFrame(canvas, i);
       if (i % 4 === 3) await new Promise((r) => setTimeout(r)); // deja respirar al navegador
-    }
-
-    if (sub) {
-      const fh = await sub.getFileHandle("LEEME.txt", { create: true });
-      const w = await fh.createWritable();
-      await w.write(readme);
-      await w.close();
-    } else {
-      o.onProgress?.({ phase: "armando el ZIP", i: frames, total: frames });
-      zip.add(`${name}/LEEME.txt`, new TextEncoder().encode(readme));
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(zip.finish());
-      a.download = `${name}.zip`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
     }
   } finally {
     // se deja todo como estaba
@@ -271,6 +217,114 @@ export async function exportPngSequence(o) {
     }
     if (video && videoWasPlaying) video.play().catch(() => {});
   }
+  return { frames };
+}
 
+// ---------- secuencia de PNG (una imagen por cuadro; para After) ----------
+// opciones extra: dirHandle → carpeta donde escribir (File System Access API);
+// si es null, se arma un ZIP y se descarga.
+// Devuelve { frames, mode, name }.
+export async function exportPngSequence(o) {
+  const name = `secuencia-png-${stampNow()}`;
+  const { width: W, height: H, seconds, fps, transparent } = o;
+
+  let sub = null;
+  const zip = o.dirHandle ? null : new ZipWriter();
+  if (o.dirHandle) sub = await o.dirHandle.getDirectoryHandle(name, { create: true });
+
+  const readme =
+    `Secuencia de PNG exportada del Visualizador de sonido.\n\n` +
+    `Tamaño: ${W} x ${H} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
+    `Fondo: ${transparent ? "transparente (solo los colores)" : "con color de fondo"}\n` +
+    `Video de fondo: ${o.includeVideo === false ? "no incluido" : "incluido"}\n\n` +
+    `Esto es una carpeta con UNA IMAGEN POR CUADRO: al reproducirlas en orden se ven en movimiento.\n\n` +
+    `Para abrirla en After Effects:\n` +
+    `  Archivo > Importar > Archivo... > elegí el primer PNG > marcá "PNG Sequence" > Importar.\n` +
+    `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${fps} cuadros/seg.\n` +
+    `El audio no va en las imágenes: importá el archivo de audio original aparte.\n`;
+
+  const { frames } = await renderAnimation(o, async (canvas, i) => {
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+    const file = `${name}_${pad(i + 1)}.png`;
+    if (sub) {
+      const fh = await sub.getFileHandle(file, { create: true });
+      const w = await fh.createWritable();
+      await w.write(blob);
+      await w.close();
+    } else {
+      zip.add(`${name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
+      if (zip.bytes > 1.5e9) throw new Error("demasiado grande para un ZIP en memoria: bajá el tamaño o la duración, o usá Chrome para guardar en una carpeta");
+    }
+  });
+
+  if (sub) {
+    const fh = await sub.getFileHandle("LEEME.txt", { create: true });
+    const w = await fh.createWritable();
+    await w.write(readme);
+    await w.close();
+  } else {
+    o.onProgress?.({ phase: "armando el ZIP", i: frames, total: frames });
+    zip.add(`${name}/LEEME.txt`, new TextEncoder().encode(readme));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(zip.finish());
+    a.download = `${name}.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+  }
   return { frames, mode: sub ? "carpeta" : "zip", name };
+}
+
+// ---------- animaciones de UN SOLO ARCHIVO (PNG animado y GIF) ----------
+// No se descargan solas: devuelven { blob, ext, frames, width, height, name }
+// para mostrar una vista previa y que el usuario decida guardarlas.
+// opción extra: outWidth → ancho del archivo final (se achica desde el lienzo;
+// un archivo animado de 1080p+ pesaría muchísimo).
+
+function outputSize(o) {
+  const outW = Math.max(16, Math.min(o.width, Math.round(o.outWidth || o.width)));
+  return { outW, outH: Math.max(16, Math.round((o.height * outW) / o.width)) };
+}
+
+export async function exportApng(o) {
+  const { outW, outH } = outputSize(o);
+  const small = document.createElement("canvas");
+  small.width = outW;
+  small.height = outH;
+  const sctx = small.getContext("2d");
+  const pngs = [];
+  let bytes = 0;
+
+  await renderAnimation(o, async (canvas) => {
+    sctx.clearRect(0, 0, outW, outH);
+    sctx.drawImage(canvas, 0, 0, outW, outH);
+    const blob = await new Promise((res) => small.toBlob(res, "image/png"));
+    const data = new Uint8Array(await blob.arrayBuffer());
+    bytes += data.length;
+    if (bytes > 700e6) throw new Error("la animación es demasiado pesada: bajá la duración, los cuadros por segundo o el ancho");
+    pngs.push(data);
+  });
+
+  o.onProgress?.({ phase: "armando el PNG animado", i: pngs.length, total: pngs.length });
+  const blob = buildApng(pngs, o.fps);
+  return { blob, ext: "png", frames: pngs.length, width: outW, height: outH, name: `animacion-${stampNow()}` };
+}
+
+export async function exportGif(o) {
+  const { outW, outH } = outputSize(o);
+  const small = document.createElement("canvas");
+  small.width = outW;
+  small.height = outH;
+  const sctx = small.getContext("2d", { willReadFrequently: true });
+  const frames = [];
+
+  await renderAnimation(o, async (canvas) => {
+    sctx.clearRect(0, 0, outW, outH);
+    sctx.drawImage(canvas, 0, 0, outW, outH);
+    frames.push(sctx.getImageData(0, 0, outW, outH));
+  });
+
+  o.onProgress?.({ phase: "armando el GIF", i: frames.length, total: frames.length });
+  await new Promise((r) => setTimeout(r)); // para que se vea el aviso antes de que trabaje fuerte
+  const blob = buildGif(frames, outW, outH, o.fps, !!o.transparent);
+  return { blob, ext: "gif", frames: frames.length, width: outW, height: outH, name: `animacion-${stampNow()}` };
 }

@@ -51,20 +51,21 @@ Con "cola detrás del movimiento" (carpeta "Copias (ecos de aura)"), la fila de 
 
 **Lienzo (carpeta "Lienzo")** — el tamaño de lo que se ve y se graba, como la composición de After. Presets: ventana (se adapta), Full HD 1920×1080, HD 1280×720, 4K 3840×2160, vertical 1080×1920 (reels), cuadrado 1080×1080 y 4:5 1080×1350, o medidas personalizadas, y un botón para girarlo (intercambiar ancho y alto). Se puede cambiar sobre la marcha; se muestra achicado para que entre en la ventana, pero todo (posiciones en píxeles, grabación, exportación) está en el tamaño real. No se puede cambiar mientras graba: se aplica al terminar. El 4K en vivo puede ir pesado.
 
-**Grabar en vivo (botón ● Grabar)** — carpeta "Grabación: formato y calidad":
+**Grabar en vivo (botón ● Grabar)** — carpeta "Grabación: formato y calidad". Graba **lo que hacés en el momento**: el mouse, el audio sonando, todo. Elegís el formato:
 - **MP4 H.264**: lo abren After Effects, Premiere y las redes.
 - **WebM VP9** (liviano) y **WebM VP8** (compatible): solo navegador; After no los abre.
-- **cuadros/seg** (24, 30 o 60) y **calidad** en Mbps. Si el navegador no soporta el formato pedido, avisa cuál usa.
-- Graba el canvas: sin mouse, sin panel y sin manijas del gizmo (las manijas del aura de colores sí salen si no las apagás).
+- **Secuencia de PNG, sin fondo (en vivo)**: mientras movés las cosas, se va guardando **una imagen PNG por cada cuadro, con fondo transparente** (se ve un damero detrás del lienzo mientras graba). Se guarda en una carpeta (Chrome te la pide al empezar) o en un ZIP al detener. Los cuadros que la compu no alcanza a codificar se rellenan repitiendo el anterior para que la duración quede bien (si pasa, te avisa: probá un lienzo más chico).
+- **cuadros/seg** (24, 30 o 60) y **calidad** en Mbps (solo para video).
+- **Lo que se graba es solo el canvas**: no salen el mouse, el panel, el **gizmo** ni las **manijas** del aura de colores. Esas manijas viven en una capa aparte encima del lienzo que se ve en pantalla pero nunca entra en la grabación ni en la exportación.
 
-**Exportar secuencia de PNG** — carpeta "Exportar secuencia de PNG (para After)": una imagen por cuadro, **con fondo transparente** si querés. No es en vivo: cada cuadro se arma con el tiempo exacto (1/fps), así que sale perfecto aunque la compu tarde, y el audio se analiza cuadro por cuadro sin reproducirlo. Se exporta lo que determinan la línea de tiempo, el movimiento continuo y el audio; **lo que movés con el mouse en vivo no se graba**.
-- **Botón rápido:** "⬇ PNG sin fondo", al lado de "● Grabar" (abajo a la izquierda). Siempre exporta con fondo transparente y usa la duración y los cuadros por segundo de esta carpeta. "incluir el video cargado" (apagado por defecto) decide si un video de fondo cargado entra en los PNG; con fondo transparente, por defecto **no** entra, así sale solo lo generativo.
-- **Para que salga en movimiento:** una secuencia es una carpeta con **una imagen por cuadro**; al reproducirlas en orden son un video. Pero las imágenes solo cambian si algo se mueve: **cargá un audio y activalo** (arrastrá su miniatura al centro) para que las formas reaccionen al sonido, y/o usá el movimiento continuo (giro, órbita, pulso) o los keyframes. Sin audio activo ni nada animado, todos los cuadros salen iguales (una imagen fija repetida); el programa te avisa con "sin audio activo".
-- **Cómo verla en movimiento:** en After Effects (Archivo > Importar > Archivo, marcar "PNG Sequence"); en una Mac también se puede abrir en QuickTime Player (Archivo > Abrir secuencia de imágenes) y elegir los cuadros por segundo.
+**Exportar un archivo que se mueve** — carpeta "Exportar animación" → "Un solo archivo que se mueve". Dibuja la animación cuadro por cuadro (con tiempo exacto, no en vivo) y la deja en **un solo archivo**, con una **vista previa moviéndose** antes de guardar:
+- **PNG animado (botón "⬇ PNG animado")**: un `.png` que se mueve, con **fondo transparente** y calidad completa de color. Se ve animado en el navegador (Chrome, Safari…); el visor de imágenes de la Mac y After Effects lo muestran quieto.
+- **GIF (botón "⬇ GIF")**: se mueve en cualquier lado (Mac, WhatsApp, redes). Tiene como máximo 256 colores y la transparencia es de todo o nada, por eso por defecto sale con fondo; se puede tildar "GIF: fondo transparente".
+- Se elige **duración**, **cuadros por segundo** y **ancho del archivo** (se achica desde el lienzo; un archivo animado grande pesa muchísimo). "incluir el video cargado" (apagado por defecto) decide si un video de fondo entra.
+- **Para que se mueva:** cargá un audio y activalo (arrastrá su miniatura al centro) para que las formas reaccionen al sonido, y/o usá el movimiento continuo (giro, órbita, pulso) o keyframes. Sin audio activo ni nada animado, todos los cuadros salen iguales; el programa avisa con "sin audio activo". Lo que movés con el mouse **no** entra en esta exportación (para eso, grabá en vivo).
+
+**Exportar secuencia de PNG (offline, para After)** — "Secuencia de PNG (carpeta de imágenes, para After)": una **carpeta con una imagen por cuadro** (al reproducirlas en orden son un video). Cada cuadro se arma con tiempo exacto aunque la compu tarde, y el audio se analiza cuadro por cuadro sin reproducirlo. Incluye un `LEEME.txt` con cómo importarlo en After (Archivo > Importar > Archivo, marcar "PNG Sequence"; el audio se importa aparte). En Chrome te pide una carpeta; en otros navegadores descarga un ZIP. En una Mac también se puede abrir en QuickTime Player (Archivo > Abrir secuencia de imágenes).
 - **Mezcla "suma" con fondo transparente:** los colores se conservan (apilados sobre un fondo oscuro quedan prácticamente idénticos al original), pero sobre otros fondos un brillo "suma" se ve como uno normal; en After conviene poner la capa en modo de fusión "Add" o "Screen".
-- En **Chrome** te pide una carpeta y escribe ahí los PNG. En otros navegadores descarga un **ZIP**.
-- Incluye un `LEEME.txt` con el tamaño, los cuadros por segundo y cómo importarlo en After (Archivo > Importar > Archivo, marcar "PNG Sequence"). El audio se importa aparte, con el archivo original.
-- Mientras exporta, el dibujo en vivo se pausa; el mismo botón pasa a "■ Cancelar exportación".
 
 ## Cómo correrlo
 

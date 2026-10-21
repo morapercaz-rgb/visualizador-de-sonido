@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261021155157";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261021160448";
 
 const TAU = Math.PI * 2;
 
@@ -20,6 +20,7 @@ const MOVABLE_MODES = new Set(["ring", "spikes", "spiral", "vortex"]);
 export class VisualEngine {
   constructor() {
     this.time = 0;
+    this.handles = [];
     this.k = 1; // cuántos "cuadros de 1/60 s" duró el último cuadro (ver draw)
     // (ver también videoLayer.js: la capa de video hace lo mismo con su propio dt)
 
@@ -81,6 +82,7 @@ export class VisualEngine {
     this.k = dt * 60;
     this.time += dt;
     this.targets = [];
+    this.handles = []; // manijas para dibujar en la capa de encima (ver _drawMix)
     FRAME = { audio: audioData, time: this.time };
 
     // la pieza entera persigue al mouse si la están arrastrando; si no, desliza
@@ -382,24 +384,20 @@ export class VisualEngine {
     }
     ctx.restore();
 
-    // las "manijas": un puntito con aro en el centro de cada luz, para ver
-    // dónde agarrarla. Se pueden apagar (mixHandles) para que no salgan al grabar.
-    ctx.save();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.filter = "none";
+    // las "manijas": un puntito con aro en el centro de cada luz, para ver dónde
+    // agarrarla. NO se dibujan acá: se anotan en this.handles y scene.js las
+    // dibuja en una capa aparte encima del canvas, así se ven en pantalla pero
+    // nunca entran en lo que se graba ni se exporta.
     for (const { l, px, py, R, rgb } of placed) {
       this.targets.push({ kind: "light", ref: l, x: px, y: py, r: Math.max(30, R * 0.22), prio: 0 });
       if (!params.mixHandles) continue;
-      const grabbed = this.drag?.t.ref === l;
-      ctx.beginPath();
-      ctx.arc(px, py, grabbed ? 11 : 8, 0, TAU);
-      ctx.fillStyle = `rgb(${Math.round(rgb.r)},${Math.round(rgb.g)},${Math.round(rgb.b)})`;
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = `rgba(255,255,255,${grabbed ? 1 : 0.7})`;
-      ctx.stroke();
+      this.handles.push({
+        x: px,
+        y: py,
+        grabbed: this.drag?.t.ref === l,
+        color: `rgb(${Math.round(rgb.r)},${Math.round(rgb.g)},${Math.round(rgb.b)})`,
+      });
     }
-    ctx.restore();
   }
 
   // dibuja la estela (de más vieja a más nueva) y la cabeza de cada círculo.
