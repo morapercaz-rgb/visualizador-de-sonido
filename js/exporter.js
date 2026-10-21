@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261021162345";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261021162345";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261021195400";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261021195400";
 
 export { crc32 };
 
@@ -327,4 +327,86 @@ export async function exportGif(o) {
   await new Promise((r) => setTimeout(r)); // para que se vea el aviso antes de que trabaje fuerte
   const blob = buildGif(frames, outW, outH, o.fps, !!o.transparent);
   return { blob, ext: "gif", frames: frames.length, width: outW, height: outH, name: `animacion-${stampNow()}` };
+}
+
+// ---------- convertir un archivo animado ya hecho (PNG animado, GIF, WebP) a secuencia de PNG ----------
+// Un PNG animado o un GIF guardan todos sus cuadros adentro. Esto los saca uno
+// por uno y los guarda como PNG sueltos (con su transparencia), que es lo que
+// After Effects sí abre. Usa ImageDecoder del navegador (Chrome, Edge, Safari 17+).
+// opciones: file, dirHandle (o null → ZIP), onProgress, isCancelled
+// Devuelve { frames, fps, width, height, mode, name }.
+export async function convertAnimationToSequence({ file, dirHandle = null, onProgress, isCancelled }) {
+  if (typeof ImageDecoder === "undefined") throw new Error("este navegador no puede leer animaciones cuadro por cuadro: usá Chrome");
+
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const type = file.type || (ext === "gif" ? "image/gif" : ext === "webp" ? "image/webp" : "image/png");
+  const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type });
+  await decoder.tracks.ready;
+  await decoder.completed;
+  const total = decoder.tracks.selectedTrack.frameCount;
+  if (total < 2) throw new Error("ese archivo tiene un solo cuadro: no es una animación");
+
+  const name = `secuencia-de-${file.name.replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_")}-${stampNow()}`;
+  let sub = null;
+  const zip = dirHandle ? null : new ZipWriter();
+  if (dirHandle) sub = await dirHandle.getDirectoryHandle(name, { create: true });
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  let durationUs = 0, width = 0, height = 0;
+
+  for (let i = 0; i < total; i++) {
+    if (isCancelled?.()) throw new Error("cancelado");
+    onProgress?.({ phase: "sacando cuadros", i, total });
+    const { image } = await decoder.decode({ frameIndex: i, completeFramesOnly: true });
+    if (i === 0) {
+      width = canvas.width = image.displayWidth;
+      height = canvas.height = image.displayHeight;
+    }
+    durationUs += image.duration || 0;
+    ctx.clearRect(0, 0, width, height); // transparente: así se conserva el alfa
+    ctx.drawImage(image, 0, 0);
+    image.close();
+
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+    const out = `${name}_${pad(i + 1)}.png`;
+    if (sub) {
+      const fh = await sub.getFileHandle(out, { create: true });
+      const w = await fh.createWritable();
+      await w.write(blob);
+      await w.close();
+    } else {
+      zip.add(`${name}/${out}`, new Uint8Array(await blob.arrayBuffer()));
+      if (zip.bytes > 1.5e9) throw new Error("demasiado grande para un ZIP en memoria: usá Chrome para guardar en una carpeta");
+    }
+    if (i % 4 === 3) await new Promise((r) => setTimeout(r));
+  }
+
+  // cuadros por segundo: lo que dura cada cuadro, en promedio
+  const avgMs = durationUs / total / 1000;
+  const fps = avgMs > 0 ? Math.max(1, Math.round(1000 / avgMs)) : 24;
+
+  const readme =
+    `Secuencia de PNG sacada de "${file.name}" con el Visualizador de sonido.\n\n` +
+    `Tamaño: ${width} x ${height} px\nCuadros: ${total}\nCuadros por segundo: ${fps}\n` +
+    `Se conserva la transparencia del archivo original.\n\n` +
+    `Esto es una carpeta con UNA IMAGEN POR CUADRO: al reproducirlas en orden se ven en movimiento.\n\n` +
+    `Para abrirla en After Effects:\n` +
+    `  Archivo > Importar > Archivo... > elegí el primer PNG > marcá "PNG Sequence" > Importar.\n` +
+    `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${fps} cuadros/seg.\n`;
+  if (sub) {
+    const fh = await sub.getFileHandle("LEEME.txt", { create: true });
+    const w = await fh.createWritable();
+    await w.write(readme);
+    await w.close();
+  } else {
+    onProgress?.({ phase: "armando el ZIP", i: total, total });
+    zip.add(`${name}/LEEME.txt`, new TextEncoder().encode(readme));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(zip.finish());
+    a.download = `${name}.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+  }
+  return { frames: total, fps, width, height, mode: sub ? "carpeta" : "zip", name };
 }

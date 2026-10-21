@@ -2,12 +2,12 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261021162345";
-import { VideoLayer } from "./videoLayer.js?v=20261021162345";
-import { Scene } from "./scene.js?v=20261021162345";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021162345";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021162345";
-import { exportPngSequence, exportApng, exportGif } from "./exporter.js?v=20261021162345";
+import { AudioEngine } from "./audioEngine.js?v=20261021195400";
+import { VideoLayer } from "./videoLayer.js?v=20261021195400";
+import { Scene } from "./scene.js?v=20261021195400";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021195400";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021195400";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261021195400";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -51,6 +51,7 @@ function buildPanel() {
       rebuild: () => setTimeout(buildPanel, 0),
       refreshPanel: () => pane.refresh(),
       syncAnimDuration: () => syncAnimDurSelect(),
+      pickConvert: () => document.getElementById("convInput")?.click(),
       applyCanvas: () => applyCanvasSize(),
       exportPng: () => startExport("seq"),
       exportApng: () => startExport("apng", { forceTransparent: false }),
@@ -385,6 +386,45 @@ function showPreview(result, note) {
 
 pngBtn?.addEventListener("click", () => (exporting ? (exportCancel = true) : startExport("apng", { forceTransparent: true })));
 gifBtn?.addEventListener("click", () => (exporting ? (exportCancel = true) : startExport("gif")));
+
+// ---------- convertir un PNG animado / GIF ya hecho a secuencia de PNG ----------
+const convInput = document.getElementById("convInput");
+convInput?.addEventListener("change", async () => {
+  const file = convInput.files[0];
+  convInput.value = ""; // permite elegir el mismo archivo otra vez
+  if (!file || exporting || recorder.isRecording || pngRec.active) return;
+
+  // La carpeta se intenta pedir apenas se elige el archivo. Si el navegador no
+  // lo permite en ese momento (o no tiene la función), se arma un ZIP.
+  let dirHandle = null;
+  if (window.showDirectoryPicker) {
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+    } catch (e) {
+      if (e.name === "AbortError") return;
+    }
+  }
+
+  exporting = true;
+  exportCancel = false;
+  recBtn.classList.add("recording");
+  recBtn.textContent = "■ Cancelar";
+  try {
+    const r = await convertAnimationToSequence({
+      file,
+      dirHandle,
+      onProgress: ({ phase, i, total }) => (recInfo.textContent = `${phase} ${i}/${total}`),
+      isCancelled: () => exportCancel,
+    });
+    recInfo.textContent = `listo: ${r.frames} PNG (${r.width}×${r.height}, ${r.fps} cuadros/seg) ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado: descomprimilo antes de abrirlo en After"}`;
+  } catch (e) {
+    recInfo.textContent = e.message === "cancelado" ? "conversión cancelada" : `error: ${e.message}`;
+  } finally {
+    exporting = false;
+    recBtn.classList.remove("recording");
+    recBtn.textContent = "● Grabar";
+  }
+});
 
 async function startExport(kind, { forceTransparent = false } = {}) {
   if (exporting || recorder.isRecording) return;

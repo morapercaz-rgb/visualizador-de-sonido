@@ -611,6 +611,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   animF.addButton({ title: "▶ exportar PNG animado" }).on("click", () => actions.exportApng?.());
   animF.addButton({ title: "▶ exportar GIF" }).on("click", () => actions.exportGif?.());
 
+  exportF.addButton({ title: "⇄ convertir un PNG animado / GIF ya hecho a secuencia…" }).on("click", () => actions.pickConvert?.());
+
   const pngF = exportF.addFolder({ title: "Secuencia de PNG (carpeta de imágenes, para After)" });
   pngF.addInput(gp, "pngSeconds", { min: 1, max: 120, step: 1, label: "duración (s)" });
   pngF.addInput(gp, "pngFps", { options: { "24 cuadros/seg": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
