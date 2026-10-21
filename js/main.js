@@ -2,12 +2,12 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js";
-import { VideoLayer } from "./videoLayer.js";
-import { Scene } from "./scene.js";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js";
-import { ScreenRecorder } from "./recorder.js";
-import { exportPngSequence } from "./exporter.js";
+import { AudioEngine } from "./audioEngine.js?v=20261021155157";
+import { VideoLayer } from "./videoLayer.js?v=20261021155157";
+import { Scene } from "./scene.js?v=20261021155157";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021155157";
+import { ScreenRecorder } from "./recorder.js?v=20261021155157";
+import { exportPngSequence } from "./exporter.js?v=20261021155157";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -199,6 +199,8 @@ playBtn.addEventListener("click", () => {
 // grabación: graba el canvas (sin mouse ni paneles) y al detener descarga el video
 const recBtn = document.getElementById("recBtn");
 const recInfo = document.getElementById("recInfo");
+// (opcional: si el navegador guardó un HTML viejo sin este botón, la página tiene que seguir andando)
+const pngBtn = document.getElementById("pngBtn");
 let recTimer = null;
 let exportCancel = false;
 
@@ -234,8 +236,14 @@ recBtn.addEventListener("click", () => {
   }, 250);
 });
 
+// botón "PNG sin fondo": exporta la secuencia con fondo transparente (o cancela si ya está exportando)
+pngBtn?.addEventListener("click", () => {
+  if (exporting) exportCancel = true;
+  else startPngExport({ forceTransparent: true });
+});
+
 // exportar secuencia de PNG (cuadro a cuadro, ver exporter.js)
-async function startPngExport() {
+async function startPngExport({ forceTransparent = false } = {}) {
   if (exporting || recorder.isRecording) return;
 
   // La carpeta se pide ANTES de cualquier otra cosa: el navegador solo deja
@@ -250,32 +258,44 @@ async function startPngExport() {
     }
   }
 
+  // "PNG sin fondo" siempre es transparente. Con fondo transparente el video
+  // cargado solo entra si se lo pide; con fondo de color (no transparente) sí entra.
+  const transparent = forceTransparent || globalParams.pngTransparent;
+  const includeVideo = !transparent || globalParams.pngIncludeVideo;
+
   exporting = true;
   exportCancel = false;
   recBtn.classList.add("recording");
   recBtn.textContent = "■ Cancelar exportación";
+  if (pngBtn) pngBtn.textContent = "■ Cancelar";
   try {
+    const audioFile = audio.tracks[audio.currentIndex]?.file ?? null;
+    // Sin audio activo las formas no reaccionan al sonido: solo se mueve lo que
+    // esté animado (keyframes, giro, órbita…). Se avisa para que no sorprenda.
+    const note = audioFile ? "" : " · sin audio activo: no hay reacción al sonido";
     const r = await exportPngSequence({
       scene,
       videoLayer,
       globalParams,
-      audioFile: audio.tracks[audio.currentIndex]?.file ?? null,
+      audioFile,
       width: canvas.width,
       height: canvas.height,
       seconds: globalParams.pngSeconds,
       fps: globalParams.pngFps,
-      transparent: globalParams.pngTransparent,
+      transparent,
+      includeVideo,
       dirHandle,
-      onProgress: ({ phase, i, total }) => (recInfo.textContent = `${phase} ${i}/${total}`),
+      onProgress: ({ phase, i, total }) => (recInfo.textContent = `${phase} ${i}/${total}${note}`),
       isCancelled: () => exportCancel,
     });
-    recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}`;
+    recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}${note}`;
   } catch (e) {
     recInfo.textContent = e.message === "cancelado" ? "exportación cancelada" : `error: ${e.message}`;
   } finally {
     exporting = false;
     recBtn.classList.remove("recording");
     recBtn.textContent = "● Grabar";
+    if (pngBtn) pngBtn.textContent = "⬇ PNG sin fondo";
     if (pendingResize) {
       pendingResize = false;
       applyCanvasSize();

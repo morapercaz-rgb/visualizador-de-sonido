@@ -13,7 +13,7 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261021155157";
 
 // ---------- ZIP mínimo (sin compresión) ----------
 // Alcanza para empaquetar PNGs (que ya vienen comprimidos). Se usa cuando el
@@ -160,6 +160,7 @@ const pad = (n, len = 5) => String(n).padStart(len, "0");
 // opciones:
 //   scene, videoLayer, globalParams, audioFile (File o null)
 //   width, height, seconds, fps, transparent
+//   includeVideo → dibujar también el video de fondo cargado (false = solo lo generativo)
 //   dirHandle  → carpeta donde escribir (File System Access API); si es null, se arma un ZIP
 //   onProgress({ phase, i, total }), isCancelled()
 // Devuelve { frames, mode, name }.
@@ -181,7 +182,7 @@ export async function exportPngSequence(o) {
     gizmo: scene.settings.gizmo,
     conjuntos: scene.conjuntos.map((c) => ({ c, spin: c.spinAngle, lastT: c._lastT, handles: c.params.mixHandles })),
   };
-  const video = videoLayer.active?.el ?? null;
+  const video = o.includeVideo === false ? null : videoLayer.active?.el ?? null;
   const videoWasPlaying = video && !video.paused;
 
   // arranca desde el principio de la animación, sin manijas ni gizmo en la imagen
@@ -208,7 +209,8 @@ export async function exportPngSequence(o) {
   const readme =
     `Secuencia de PNG exportada del Visualizador de sonido.\n\n` +
     `Tamaño: ${W} x ${H} px\nCuadros por segundo: ${fps}\nCuadros: ${frames}\nDuración: ${seconds} s\n` +
-    `Fondo: ${transparent ? "transparente" : "con color de fondo"}\n\n` +
+    `Fondo: ${transparent ? "transparente (solo los colores)" : "con color de fondo"}\n` +
+    `Video de fondo: ${o.includeVideo === false ? "no incluido" : "incluido"}\n\n` +
     `Para abrirla en After Effects:\n` +
     `  Archivo > Importar > Archivo... > elegí el primer PNG > marcá "PNG Sequence" > Importar.\n` +
     `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${fps} cuadros/seg.\n` +
@@ -226,7 +228,7 @@ export async function exportPngSequence(o) {
         ctx.fillStyle = globalParams.bgColor;
         ctx.fillRect(0, 0, W, H);
       }
-      videoLayer.draw(ctx, W, H, globalParams, audioFrames[i], dt);
+      if (o.includeVideo !== false) videoLayer.draw(ctx, W, H, globalParams, audioFrames[i], dt);
       scene.draw(ctx, W, H, audioFrames[i], dt);
 
       const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));

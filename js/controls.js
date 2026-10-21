@@ -212,6 +212,7 @@ export function createDefaultParams() {
     pngSeconds: 10,
     pngFps: 30,
     pngTransparent: true, // fondo transparente (sin color de fondo)
+    pngIncludeVideo: false, // con fondo transparente: ¿incluir también el video cargado?
   };
 }
 
@@ -593,6 +594,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   pngF.addInput(gp, "pngSeconds", { min: 1, max: 120, step: 1, label: "duración (s)" });
   pngF.addInput(gp, "pngFps", { options: { "24 cuadros/seg": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
   pngF.addInput(gp, "pngTransparent", { label: "fondo transparente" });
+  pngF.addInput(gp, "pngIncludeVideo", { label: "incluir el video cargado" });
   pngF.addButton({ title: "▶ exportar secuencia de PNG" }).on("click", () => actions.exportPng?.());
 
   // Carpetas abiertas/cerradas. Al arrancar: todo cerrado menos "Conjuntos" y

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Visualizador de sonido</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=20261021155157" />
 </head>
 <body>
   <canvas id="stage"></canvas>
@@ -27,8 +27,9 @@
     </div>
     <div class="row">
       <button id="recBtn">● Grabar</button>
-      <span id="recInfo">sin mouse ni panel en el video</span>
+      <button id="pngBtn" title="Exporta una imagen PNG por cuadro, con fondo transparente (solo los colores)">⬇ PNG sin fondo</button>
     </div>
+    <div id="recInfo">sin mouse ni panel en el video</div>
     <div id="status">Sin archivos cargados todavía</div>
 
     <div class="mediaListTitle">Audios (arrastrá al centro para activar)</div>
@@ -38,6 +39,6 @@
     <div id="videoList" class="mediaList"></div>
   </div>
 
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/main.js?v=20261021155157"></script>
 </body>
 </html>

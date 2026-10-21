@@ -10,8 +10,8 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js";
-import { createDefaultParams } from "./controls.js";
+import { VisualEngine } from "./visualEngine.js?v=20261021155157";
+import { createDefaultParams } from "./controls.js?v=20261021155157";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
