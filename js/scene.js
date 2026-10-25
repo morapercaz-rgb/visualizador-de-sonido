@@ -10,10 +10,11 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025151156";
-import { createDefaultParams } from "./controls.js?v=20261025151156";
-import { getPreset } from "./presets.js?v=20261025151156";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025151156";
+import { VisualEngine } from "./visualEngine.js?v=20261025151901";
+import { createDefaultParams } from "./controls.js?v=20261025151901";
+import { getPreset } from "./presets.js?v=20261025151901";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025151901";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025151901";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -39,7 +40,8 @@ export class Scene {
 
     // transformación de un conjunto en otro (ver morph.js). a y b son
     // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
-    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, time: 0, playing: false };
+    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, time: 0, playing: false };
+    this._caps = { a: new Capture(), b: new Capture() }; // donde se dibuja cada extremo de la transformación
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
     this._nextLibId = -1;
 
@@ -399,30 +401,50 @@ export class Scene {
     m.time = Math.min(1, Math.max(0, u)) * m.seconds;
   }
 
-  // dibuja un conjunto con parámetros prestados (los mezclados), conservando su
-  // motor y su giro acumulado
-  _drawLayer(ctx, c, params, alpha, w, h, audioData, dt) {
-    if (alpha <= 0.001) return;
-    const orig = c.params;
-    c.params = params;
-    c.xf = this._transform(c, w, h, audioData, dt);
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity)) * alpha;
-    this._apply(ctx, c.xf);
-    c.engine.draw(ctx, w, h, audioData, params, dt);
-    ctx.restore();
-    c.params = orig;
-  }
-
+  // Cada extremo se dibuja de verdad en un lienzo aparte, anotando sus formas.
+  // Al principio se ve A tal cual y al final B tal cual; en el medio, cada forma
+  // de A viaja hasta una de B (ver morphParticles.js). La transformación (posición,
+  // rotación, escala, opacidad, giro) va pasando de la de A a la de B.
   _drawMorph(ctx, w, h, audioData, dt, A, B, u) {
-    if (A.params.visualMode === B.params.visualMode) {
-      // mismo modo: una sola pieza que va cambiando
-      this._drawLayer(ctx, A, mixParams(A.params, B.params, u, u < 0.5 ? "a" : "b"), 1, w, h, audioData, dt);
-    } else {
-      // distinto modo: uno se desvanece mientras el otro aparece
-      this._drawLayer(ctx, A, mixParams(A.params, B.params, u, "a"), 1 - u, w, h, audioData, dt);
-      this._drawLayer(ctx, B, mixParams(A.params, B.params, u, "b"), u, w, h, audioData, dt);
+    const EDGE = 0.1; // cuánto dura el pasaje de "A tal cual" a "formas en viaje"
+    const smooth = (x) => x * x * (3 - 2 * x);
+    const capA = this._caps.a, capB = this._caps.b;
+    capA.begin(w, h);
+    capB.begin(w, h);
+    A.engine.draw(capA.ctx, w, h, audioData, A.params, dt);
+    B.engine.draw(capB.ctx, w, h, audioData, B.params, dt);
+
+    // la transformación de A se calcula con los parámetros de movimiento ya mezclados
+    const mixed = mixParams(A.params, B.params, u, u < 0.5 ? "a" : "b");
+    const origA = A.params;
+    A.params = mixed;
+    A.xf = this._transform(A, w, h, audioData, dt);
+    A.params = origA;
+    B.xf = A.xf;
+
+    const alpha = Math.min(1, Math.max(0, mixed.tOpacity));
+    const sA = smooth(Math.min(1, u / EDGE));
+    const sB = smooth(Math.min(1, (1 - u) / EDGE));
+    const m = capA.margin;
+
+    ctx.save();
+    this._apply(ctx, A.xf);
+    if (sA < 1) {
+      ctx.globalAlpha = alpha * (1 - sA);
+      ctx.drawImage(capA.canvas, -m, -m);
     }
+    if (sB < 1) {
+      ctx.globalAlpha = alpha * (1 - sB);
+      ctx.drawImage(capB.canvas, -capB.margin, -capB.margin);
+    }
+    const mid = Math.min(sA, sB);
+    if (mid > 0.001) {
+      ctx.globalAlpha = alpha * mid;
+      ctx.globalCompositeOperation = mixed.shapeBlendMode;
+      ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount}px)` : "none";
+      drawParticleMorph(ctx, capA.particles, capB.particles, u, this.morph);
+    }
+    ctx.restore();
   }
 
   // las manijas que un motor anotó (ver visualEngine._drawMix), llevadas a la

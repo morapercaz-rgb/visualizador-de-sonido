@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025151156";
+import { listPresets } from "./presets.js?v=20261025151901";
 
 export function createDefaultParams() {
   return {
@@ -288,6 +288,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   mf.addInput(m, "seconds", { min: 0.5, max: 60, step: 0.5, label: "duración (s)" });
   mf.addInput(m, "ease", { options: { "suave (arranca y frena)": "smooth", "constante": "linear" }, label: "curva" });
   mf.addInput(m, "repeat", { options: { "una vez": "once", "repetir": "loop", "ida y vuelta": "pingpong" }, label: "al terminar" });
+  mf.addInput(m, "stagger", { min: 0, max: 0.9, step: 0.05, label: "escalonado (0 = todo junto)" });
+  mf.addInput(m, "swirl", { min: -0.6, max: 0.6, step: 0.02, label: "curva del camino (0 = recto)" });
   mf.addInput(m, "only", { label: "solo estos dos" });
   mf.addButton({ title: "▶ ver la transformación" }).on("click", () => actions.morphPlay?.());
   mf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.morphToggle?.());

@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025151156";
-import { VideoLayer } from "./videoLayer.js?v=20261025151156";
-import { Scene } from "./scene.js?v=20261025151156";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025151156";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025151156";
-import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261025151156";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025151156";
+import { AudioEngine } from "./audioEngine.js?v=20261025151901";
+import { VideoLayer } from "./videoLayer.js?v=20261025151901";
+import { Scene } from "./scene.js?v=20261025151901";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025151901";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025151901";
+import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261025151901";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025151901";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -33,13 +33,13 @@ const globalParams = createDefaultParams();
 // la configuración de la transformación (qué dos conjuntos, cuánto dura…) también queda guardada
 const MORPH_KEY = "visualizador-de-sonido.transformacion.v1";
 try {
-  const { a, b, seconds, ease, repeat, only } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
-  Object.assign(scene.morph, { a: a ?? "", b: b ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true });
+  const { a, b, seconds, ease, repeat, only, stagger, swirl } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
+  Object.assign(scene.morph, { a: a ?? "", b: b ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true, stagger: stagger ?? 0.35, swirl: swirl ?? 0.18 });
 } catch {}
 function saveMorphSettings() {
   try {
-    const { a, b, seconds, ease, repeat, only } = scene.morph;
-    localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, seconds, ease, repeat, only }));
+    const { a, b, seconds, ease, repeat, only, stagger, swirl } = scene.morph;
+    localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, seconds, ease, repeat, only, stagger, swirl }));
   } catch {}
 }
 
