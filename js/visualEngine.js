@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025181657";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025193433";
 
 const TAU = Math.PI * 2;
 
@@ -408,10 +408,44 @@ export class VisualEngine {
     for (let i = 0; i < n; i++) {
       const l = this.lights[i];
       const grabbed = this.drag?.t.ref === l;
-      this._glide(l, grabbed ? { x: this.pointer.x - this.drag.gx, y: this.pointer.y - this.drag.gy } : null, grabbed, params);
-      if (!grabbed && n > 1) {
-        l.vx += (gx - l.x) * params.mixPull * 0.01 * this.k;
-        l.vy += (gy - l.y) * params.mixPull * 0.01 * this.k;
+      const speed = params.mixSpeed ?? 0;
+      if (speed > 0 && !grabbed) {
+        // recorrer la pantalla: cada luz avanza en línea recta a la velocidad
+        // elegida y rebota al chocar con las paredes. Si la soltás después de
+        // agarrarla, sigue para el lado en que la tiraste.
+        if (l.hx === undefined) {
+          const a = i * 2.4 + 1; // cada una sale para un lado distinto
+          l.hx = Math.cos(a);
+          l.hy = Math.sin(a);
+        }
+        if (l.held) {
+          l.held = false;
+          const sp = Math.hypot(l.vx, l.vy);
+          if (sp > 0.5) {
+            l.hx = l.vx / sp;
+            l.hy = l.vy / sp;
+          }
+        }
+        const dt = this.k / 60;
+        const v = speed * (0.85 + 0.3 * ((i * 0.618) % 1)); // un poco distinta cada una
+        l.x += l.hx * v * dt;
+        l.y += l.hy * v * dt;
+        l.vx = 0;
+        l.vy = 0;
+        // la pared está donde llega el cuerpo del aura, no el centro
+        const mx = Math.min(params.mixSize * 0.5, w / 2 - 1);
+        const my = Math.min(params.mixSize * 0.5, h / 2 - 1);
+        if (l.x < mx) { l.x = mx; l.hx = Math.abs(l.hx); }
+        else if (l.x > w - mx) { l.x = w - mx; l.hx = -Math.abs(l.hx); }
+        if (l.y < my) { l.y = my; l.hy = Math.abs(l.hy); }
+        else if (l.y > h - my) { l.y = h - my; l.hy = -Math.abs(l.hy); }
+      } else {
+        if (grabbed) l.held = true;
+        this._glide(l, grabbed ? { x: this.pointer.x - this.drag.gx, y: this.pointer.y - this.drag.gy } : null, grabbed, params);
+        if (!grabbed && n > 1) {
+          l.vx += (gx - l.x) * params.mixPull * 0.01 * this.k;
+          l.vy += (gy - l.y) * params.mixPull * 0.01 * this.k;
+        }
       }
       l.x = Math.min(w, Math.max(0, l.x));
       l.y = Math.min(h, Math.max(0, l.y));

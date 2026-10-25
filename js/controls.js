@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025181657";
+import { listPresets } from "./presets.js?v=20261025193433";
 
 export function createDefaultParams() {
   return {
@@ -99,6 +99,7 @@ export function createDefaultParams() {
     mixBlend: "source-over", // cómo se mezclan los colores: source-over | screen | lighter
     mixPull: 0, // atracción hacia el centro del grupo (0 = cada luz se queda donde la soltás)
     mixDrift: 0.4, // flotar solas
+    mixSpeed: 120, // velocidad (px/seg) con la que recorren la pantalla y rebotan en las paredes (0 = quietas)
     mixHandles: true, // mostrar las manijas para agarrar cada luz
     deformMix: true,
     mixColor1: "#ff3b6b",
@@ -565,6 +566,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   });
   mixF.addInput(params, "mixPull", { min: 0, max: 1, label: "atracción al centro" });
   mixF.addInput(params, "mixDrift", { min: 0, max: 1, label: "flotar" });
+  mixF.addInput(params, "mixSpeed", { min: 0, max: 800, step: 5, label: "velocidad (rebotan en las paredes)" });
   mixF.addInput(params, "mixHandles", { label: "mostrar manijas" });
   mixF.addInput(params, "deformMix", { label: "aplicar deformación" });
 

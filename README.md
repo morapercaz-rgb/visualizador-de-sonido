@@ -194,6 +194,7 @@ Modo **"aura de colores (mezcla)"**: un aura grande hecha de varias luces de dis
 - **cantidad de colores** (1 a 8) y un selector de color para cada una (color 1 a 8). Para "agregar un color" subí la cantidad; los selectores de colores que sobran no se usan.
 - **cómo se mezclan**: "mezclar (normal)" mantiene los colores vivos (el mejor para ver la mezcla); "pantalla" y "luz (suma)" aclaran y con muchos colores se queman a blanco.
 - **atracción al centro**: una leve fuerza que va juntando las luces hacia el centro del grupo, para que se sigan mezclando (en 0 se quedan donde las sueltes). **flotar** las hace moverse solas despacito.
+- **velocidad (rebotan en las paredes):** además de flotar, las luces **recorren la pantalla en línea recta y rebotan al chocar con las paredes** (los bordes del lienzo, contando el cuerpo del aura, no solo su centro). La velocidad la ponés vos, en píxeles por segundo (0 = quietas, como antes; viene en 120). Cada luz sale para un lado y va a un ritmo apenas distinto. Se puede agarrar una luz con la manija: al soltarla sigue para el lado en que la tiraste. Mientras se mueven así, la atracción al centro no actúa. La velocidad es la misma en pantallas de 60 y de 120 Hz y en las exportaciones.
 - Cada luz escucha una franja distinta del espectro, así que cada color late a su manera con la música. **tamaño** y **opacidad** del aura, y "aplicar deformación" (carpeta "Deformar") la estira o la hace ondular.
 - **mostrar manijas**: apagalo antes de grabar si no querés que los puntitos aparezcan en el video.
 
