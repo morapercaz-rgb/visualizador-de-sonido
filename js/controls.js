@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025172438";
+import { listPresets } from "./presets.js?v=20261025174347";
 
 export function createDefaultParams() {
   return {
@@ -356,7 +356,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   gooF.addInput(goo, "viscosity", { min: 0, max: 1, label: "melaza (se estira)" });
   gooF.addInput(goo, "neck", { min: 0.05, max: 1.2, label: "grosor del puente" });
   gooF.addInput(goo, "core", { min: 0, max: 1, label: "brillo del centro" });
-  gooF.addInput(goo, "colorMode", { options: { "color de cada conjunto": "conjuntos", "un solo color": "uno" }, label: "color" });
+  gooF.addInput(goo, "style", { options: { "aura lisa con los colores de cada conjunto": "material", "liso con centro brillante": "liso" }, label: "puente" });
+  gooF.addInput(goo, "colorMode", { options: { "color de cada conjunto": "conjuntos", "un solo color": "uno" }, label: "color (liso)" });
   gooF.addInput(goo, "color", { label: "  ese color" });
   gooF.addInput(params, "gooOn", { label: "este conjunto se une" });
   gooF.addInput(params, "gooRadius", { min: 0, max: 600, step: 1, label: "radio de contacto (0 = auto)" });

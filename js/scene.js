@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025172438";
-import { createDefaultParams } from "./controls.js?v=20261025172438";
-import { getPreset } from "./presets.js?v=20261025172438";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025172438";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025172438";
-import { GooSystem, GOO_DEFAULTS, drawBridge } from "./goo.js?v=20261025172438";
+import { VisualEngine } from "./visualEngine.js?v=20261025174347";
+import { createDefaultParams } from "./controls.js?v=20261025174347";
+import { getPreset } from "./presets.js?v=20261025174347";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025174347";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025174347";
+import { GooSystem, GOO_DEFAULTS, drawBridge, drawSoftBridge } from "./goo.js?v=20261025174347";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -344,8 +344,9 @@ export class Scene {
     }
     const inSeq = seqOn ? new Set(sched.segs.map((v) => v.c)) : null;
 
-    // goo: atracción y puentes entre los conjuntos que se ven normalmente. Los
-    // puentes van DEBAJO de los conjuntos.
+    // goo: atracción y puentes entre los conjuntos que se ven normalmente.
+    // Los puentes se dibujan encima de los conjuntos.
+    let gooBridges = null;
     if (this.goo.on) {
       const items = this.conjuntos
         .filter((c) => c.visible && c.params.gooOn && c.xf)
@@ -355,7 +356,7 @@ export class Scene {
           const f = { ...c.xf, tx: c.xf.tx - off.x, ty: c.xf.ty - off.y }; // el lugar donde lo puso el usuario, sin la atracción
           return { c, n: this._map(f, c.engine.pieceCenter(w, h, c.params)), r: this._gooRadius(c, w, h) };
         });
-      for (const br of this._gooSys.step(items, this.goo, dt)) drawBridge(ctx, br, this.goo, this.clock);
+      gooBridges = this._gooSys.step(items, this.goo, dt);
     } else if (this._gooSys.off.size || this._gooSys.pairs.size) {
       this._gooSys.reset();
     }
@@ -373,6 +374,13 @@ export class Scene {
       ctx.restore();
 
       if (overlay) this._drawHandles(overlay, c);
+    }
+
+    if (gooBridges) {
+      for (const br of gooBridges) {
+        if (this.goo.style === "liso") drawBridge(ctx, br, this.goo, this.clock);
+        else drawSoftBridge(ctx, br, this.goo, this.clock);
+      }
     }
 
     if (ends) {

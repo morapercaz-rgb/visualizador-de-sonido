@@ -9,7 +9,7 @@
 //
 // Todo es gradual: nada aparece ni desaparece de golpe.
 
-import { hexToRgb } from "./colorUtils.js?v=20261025172438";
+import { hexToRgb } from "./colorUtils.js?v=20261025174347";
 
 export const GOO_DEFAULTS = {
   on: false,
@@ -18,7 +18,8 @@ export const GOO_DEFAULTS = {
   viscosity: 0.6, // 0 = se corta enseguida, 1 = melaza: se estira muchísimo antes de cortarse
   neck: 0.55, // grosor del puente (cuando están pegados)
   core: 0.6, // cuánto brilla el centro del puente (blanco)
-  colorMode: "conjuntos", // "conjuntos" = el color de cada uno; "uno" = un solo color
+  style: "material", // "material" = cuerpo suave con el degradé de los colores de cada conjunto; "liso" = forma de un solo color con centro brillante
+  colorMode: "conjuntos", // (solo "liso") "conjuntos" = el color de cada uno; "uno" = un solo color
   color: "#ffee33",
 };
 
@@ -26,10 +27,17 @@ const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const smooth = (x) => x * x * (3 - 2 * x);
 const lerp = (a, b, u) => a + (b - a) * u;
 
-// el color "principal" de un conjunto: el primero de su paleta que esté prendido
-function leadColor(params) {
-  for (let i = 1; i <= 6; i++) if (params[`paletteEnabled${i}`]) return params[`paletteColor${i}`];
-  return params.paletteColor1;
+// los colores de un conjunto, como {r,g,b}: en el aura de colores, los de sus
+// luces; en los demás modos, los prendidos de la paleta
+function paletteOf(params) {
+  const cols = [];
+  if (params.visualMode === "mix") {
+    const n = Math.max(1, Math.min(8, Math.round(params.mixCount)));
+    for (let i = 1; i <= n; i++) cols.push(hexToRgb(params[`mixColor${i}`]));
+  } else {
+    for (let i = 1; i <= 6; i++) if (params[`paletteEnabled${i}`]) cols.push(hexToRgb(params[`paletteColor${i}`]));
+  }
+  return cols.length ? cols : [hexToRgb(params.paletteColor1)];
 }
 
 export class GooSystem {
@@ -119,8 +127,10 @@ export class GooSystem {
           rb: b.r,
           l: st.l,
           stretch,
-          ca: hexToRgb(mode ? o.color : leadColor(a.c.params)),
-          cb: hexToRgb(mode ? o.color : leadColor(b.c.params)),
+          colsA: paletteOf(a.c.params),
+          colsB: paletteOf(b.c.params),
+          ca: mode ? hexToRgb(o.color) : paletteOf(a.c.params)[0],
+          cb: mode ? hexToRgb(o.color) : paletteOf(b.c.params)[0],
         });
       }
     }
@@ -198,6 +208,70 @@ export function drawBridge(ctx, br, o, time) {
     ctx.shadowBlur = 0;
     path(0.62);
     ctx.fillStyle = grad(0.85, 0.9 * clamp(o.core));
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+
+// ---------- puente de la misma materia: un aura lisa que une a los dos ----------
+// Está hecho con muchos halos suaves (degradados radiales) puestos a lo largo
+// del camino de uno a otro, con el color de A de su lado y el de B del otro.
+// Al superponerse se funden en un cuerpo liso, sin bordes duros, como una gota
+// de aura. Grueso cerca de cada conjunto y fino en el cuello; ondula apenas.
+
+function sampleStops(stops, t) {
+  if (stops.length === 1) return stops[0];
+  const x = clamp(t) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(x));
+  const u = x - i;
+  const a = stops[i], b = stops[i + 1];
+  return { r: lerp(a.r, b.r, u), g: lerp(a.g, b.g, u), b: lerp(a.b, b.b, u) };
+}
+
+export function drawSoftBridge(ctx, br, o, time) {
+  const { pa, pb, ra, rb, l, stretch, colsA, colsB } = br;
+  const dx = pb.x - pa.x, dy = pb.y - pa.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 1e-3) return;
+  const ux = dx / d, uy = dy / d, nx = -uy, ny = ux;
+
+  const touching = clamp(1 - (d - 0.9 * (ra + rb)) / (0.5 * (ra + rb)), 0, 1);
+  const thick = l * Math.pow(1 - stretch, 1.1) * (1 - 0.3 * touching);
+  if (thick < 0.004) return;
+
+  const small = Math.min(ra, rb);
+  // el camino va desde adentro de A hasta adentro de B
+  const t0 = -0.5 * small / d, t1 = 1 + 0.5 * small / d;
+  const side = (cols) => (cols.length > 3 ? [cols[0], cols[Math.floor(cols.length / 2)], cols[cols.length - 1]] : cols);
+  const stops = [...side(colsA), ...side(colsB).slice().reverse()];
+
+  const hm = Math.max(2.5, small * o.neck * 0.8 * thick); // medio ancho en el cuello
+  const flare = small * (0.35 + 0.45 * thick) * Math.min(1, 0.35 + l); // medio ancho junto a cada uno
+  const steps = clamp(Math.ceil(d / Math.max(4, hm * 0.45)), 14, 90);
+  const alpha = clamp(Math.sqrt(thick) * 1.1);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  for (let k = 0; k <= steps; k++) {
+    const u = k / steps; // 0 = A, 1 = B
+    const t = lerp(t0, t1, u);
+    const mid = Math.abs(2 * u - 1);
+    const hw = lerp(hm, flare, Math.pow(mid, 2.2));
+    const sway = (Math.sin(time * 1.7 + u * 5) * 0.12 + Math.sin(time * 2.6 + u * 9) * 0.07) * (0.5 + stretch) * hw;
+    const x = pa.x + dx * t + nx * sway;
+    const y = pa.y + dy * t + ny * sway;
+    const R = hw * 1.3 + 4;
+    const c = sampleStops(stops, u);
+    const col = `${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)}`;
+    const a = 0.2 * alpha;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+    g.addColorStop(0, `rgba(${col},${a})`);
+    g.addColorStop(0.55, `rgba(${col},${a * 0.8})`);
+    g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, R, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
