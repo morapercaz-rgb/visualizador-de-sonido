@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025152542";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025153008";
 
 const TAU = Math.PI * 2;
 
@@ -73,6 +73,11 @@ export class VisualEngine {
   }
 
   draw(ctx, w, h, audioData, params, dt = 0.016) {
+    this._size = { w, h };
+    if (this._pending) {
+      this._applyState(this._pending, w, h);
+      this._pending = null;
+    }
     // el audio se analiza una sola vez por cuadro para todos los conjuntos;
     // acá se lo ajusta a la cantidad de picos/barras de ESTE conjunto
     audioData = withSpectrumBins(audioData, Math.round(params.spectrumBins));
@@ -268,6 +273,47 @@ export class VisualEngine {
     this.echoChain = []; // las copias de los ecos vuelven a ponerse en fila
     this.echoDir = null;
     this.echoSpin = 0;
+  }
+
+  // ---------- guardar y recuperar cómo quedó la pieza ----------
+  // Además de los parámetros del panel, la pieza tiene "dónde quedó" lo que
+  // moviste con el mouse (el centro, los núcleos, los círculos libres, las luces
+  // del aura de colores, la fila de ecos). Esto lo resume para poder guardarlo y
+  // volver a verlo igual. Todo queda quieto (sin velocidad) y se guarda el tamaño
+  // del lienzo, para acomodarlo si después se abre en otro tamaño.
+  exportState() {
+    const still = (m) => ({ ...m, vx: 0, vy: 0 });
+    const { w = 0, h = 0 } = this._size ?? {};
+    return {
+      w,
+      h,
+      centerOffset: still(this.centerOffset),
+      coreOffsets: { a: still(this.coreOffsets.a), b: still(this.coreOffsets.b) },
+      freeCircles: this.freeCircles.map((c) => ({ x: c.x, y: c.y, vx: 0, vy: 0, hueShift: c.hueShift, size: c.size })),
+      lights: this.lights.map(still),
+      echoChain: this.echoChain.map((c) => ({ x: c.x, y: c.y })),
+      echoDir: this.echoDir,
+      echoSpin: this.echoSpin,
+    };
+  }
+
+  // lo deja para aplicarlo en el próximo cuadro (ahí se sabe el tamaño del lienzo)
+  importState(st) {
+    this._pending = st ?? null;
+  }
+
+  _applyState(st, w, h) {
+    const sx = st.w ? w / st.w : 1;
+    const sy = st.h ? h / st.h : 1;
+    const num = (v) => (Number.isFinite(v) ? v : 0);
+    const pos = (m) => ({ ...m, x: num(m.x) * sx, y: num(m.y) * sy, vx: 0, vy: 0 });
+    if (st.centerOffset) this.centerOffset = pos(st.centerOffset);
+    if (st.coreOffsets) this.coreOffsets = { a: pos(st.coreOffsets.a ?? newMover()), b: pos(st.coreOffsets.b ?? newMover()) };
+    this.freeCircles = (st.freeCircles ?? []).map((c) => ({ ...pos(c), hueShift: c.hueShift ?? 0, size: c.size ?? 28, trail: [], lastPush: null }));
+    this.lights = (st.lights ?? []).map(pos);
+    this.echoChain = (st.echoChain ?? []).map((c) => ({ x: num(c.x) * sx, y: num(c.y) * sy }));
+    this.echoDir = st.echoDir ?? null;
+    this.echoSpin = st.echoSpin ?? 0;
   }
 
   // dónde tiene que estar el núcleo "a" o "b" (en coordenadas de la pieza).

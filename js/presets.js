@@ -5,8 +5,9 @@
 // conjuntos de una a otra o a una amiga están "exportar" e "importar").
 //
 // Se guarda la configuración del conjunto (modo, colores, cantidades, estilo,
-// movimiento, transformación y keyframes), no lo que está pasando en ese
-// momento (posiciones de las gotas, estelas, etc.).
+// movimiento, transformación y keyframes) y dónde quedó lo que moviste con el
+// mouse (núcleos, círculos libres, luces del aura de colores, ecos). No se
+// guarda lo que pasa solo en ese momento (gotas que van apareciendo, estelas).
 
 const KEY = "visualizador-de-sonido.conjuntos.v1";
 
@@ -36,7 +37,14 @@ export function listPresets() {
 export function savePreset(name, c) {
   const clean = name.trim() || c.name;
   const list = read();
-  const preset = { name: clean, params: structuredClone(c.params), keys: structuredClone(c.keys ?? []), savedAt: Date.now() };
+  const preset = {
+    name: clean,
+    params: structuredClone(c.params),
+    keys: structuredClone(c.keys ?? []),
+    state: c.engine?.exportState?.() ?? null, // dónde quedó lo que moviste con el mouse
+    spin: c.spinAngle ?? 0, // cuánto giró por su cuenta
+    savedAt: Date.now(),
+  };
   const i = list.findIndex((p) => p.name === clean);
   const replaced = i >= 0;
   if (replaced) list[i] = preset;
@@ -71,7 +79,7 @@ export function importPresetsText(text) {
   let n = 0;
   for (const p of incoming) {
     if (!p || typeof p.name !== "string" || typeof p.params !== "object" || !p.params) continue;
-    const item = { name: p.name, params: p.params, keys: Array.isArray(p.keys) ? p.keys : [], savedAt: Date.now() };
+    const item = { name: p.name, params: p.params, keys: Array.isArray(p.keys) ? p.keys : [], state: p.state ?? null, spin: p.spin ?? 0, savedAt: Date.now() };
     const i = list.findIndex((x) => x.name === item.name);
     if (i >= 0) list[i] = item;
     else list.push(item);

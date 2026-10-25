@@ -10,11 +10,11 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025152542";
-import { createDefaultParams } from "./controls.js?v=20261025152542";
-import { getPreset } from "./presets.js?v=20261025152542";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025152542";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025152542";
+import { VisualEngine } from "./visualEngine.js?v=20261025153008";
+import { createDefaultParams } from "./controls.js?v=20261025153008";
+import { getPreset } from "./presets.js?v=20261025153008";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025153008";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025153008";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -114,7 +114,8 @@ export class Scene {
     c.params = { ...createDefaultParams(), ...structuredClone(p.params) };
     c.keys = structuredClone(p.keys ?? []);
     c.engine = new VisualEngine(); // arranca limpio, sin restos del conjunto anterior
-    c.spinAngle = 0;
+    c.engine.importState(p.state); // y con lo que habías movido, donde lo dejaste
+    c.spinAngle = p.spin ?? 0;
     c._lastT = null;
   }
 
@@ -495,11 +496,12 @@ export class Scene {
             params: { ...createDefaultParams(), ...structuredClone(p.params) },
             keys: [],
             engine: new VisualEngine(),
-            spinAngle: 0,
+            spinAngle: p.spin ?? 0,
             _lastT: null,
             xf: null,
           },
         };
+        hit.c.engine.importState(p.state);
         this._libCache.set(name, hit);
       }
       return hit.c;
