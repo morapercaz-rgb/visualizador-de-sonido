@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025175500";
+import { listPresets } from "./presets.js?v=20261025181139";
 
 export function createDefaultParams() {
   return {
@@ -27,6 +27,9 @@ export function createDefaultParams() {
     colorA: "#33aaff",
     colorB: "#ff3399",
     hueSpread: 1,
+
+    // qué tan lejos llega el halo de las auras (1 = normal): con más alcance, dos auras se funden a más distancia
+    auraReach: 1,
 
     // si este conjunto reacciona al sonido (apagado: se ve como con silencio)
     reactAudio: true,
@@ -153,6 +156,9 @@ export function createDefaultParams() {
     spikeOpacity: 1,
     barStyle: "fill",
     barOpacity: 1,
+    barFocusAmount: 0, // 0 = todas las barras reaccionan igual; 1 = solo las cercanas al foco
+    barFocusX: 0.5, // dónde está el foco (0 = izquierda, 1 = derecha)
+    barFocusWidth: 0.25, // qué tan ancho es el foco
 
     auraMax: 40, // máximo de gotas/auras a la vez
     auraStyle: "fill",
@@ -437,6 +443,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     label: "modo",
   });
   shapesF.addInput(params, "baseRadius", { min: 0, max: 400, label: "radio base" });
+  shapesF.addInput(params, "auraReach", { min: 0.5, max: 4, step: 0.05, label: "alcance del aura (más = se funden de más lejos)" });
   shapesF.addInput(params, "shapeSize", { min: 1, max: 60, label: "tamaño" });
   shapesF.addInput(params, "rotationSpeed", { min: -2, max: 2, label: "rotación" });
   shapesF.addInput(params, "colorMode", {
@@ -524,6 +531,9 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   spikesF.addInput(params, "spikeOpacity", { min: 0, max: 1, label: "opacidad picos" });
   spikesF.addInput(params, "barStyle", { options: STYLE, label: "estilo barras" });
   spikesF.addInput(params, "barOpacity", { min: 0, max: 1, label: "opacidad barras" });
+  spikesF.addInput(params, "barFocusAmount", { min: 0, max: 1, label: "foco de reacción (0 = parejo)" });
+  spikesF.addInput(params, "barFocusX", { min: 0, max: 1, label: "  dónde (izq ↔ der)" });
+  spikesF.addInput(params, "barFocusWidth", { min: 0.03, max: 1, label: "  qué tan ancho" });
 
   const aurasF = eachF.addFolder({ title: "Gotas / auras" });
   aurasF.addInput(params, "auraMax", { min: 1, max: 100, step: 1, label: "máx. a la vez" });

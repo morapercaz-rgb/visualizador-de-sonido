@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025175500";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025181139";
 
 const TAU = Math.PI * 2;
 
@@ -688,10 +688,19 @@ function newMover() {
   return { x: 0, y: 0, vx: 0, vy: 0 };
 }
 
+// alcance del aura (params.auraReach): 1 = como siempre; más de 1 = el halo
+// llega más lejos y su borde es más lleno, así dos auras cercanas se funden a
+// mayor distancia. Devuelve el radio ya ajustado y cuánto "levantar" la caída.
+function reachOf(params, R) {
+  const reach = Math.max(0.1, params.auraReach ?? 1);
+  return { R: R * reach, lift: reach > 1 ? 1 / (1 + 0.45 * (reach - 1)) : 1 };
+}
+
 // una luz de color del "aura de colores": un degradado radial con el color
 // exacto elegido (sin pasar por los sliders de saturación/luminosidad), de
 // caída bien suave así al superponerse con otras los colores se funden.
-function lightGradient(ctx, px, py, R, rgb, alpha, params) {
+function lightGradient(ctx, px, py, R0, rgb, alpha, params) {
+  const { R, lift } = reachOf(params, R0);
   const d = deformState(params, params.deformMix);
   const c = `${Math.round(rgb.r)},${Math.round(rgb.g)},${Math.round(rgb.b)}`;
   ctx.save();
@@ -702,7 +711,7 @@ function lightGradient(ctx, px, py, R, rgb, alpha, params) {
   }
   const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
   for (const [stop, k] of [[0, 1], [0.25, 0.75], [0.5, 0.4], [0.75, 0.12], [1, 0]]) {
-    g.addColorStop(stop, `rgba(${c},${alpha * k})`);
+    g.addColorStop(stop, `rgba(${c},${alpha * Math.pow(k, lift)})`);
   }
   ctx.fillStyle = g;
   ctx.beginPath();
@@ -768,12 +777,20 @@ function warpedPath(ctx, x, y, r, params, seed, enabled) {
 // se estira/rota con una transformación; si además hay ondulación, se arma
 // con varias luces chicas que se corren de a poco (así el borde sigue siendo
 // blando en vez de quedar con un corte duro).
-function softAura(ctx, x, y, R, hue, alpha, params, seed, enabled) {
+function softAura(ctx, x, y, R0, hue, alpha, params, seed, enabled) {
+  const { R, lift } = reachOf(params, R0);
   const d = deformState(params, enabled);
   const grad = (rr, al) => {
     const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
-    g.addColorStop(0, colorStr(hue, params, al));
-    g.addColorStop(1, colorStr(hue + params.edgeHueShift, params, 0));
+    if (lift === 1) {
+      g.addColorStop(0, colorStr(hue, params, al));
+      g.addColorStop(1, colorStr(hue + params.edgeHueShift, params, 0));
+    } else {
+      for (let i = 0; i <= 6; i++) {
+        const p = i / 6;
+        g.addColorStop(p, colorStr(hue + params.edgeHueShift * p, params, al * Math.pow(1 - p, lift)));
+      }
+    }
     return g;
   };
   ctx.save();
@@ -912,9 +929,16 @@ function drawBars(ctx, w, h, audioData, params) {
   const spectrum = audioData.spectrum;
   const n = spectrum.length;
   const barW = w / n;
+  // foco de la reacción: las barras cercanas a barFocusX reaccionan al sonido a
+  // pleno y las lejanas cada vez menos (barFocusAmount = 0: todas parejo, como siempre)
+  const amount = params.barFocusAmount ?? 0;
+  const focus = params.barFocusX ?? 0.5;
+  const spread = Math.max(0.02, params.barFocusWidth ?? 0.25);
 
   for (let i = 0; i < n; i++) {
-    const barH = spectrum[i] * h * 0.6 * params.overallReactivity + params.shapeSize;
+    const dist = ((i + 0.5) / n - focus) / spread;
+    const weight = 1 - amount + amount * Math.exp(-0.5 * dist * dist);
+    const barH = spectrum[i] * h * 0.6 * params.overallReactivity * weight + params.shapeSize;
     const hue = hueForIndex(i, n, audioData, params);
     const col = colorStr(hue, params, params.shapeOpacity * params.barOpacity);
     ctx.beginPath();
@@ -1180,8 +1204,9 @@ function drawAmbient(ctx, w, h, audioData, params, time) {
 
     const x = w * (0.08 + t * 0.84) + Math.sin(time * 0.4 + i * 1.7) * w * 0.04;
     const y = h * 0.5 + Math.sin(time * 0.3 + i * 2.1) * h * 0.12;
-    const rx = (w / n) * (0.9 + v * 1.6) + params.baseRadius * 0.5;
-    const ry = h * (0.22 + v * 0.3);
+    const reach = Math.max(0.1, params.auraReach ?? 1);
+    const rx = ((w / n) * (0.9 + v * 1.6) + params.baseRadius * 0.5) * reach;
+    const ry = h * (0.22 + v * 0.3) * reach;
 
     const hue = hueForIndex(i, n, audioData, params);
     ctx.save();

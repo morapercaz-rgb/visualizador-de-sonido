@@ -143,6 +143,18 @@ Saturación y luminosidad son sliders aparte que se aplican siempre, sea cual se
 
 Es una carpeta aparte con 6 colores, cada uno con su check para prenderlo o apagarlo — podés usar 2, 3, o los 6 a la vez. El modo "según frecuencia" recorre en orden los que estén prendidos: si el audio suena más grave, el color se acerca al primero de la lista que esté activo; si suena más agudo, se acerca al último. Los que apagás quedan totalmente afuera de la mezcla.
 
+## Barras: dónde reacciona más al sonido
+
+En el modo **barras** (carpeta "Picos radiales y barras") podés elegir **en qué parte reaccionan más**:
+- **foco de reacción (0 = parejo):** en 0 todas las barras reaccionan igual (como siempre). Subiéndolo, solo reaccionan las que están cerca del foco y las demás se quedan bajas; en 1 reaccionan únicamente las del foco.
+- **dónde (izq ↔ der):** la posición del foco, de la izquierda (0) a la derecha (1).
+- **qué tan ancho:** cuántas barras alrededor del foco reaccionan; chico = unas pocas, ancho = casi todas.
+Es por conjunto y se guarda con el conjunto.
+
+## Alcance del aura: que las auras se fundan de más lejos
+
+En "Formas generativas", **alcance del aura** (1 = normal). Con más de 1, el halo de las auras (aura de colores, auras/gotas, aura envolvente y círculos en estilo aura) llega más lejos y su borde es más lleno, así **cuando dos conjuntos se acercan, sus auras se funden sobre una zona más larga**, sin agregar nada nuevo: es la misma unión que ya ocurre donde se superponen. Con menos de 1 el halo se acorta. Es por conjunto y se guarda con él.
+
 ## Círculos, auras y degradados
 
 Carpeta "Círculos, auras y degradados" del panel. Tres modos nuevos inspirados en referencias de arte generativo, más controles que valen para varios modos:
