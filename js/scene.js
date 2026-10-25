@@ -10,8 +10,10 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261021204241";
-import { createDefaultParams } from "./controls.js?v=20261021204241";
+import { VisualEngine } from "./visualEngine.js?v=20261025151156";
+import { createDefaultParams } from "./controls.js?v=20261025151156";
+import { getPreset } from "./presets.js?v=20261025151156";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025151156";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -34,6 +36,12 @@ export class Scene {
 
     // línea de tiempo de keyframes (una sola para todos los conjuntos)
     this.timeline = { time: 0, duration: 8, playing: false, loop: true, ease: "smooth" };
+
+    // transformación de un conjunto en otro (ver morph.js). a y b son
+    // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
+    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, time: 0, playing: false };
+    this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
+    this._nextLibId = -1;
 
     this.settings = { gizmo: false }; // mostrar las manijas de transformación
     this.gdrag = null; // arrastre de una manija del gizmo
@@ -302,7 +310,19 @@ export class Scene {
     this.clock += dt;
     this._tickTimeline(dt);
 
+    const m = this.morph;
+    const ends = m.on ? this.morphEnds() : null;
+    if (ends && m.playing) {
+      m.time += dt;
+      if (m.repeat === "once" && m.time >= m.seconds) {
+        m.time = m.seconds;
+        m.playing = false;
+      }
+    }
+
     for (const c of this.conjuntos) {
+      if (ends && (c === ends.a || c === ends.b)) continue; // estos dos se dibujan como transformación
+      if (ends && m.only) continue; // y con "solo estos dos" no se dibuja nada más
       if (!c.visible) continue;
       c.xf = this._transform(c, w, h, audioData, dt);
       ctx.save();
@@ -314,7 +334,95 @@ export class Scene {
       if (overlay) this._drawHandles(overlay, c);
     }
 
+    if (ends) {
+      this._drawMorph(ctx, w, h, audioData, dt, ends.a, ends.b, easeMorph(this.morphProgress(), m.ease));
+      if (overlay) for (const c of [ends.a, ends.b]) if (this.conjuntos.includes(c)) this._drawHandles(overlay, c);
+    }
+
     if (overlay && this.settings.gizmo) this._drawGizmo(overlay);
+  }
+
+  // ---------- transformación de un conjunto en otro ----------
+
+  // un extremo de la transformación → un conjunto que se pueda dibujar (o null)
+  _resolveEnd(key) {
+    if (key?.startsWith("set:")) return this.conjuntos.find((c) => c.id === +key.slice(4)) ?? null;
+    if (key?.startsWith("lib:")) {
+      const name = key.slice(4);
+      const p = getPreset(name);
+      if (!p) return null;
+      let hit = this._libCache.get(name);
+      if (!hit || hit.savedAt !== p.savedAt) {
+        hit = {
+          savedAt: p.savedAt,
+          c: {
+            id: this._nextLibId--,
+            name: p.name,
+            visible: true,
+            params: { ...createDefaultParams(), ...structuredClone(p.params) },
+            keys: [],
+            engine: new VisualEngine(),
+            spinAngle: 0,
+            _lastT: null,
+            xf: null,
+          },
+        };
+        this._libCache.set(name, hit);
+      }
+      return hit.c;
+    }
+    return null;
+  }
+
+  // los dos conjuntos de la transformación, o null si falta alguno
+  morphEnds() {
+    const a = this._resolveEnd(this.morph.a);
+    const b = this._resolveEnd(this.morph.b);
+    return a && b ? { a, b } : null;
+  }
+
+  // avance de la transformación, de 0 (todo A) a 1 (todo B)
+  morphProgress() {
+    return progressAt(this.morph.time, this.morph.seconds, this.morph.repeat);
+  }
+
+  // arranca la transformación desde el principio
+  morphPlay() {
+    Object.assign(this.morph, { on: true, time: 0, playing: true });
+  }
+
+  // ir a un punto de la transformación (0 a 1) y dejarla ahí
+  morphSeek(u) {
+    const m = this.morph;
+    m.on = true;
+    m.playing = false;
+    m.time = Math.min(1, Math.max(0, u)) * m.seconds;
+  }
+
+  // dibuja un conjunto con parámetros prestados (los mezclados), conservando su
+  // motor y su giro acumulado
+  _drawLayer(ctx, c, params, alpha, w, h, audioData, dt) {
+    if (alpha <= 0.001) return;
+    const orig = c.params;
+    c.params = params;
+    c.xf = this._transform(c, w, h, audioData, dt);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity)) * alpha;
+    this._apply(ctx, c.xf);
+    c.engine.draw(ctx, w, h, audioData, params, dt);
+    ctx.restore();
+    c.params = orig;
+  }
+
+  _drawMorph(ctx, w, h, audioData, dt, A, B, u) {
+    if (A.params.visualMode === B.params.visualMode) {
+      // mismo modo: una sola pieza que va cambiando
+      this._drawLayer(ctx, A, mixParams(A.params, B.params, u, u < 0.5 ? "a" : "b"), 1, w, h, audioData, dt);
+    } else {
+      // distinto modo: uno se desvanece mientras el otro aparece
+      this._drawLayer(ctx, A, mixParams(A.params, B.params, u, "a"), 1 - u, w, h, audioData, dt);
+      this._drawLayer(ctx, B, mixParams(A.params, B.params, u, "b"), u, w, h, audioData, dt);
+    }
   }
 
   // las manijas que un motor anotó (ver visualEngine._drawMix), llevadas a la

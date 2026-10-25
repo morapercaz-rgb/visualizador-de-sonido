@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261021204241";
-import { VideoLayer } from "./videoLayer.js?v=20261021204241";
-import { Scene } from "./scene.js?v=20261021204241";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261021204241";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261021204241";
-import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261021204241";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261021204241";
+import { AudioEngine } from "./audioEngine.js?v=20261025151156";
+import { VideoLayer } from "./videoLayer.js?v=20261025151156";
+import { Scene } from "./scene.js?v=20261025151156";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025151156";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025151156";
+import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261025151156";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025151156";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -30,6 +30,19 @@ const globalParams = createDefaultParams();
 // El panel edita el conjunto seleccionado. Cuando cambia la selección, se suma
 // o se borra un conjunto, se rearma entero — conservando qué carpetas estaban
 // abiertas y la posición del scroll.
+// la configuración de la transformación (qué dos conjuntos, cuánto dura…) también queda guardada
+const MORPH_KEY = "visualizador-de-sonido.transformacion.v1";
+try {
+  const { a, b, seconds, ease, repeat, only } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
+  Object.assign(scene.morph, { a: a ?? "", b: b ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true });
+} catch {}
+function saveMorphSettings() {
+  try {
+    const { a, b, seconds, ease, repeat, only } = scene.morph;
+    localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, seconds, ease, repeat, only }));
+  } catch {}
+}
+
 let pane = null;
 function buildPanel() {
   let openState = null;
@@ -55,6 +68,18 @@ function buildPanel() {
       pickConvert: () => document.getElementById("convInput")?.click(),
       applyCanvas: () => applyCanvasSize(),
       exportPng: () => startExport("seq"),
+      morphPlay: () => {
+        if (!scene.morphEnds()) { recInfo.textContent = "elegí dos conjuntos (desde y hasta) para ver la transformación"; return; }
+        scene.morphPlay();
+        recInfo.textContent = "viendo la transformación: ■ salir la apaga y vuelven los conjuntos separados";
+      },
+      morphToggle: () => { if (scene.morphEnds()) Object.assign(scene.morph, { on: true, playing: !scene.morph.playing }); },
+      morphStop: () => { Object.assign(scene.morph, { on: false, playing: false, time: 0 }); recInfo.textContent = "salí de la transformación"; },
+      morphSeek: (u) => { if (scene.morphEnds()) scene.morphSeek(u); },
+      exportMorph: () => {
+        if (!scene.morphEnds()) { recInfo.textContent = "elegí dos conjuntos (desde y hasta) para exportar la transformación"; return; }
+        startExport("seq", { morph: true });
+      },
       exportApng: () => startExport("apng", { forceTransparent: false }),
       exportGif: () => startExport("gif"),
       selectSet: (id) => { scene.select(id); setTimeout(buildPanel, 0); },
@@ -64,6 +89,7 @@ function buildPanel() {
       bringToFront: () => { scene.bringToFront(); setTimeout(buildPanel, 0); },
       savePreset: (name) => {
         const r = savePreset(name, scene.selected);
+        navigator.storage?.persist?.().catch(() => {}); // pide que el navegador no los borre solo
         recInfo.textContent = r.ok
           ? `${r.replaced ? "actualicé" : "guardé"} "${r.name}" en tus conjuntos guardados: va a estar ahí la próxima vez que entres`
           : "no pude guardar: el navegador no deja guardar datos (¿ventana privada?). Probá con \"exportar a un archivo\"";
@@ -104,6 +130,7 @@ function buildPanel() {
       clearKeys: () => { scene.clearKeys(); setTimeout(buildPanel, 0); },
     },
   }));
+  pane.on("change", saveMorphSettings);
   const root = document.querySelector(".tp-dfwv");
   if (root) root.scrollTop = scrollTop;
 }
@@ -515,7 +542,7 @@ convInput?.addEventListener("change", async () => {
   }
 });
 
-async function startExport(kind, { forceTransparent = false } = {}) {
+async function startExport(kind, { forceTransparent = false, morph = false } = {}) {
   if (exporting || recorder.isRecording) return;
 
   // Para la secuencia, la carpeta (si se eligió guardar en carpeta) se pide ANTES
@@ -558,7 +585,7 @@ async function startExport(kind, { forceTransparent = false } = {}) {
     };
 
     if (kind === "seq") {
-      const r = await exportPngSequence({ ...common, seconds: globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle });
+      const r = await exportPngSequence({ ...common, seconds: morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, morph });
       recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}${note}`;
     } else {
       const run = kind === "gif" ? exportGif : exportApng;

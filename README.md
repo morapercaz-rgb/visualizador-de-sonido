@@ -36,6 +36,16 @@ El mouse recorre los conjuntos de arriba hacia abajo: si agarrás algo, se mueve
 
 Al cambiar de conjunto el panel se rearma pero **conserva qué carpetas tenías abiertas** y la posición del scroll.
 
+## Transformación: un conjunto que se convierte en otro
+
+Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos guardados"). Elegís dos conjuntos y cuánto dura, y ves cómo el primero se va transformando en el segundo; también se puede exportar como secuencia de PNG.
+- **desde (A) / hasta (B)**: pueden ser conjuntos que tenés en la escena (los marca "en la escena") o **conjuntos guardados** (los marca "💾 … guardado"). Con los guardados no hace falta armar nada en pantalla: los dos salen de tu biblioteca. La elección queda recordada aunque refresques la página.
+- **duración (s)**, **curva** (suave arranca y frena, constante va parejo) y **al terminar** (una vez, repetir, o ida y vuelta de A a B y de vuelta a A).
+- **▶ ver la transformación** la reproduce desde el principio; **⏯ pausa / seguir**; **■ salir de la transformación** (los conjuntos vuelven a verse separados); **ir a** te deja pararte en cualquier punto (0 = A, 1 = B) para mirarlo o ajustarlo.
+- **solo estos dos** (activado por defecto): mientras se ve y se exporta la transformación, no se dibuja nada más. Si lo apagás, el resto de los conjuntos de la escena se ve debajo.
+- **Cómo se transforma:** todo lo que es un número (cantidad, tamaño, radio, posición, rotación, escala, opacidad, deformación…) y todo color pasa de a poco de lo de A a lo de B. Lo que no se puede mezclar de a poco (tildes, relleno o contorno, tipo de color) cambia a la mitad. Si A y B tienen **distinto modo** (por ejemplo anillo → remolino), se dibujan los dos a la vez: uno se desvanece mientras aparece el otro, y mientras tanto sus números también van cambiando.
+- **⬇ exportar la transformación (secuencia de PNG)**: una imagen por cuadro, desde el primero (todo A) hasta el último (todo B), con la duración que pusiste. Usa los cuadros/seg, el fondo transparente y el "guardar en" (ZIP o carpeta) de "Exportar animación". Se guarda como `transformacion-fecha`, con su `LEEME.txt`; se importa en After igual que cualquier secuencia. Si hay un audio activo, las formas reaccionan a él durante la transformación.
+
 ## Transformar, mover y animar un conjunto
 
 Cada conjunto tiene su propia transformación (carpetas "Transformar y mover", "Movimiento continuo" y "Animación (keyframes)"):

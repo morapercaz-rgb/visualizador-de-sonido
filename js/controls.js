@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261021204241";
+import { listPresets } from "./presets.js?v=20261025151156";
 
 export function createDefaultParams() {
   return {
@@ -273,6 +273,31 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   }
   libF.addButton({ title: "⬇ exportar a un archivo" }).on("click", () => actions.exportPresets?.());
   libF.addButton({ title: "⬆ importar de un archivo" }).on("click", () => actions.importPresets?.());
+
+  // ---- transformación: un conjunto que se convierte en otro ----
+  const mf = pane.addFolder({ title: "Transformación (de un conjunto a otro)" });
+  const m = scene.morph;
+  const endOpts = {};
+  for (const c of conjuntos) endOpts[`${c.name} · en la escena`] = `set:${c.id}`;
+  for (const p of saved) endOpts[`💾 ${p.name} · guardado`] = `lib:${p.name}`;
+  const validKeys = Object.values(endOpts);
+  if (!validKeys.includes(m.a)) m.a = validKeys[0] ?? "";
+  if (!validKeys.includes(m.b)) m.b = validKeys[1] ?? validKeys[0] ?? "";
+  mf.addInput(m, "a", { options: endOpts, label: "desde (A)" });
+  mf.addInput(m, "b", { options: endOpts, label: "hasta (B)" });
+  mf.addInput(m, "seconds", { min: 0.5, max: 60, step: 0.5, label: "duración (s)" });
+  mf.addInput(m, "ease", { options: { "suave (arranca y frena)": "smooth", "constante": "linear" }, label: "curva" });
+  mf.addInput(m, "repeat", { options: { "una vez": "once", "repetir": "loop", "ida y vuelta": "pingpong" }, label: "al terminar" });
+  mf.addInput(m, "only", { label: "solo estos dos" });
+  mf.addButton({ title: "▶ ver la transformación" }).on("click", () => actions.morphPlay?.());
+  mf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.morphToggle?.());
+  mf.addButton({ title: "■ salir de la transformación" }).on("click", () => actions.morphStop?.());
+  const morphView = { get avance() { return scene.morphProgress(); } };
+  mf.addMonitor(morphView, "avance", { label: "avance", interval: 100, format: (v) => `${Math.round(v * 100)} %` });
+  const seek = { v: 0 };
+  mf.addInput(seek, "v", { min: 0, max: 1, label: "ir a (0 = A, 1 = B)" }).on("change", (ev) => actions.morphSeek?.(ev.value));
+  mf.addButton({ title: "⬇ exportar la transformación (secuencia de PNG)" }).on("click", () => actions.exportMorph?.());
+  mf.addMonitor({ txt: "usa cuadros/seg y fondo de 'Exportar animación'" }, "txt", { label: "nota" });
 
   // ---- transformar, mover y animar el conjunto seleccionado ----
   const xfF = pane.addFolder({ title: "Transformar y mover" });
