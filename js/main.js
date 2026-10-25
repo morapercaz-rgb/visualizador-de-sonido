@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025153008";
-import { VideoLayer } from "./videoLayer.js?v=20261025153008";
-import { Scene } from "./scene.js?v=20261025153008";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025153008";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025153008";
-import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261025153008";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025153008";
+import { AudioEngine } from "./audioEngine.js?v=20261025161318";
+import { VideoLayer } from "./videoLayer.js?v=20261025161318";
+import { Scene } from "./scene.js?v=20261025161318";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025161318";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025161318";
+import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025161318";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025161318";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -58,6 +58,46 @@ function saveMorphSettings() {
     const { a, b, seconds, ease, repeat, only, stagger, swirl } = scene.morph;
     localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, seconds, ease, repeat, only, stagger, swirl }));
   } catch {}
+}
+
+// ---------- pasar conjuntos a otra persona ----------
+const PUBLIC_URL = "https://morapercaz-rgb.github.io/visualizador-de-sonido/";
+
+// un link que lleva los conjuntos adentro. Solo se guarda lo que difiere de los
+// valores iniciales (así el link queda mucho más corto).
+async function shareLink(list) {
+  const base = createDefaultParams();
+  const slim = list.map((p) => ({
+    name: p.name,
+    params: Object.fromEntries(Object.entries(p.params).filter(([k, v]) => v !== base[k])),
+    keys: p.keys,
+    state: p.state,
+    spin: p.spin,
+  }));
+  const code = await encodePresets(slim);
+  const root = location.hostname.endsWith("github.io") ? location.origin + location.pathname : PUBLIC_URL;
+  const url = `${root}#conjuntos=${code}`;
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(url);
+    copied = true;
+  } catch {}
+  if (!copied) window.prompt("Copiá este link (⌘+C) y mandáselo:", url);
+  const n = list.length;
+  recInfo.textContent =
+    `${copied ? "copié" : "armé"} el link con ${n} conjunto${n === 1 ? "" : "s"} (${Math.round(url.length / 1024 * 10) / 10} KB): quien lo abra los recibe en "Mis conjuntos guardados"` +
+    (url.length > 8000 ? " · es largo: si tu chat lo corta, usá exportar / importar" : "");
+}
+
+// si se abrió un link con conjuntos adentro (#conjuntos=…), se guardan en este navegador
+async function importFromHash() {
+  const m = location.hash.match(/^#conjuntos=(.+)$/);
+  if (!m) return;
+  const list = await decodePresets(m[1]);
+  history.replaceState(null, "", location.pathname + location.search); // se saca el link largo de la barra
+  const n = list ? importPresets(list) : -1;
+  recInfo.textContent = n < 0 ? "el link con conjuntos no se pudo leer (¿se cortó al copiarlo?)" : `recibí ${n} conjunto${n === 1 ? "" : "s"} por link: están en "Mis conjuntos guardados" y quedan en este navegador`;
+  buildPanel();
 }
 
 let pane = null;
@@ -190,7 +230,19 @@ function buildPanel() {
         recInfo.textContent = `el conjunto que editabas ahora es "${p.name}"`;
         setTimeout(buildPanel, 0);
       },
+      sharePreset: (name) => {
+        const p = getPreset(name);
+        if (p) shareLink([p]);
+      },
+      shareAll: () => {
+        const mine = listPresets().filter((p) => !p.shared);
+        if (mine.length) shareLink(mine);
+      },
       deletePreset: (name) => {
+        if (getPreset(name)?.shared && !listPresets().some((p) => p.name === name && !p.shared)) {
+          recInfo.textContent = `"${name}" es de la lista de todos (viene con la página): no se puede borrar desde acá`;
+          return;
+        }
         if (!name || !confirm(`¿Borrar "${name}" de tus conjuntos guardados? (los que ya tenés en la escena no se tocan)`)) return;
         deletePreset(name);
         recInfo.textContent = `borré "${name}" de tus guardados`;
@@ -216,6 +268,8 @@ function buildPanel() {
   if (root) root.scrollTop = scrollTop;
 }
 buildPanel();
+importFromHash();
+loadShared("conjuntos-compartidos.json").then((n) => n && buildPanel()); // la lista que viene con la página
 
 // importar conjuntos de un archivo exportado
 document.getElementById("presetInput")?.addEventListener("change", async (e) => {

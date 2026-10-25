@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025153008";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025161318";
 
 const TAU = Math.PI * 2;
 

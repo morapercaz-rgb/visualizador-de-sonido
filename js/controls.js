@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025153008";
+import { listPresets } from "./presets.js?v=20261025161318";
 
 export function createDefaultParams() {
   return {
@@ -263,7 +263,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   libF.addButton({ title: "💾 guardar este conjunto" }).on("click", () => actions.savePreset?.(lib.name));
   if (saved.length) {
     const opts = {};
-    for (const p of saved) opts[p.name] = p.name;
+    for (const p of saved) opts[`${p.shared ? "🌐 " : ""}${p.name}`] = p.name;
     libF.addInput(lib, "pick", { options: opts, label: "guardados" });
     libF.addButton({ title: "+ agregar a la escena" }).on("click", () => actions.addPreset?.(lib.pick));
     libF.addButton({ title: "reemplazar el que estoy editando" }).on("click", () => actions.replacePreset?.(lib.pick));
@@ -271,6 +271,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   } else {
     libF.addMonitor({ txt: "todavía no guardaste ninguno" }, "txt", { label: "guardados" });
   }
+  if (saved.length) libF.addButton({ title: "🔗 copiar link de este conjunto" }).on("click", () => actions.sharePreset?.(lib.pick));
+  if (saved.some((p) => !p.shared)) libF.addButton({ title: "🔗 copiar link con todos los míos" }).on("click", () => actions.shareAll?.());
   libF.addButton({ title: "⬇ exportar a un archivo" }).on("click", () => actions.exportPresets?.());
   libF.addButton({ title: "⬆ importar de un archivo" }).on("click", () => actions.importPresets?.());
 
@@ -279,7 +281,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   const m = scene.morph;
   const endOpts = {};
   for (const c of conjuntos) endOpts[`${c.name} · en la escena`] = `set:${c.id}`;
-  for (const p of saved) endOpts[`💾 ${p.name} · guardado`] = `lib:${p.name}`;
+  for (const p of saved) endOpts[`${p.shared ? "🌐" : "💾"} ${p.name} · ${p.shared ? "de todos" : "guardado"}`] = `lib:${p.name}`;
   const validKeys = Object.values(endOpts);
   if (!validKeys.includes(m.a)) m.a = validKeys[0] ?? "";
   if (!validKeys.includes(m.b)) m.b = validKeys[1] ?? validKeys[0] ?? "";
@@ -304,7 +306,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   // ---- línea de tiempo de varias etapas: conjuntos y posiciones que se van transformando ----
   const qf = pane.addFolder({ title: "Línea de tiempo (varias etapas)" });
   const q = scene.seq;
-  const labelOf = (src) => Object.keys(endOpts).find((k) => endOpts[k] === src)?.replace(/ · (en la escena|guardado)$/, "") ?? "⚠ falta";
+  const labelOf = (src) => Object.keys(endOpts).find((k) => endOpts[k] === src)?.replace(/ · (en la escena|guardado|de todos)$/, "") ?? "⚠ falta";
   qf.addMonitor({ txt: "cada etapa = un conjunto en una posición; entre etapas se transforma. Agregá etapas y mirá la barra de abajo." }, "txt", { label: "cómo" });
   const addv = { src: validKeys[0] ?? "" };
   qf.addInput(addv, "src", { options: endOpts, label: "conjunto" });
