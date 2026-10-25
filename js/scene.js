@@ -10,11 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025161318";
-import { createDefaultParams } from "./controls.js?v=20261025161318";
-import { getPreset } from "./presets.js?v=20261025161318";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025161318";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025161318";
+import { VisualEngine } from "./visualEngine.js?v=20261025172438";
+import { createDefaultParams } from "./controls.js?v=20261025172438";
+import { getPreset } from "./presets.js?v=20261025172438";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025172438";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025172438";
+import { GooSystem, GOO_DEFAULTS, drawBridge } from "./goo.js?v=20261025172438";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -46,6 +47,9 @@ export class Scene {
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
     //   hold = segundos que se queda; trans = segundos que tarda en pasar a la siguiente
     this.seq = { on: false, stops: [], sel: 0, time: 0, playing: false, repeat: "once", ease: "smooth", only: true };
+    // efecto goo: atracción y puente de melaza entre conjuntos que se acercan (ver goo.js)
+    this.goo = { ...GOO_DEFAULTS };
+    this._gooSys = new GooSystem();
     this._caps = { a: new Capture(), b: new Capture() }; // donde se dibuja cada extremo de la transformación
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
     this._nextLibId = -1;
@@ -252,12 +256,13 @@ export class Scene {
       by = pc.y;
     }
 
+    const go = this.goo.on ? this._gooSys.offsetOf(c) : { x: 0, y: 0 }; // cuánto lo atrae el otro conjunto
     return {
       mode: p.pivotMode,
       px: bx + p.pivotX, // el pivote: el punto alrededor del cual se rota y se escala
       py: by + p.pivotY,
-      tx: p.posX + ox + dx,
-      ty: p.posY + oy + dy,
+      tx: p.posX + ox + dx + go.x,
+      ty: p.posY + oy + dy + go.y,
       ang: ((p.rotation + c.spinAngle + swing) * Math.PI) / 180,
       s: Math.max(0.01, p.scale * pulse),
     };
@@ -338,6 +343,22 @@ export class Scene {
       }
     }
     const inSeq = seqOn ? new Set(sched.segs.map((v) => v.c)) : null;
+
+    // goo: atracción y puentes entre los conjuntos que se ven normalmente. Los
+    // puentes van DEBAJO de los conjuntos.
+    if (this.goo.on) {
+      const items = this.conjuntos
+        .filter((c) => c.visible && c.params.gooOn && c.xf)
+        .filter((c) => !(ends && (c === ends.a || c === ends.b || m.only)) && !(inSeq && (inSeq.has(c) || sq.only)))
+        .map((c) => {
+          const off = this._gooSys.offsetOf(c);
+          const f = { ...c.xf, tx: c.xf.tx - off.x, ty: c.xf.ty - off.y }; // el lugar donde lo puso el usuario, sin la atracción
+          return { c, n: this._map(f, c.engine.pieceCenter(w, h, c.params)), r: this._gooRadius(c, w, h) };
+        });
+      for (const br of this._gooSys.step(items, this.goo, dt)) drawBridge(ctx, br, this.goo, this.clock);
+    } else if (this._gooSys.off.size || this._gooSys.pairs.size) {
+      this._gooSys.reset();
+    }
 
     for (const c of this.conjuntos) {
       if (ends && (c === ends.a || c === ends.b)) continue; // estos dos se dibujan como transformación
@@ -578,6 +599,18 @@ export class Scene {
       drawParticleMorph(ctx, capA.particles, capB.particles, u, this.morph);
     }
     ctx.restore();
+  }
+
+  // radio aproximado de un conjunto, para saber cuándo "se tocan" (goo).
+  // Si el conjunto tiene un radio propio (params.gooRadius), se usa ese.
+  _gooRadius(c, w, h) {
+    const p = c.params;
+    let r;
+    if (p.gooRadius > 0) r = p.gooRadius;
+    else if (p.visualMode === "grid") r = Math.min(w, h) * 0.35;
+    else if (p.visualMode === "bars") r = Math.min(w, h) * 0.4;
+    else r = p.baseRadius + p.shapeSize;
+    return Math.max(8, r * Math.max(0.05, p.scale));
   }
 
   // las manijas que un motor anotó (ver visualEngine._drawMix), llevadas a la

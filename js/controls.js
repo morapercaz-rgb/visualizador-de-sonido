@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025161318";
+import { listPresets } from "./presets.js?v=20261025172438";
 
 export function createDefaultParams() {
   return {
@@ -27,6 +27,10 @@ export function createDefaultParams() {
     colorA: "#33aaff",
     colorB: "#ff3399",
     hueSpread: 1,
+
+    // goo: este conjunto se atrae y se une con los demás (ver "Goo" en el panel)
+    gooOn: true,
+    gooRadius: 0, // 0 = automático
 
     // paleta para el modo "según frecuencia": hasta 6 colores, cada uno con
     // su check para prenderlo o apagarlo. El sonido se mueve solo entre los
@@ -342,6 +346,20 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   qf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.seqToggle?.());
   qf.addButton({ title: "■ salir de la línea de tiempo" }).on("click", () => actions.seqStop?.());
   qf.addButton({ title: "⬇ exportar la línea de tiempo (secuencia de PNG)" }).on("click", () => actions.exportSeq?.());
+
+  // ---- goo: se atraen y se unen con un puente de melaza ----
+  const gooF = pane.addFolder({ title: "Goo: se atraen y se unen (melaza)" });
+  const goo = scene.goo;
+  gooF.addInput(goo, "on", { label: "activar" });
+  gooF.addInput(goo, "reach", { min: 20, max: 600, step: 1, label: "distancia de atracción" });
+  gooF.addInput(goo, "pull", { min: 0, max: 1, label: "cuánto se atraen" });
+  gooF.addInput(goo, "viscosity", { min: 0, max: 1, label: "melaza (se estira)" });
+  gooF.addInput(goo, "neck", { min: 0.05, max: 1.2, label: "grosor del puente" });
+  gooF.addInput(goo, "core", { min: 0, max: 1, label: "brillo del centro" });
+  gooF.addInput(goo, "colorMode", { options: { "color de cada conjunto": "conjuntos", "un solo color": "uno" }, label: "color" });
+  gooF.addInput(goo, "color", { label: "  ese color" });
+  gooF.addInput(params, "gooOn", { label: "este conjunto se une" });
+  gooF.addInput(params, "gooRadius", { min: 0, max: 600, step: 1, label: "radio de contacto (0 = auto)" });
 
   // ---- transformar, mover y animar el conjunto seleccionado ----
   const xfF = pane.addFolder({ title: "Transformar y mover" });

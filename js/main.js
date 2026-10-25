@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025161318";
-import { VideoLayer } from "./videoLayer.js?v=20261025161318";
-import { Scene } from "./scene.js?v=20261025161318";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025161318";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025161318";
-import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025161318";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025161318";
+import { AudioEngine } from "./audioEngine.js?v=20261025172438";
+import { VideoLayer } from "./videoLayer.js?v=20261025172438";
+import { Scene } from "./scene.js?v=20261025172438";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025172438";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025172438";
+import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025172438";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025172438";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -52,7 +52,14 @@ function saveSeqSettings() {
     localStorage.setItem(SEQ_KEY, JSON.stringify({ stops, sel, repeat, ease, only }));
   } catch {}
 }
+const GOO_KEY = "visualizador-de-sonido.goo.v1";
+try {
+  Object.assign(scene.goo, JSON.parse(localStorage.getItem(GOO_KEY) ?? "{}"));
+} catch {}
 function saveMorphSettings() {
+  try {
+    localStorage.setItem(GOO_KEY, JSON.stringify(scene.goo));
+  } catch {}
   saveSeqSettings();
   try {
     const { a, b, seconds, ease, repeat, only, stagger, swirl } = scene.morph;

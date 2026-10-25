@@ -39,6 +39,16 @@ El mouse recorre los conjuntos de arriba hacia abajo: si agarrás algo, se mueve
 
 Al cambiar de conjunto el panel se rearma pero **conserva qué carpetas tenías abiertas** y la posición del scroll.
 
+## Goo: los conjuntos se atraen y se unen como melaza
+
+Carpeta **"Goo: se atraen y se unen (melaza)"**. Con **activar** prendido, cuando acercás dos conjuntos (arrastrándolos, con los sliders de posición, o con keyframes):
+- **Se atraen:** cada uno se va corriendo hacia el otro, con inercia, como si fueran pegajosos (hasta casi tocarse, sin encajarse).
+- **Aparece un puente de goo que los une**, que se forma y engrosa **de a poco**: ancho donde se pega a cada conjunto y finito en el medio, con el color de cada uno (o un solo color) y un centro claro, como en la referencia.
+- **Al separarlos, el puente se estira y se afina como melaza**, tiembla un poco, y recién cuando se estira demasiado se corta; los conjuntos vuelven a su lugar despacio. Se forma a una distancia y se corta a una más larga: por eso se ve que "se resisten" a separarse.
+- Controles: **distancia de atracción** (desde qué distancia entre bordes empiezan a atraerse), **cuánto se atraen**, **melaza** (0 = se corta enseguida, 1 = se estira muchísimo), **grosor del puente**, **brillo del centro**, y **color** (el de cada conjunto o uno solo).
+- Por conjunto: **este conjunto se une** (para que uno quede afuera del efecto) y **radio de contacto** (0 = automático, según el radio base y la escala; se puede poner a mano si un conjunto es muy grande o muy chico, como una grilla o barras). Estos dos se guardan con el conjunto.
+- Los puentes van **por debajo** de los conjuntos, no se ven en las manijas del gizmo, y **sí salen en las exportaciones** (la atracción arranca de cero en cada exportación, así el resultado no depende de cómo estaban en vivo). Con la línea de tiempo o una transformación activa, los conjuntos que forman parte de ellas no entran en el goo.
+
 ## Transformación: un conjunto que se convierte en otro
 
 Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos guardados"). Elegís dos conjuntos y cuánto dura, y ves cómo el primero se va transformando en el segundo; también se puede exportar como secuencia de PNG.
