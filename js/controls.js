@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025200757";
+import { listPresets } from "./presets.js?v=20261025201513";
 
 export function createDefaultParams() {
   return {
@@ -158,6 +158,8 @@ export function createDefaultParams() {
     barStyle: "fill",
     barOpacity: 1,
     barGradient: "side", // dirección del degradado de las barras: side | up | down
+    barBalance: 0.5, // a qué altura de la barra (0 = base, 1 = punta) se pasa de un color al otro
+    barSoftness: 1, // qué tan gradual es ese pasaje (1 = todo el largo de la barra, 0 = corte seco)
     barFocusAmount: 0.85, // 0 = como siempre (graves a la izquierda, parejo); 1 = todo concentrado en el foco
     barFocusX: 0.5, // dónde está el foco (0 = izquierda, 1 = derecha)
     barFocusWidth: 0.35, // qué tan ancho es el foco
@@ -476,6 +478,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     options: { "de costado a costado": "side", "de abajo a arriba": "up", "de arriba a abajo": "down" },
     label: "dirección del degradado",
   });
+  barsF.addInput(params, "barBalance", { min: 0, max: 1, label: "  dónde cambia el color (base ↔ punta)" });
+  barsF.addInput(params, "barSoftness", { min: 0, max: 1, label: "  qué tan suave es el cambio" });
   barsF.addInput(params, "barFocusX", { min: 0, max: 1, label: "dónde (izq ↔ der)" }).on("change", focusOn);
   barsF.addInput(params, "barFocusWidth", { min: 0.03, max: 1, label: "qué tan ancho" }).on("change", focusOn);
   barsF.addInput(params, "barFocusAmount", { min: 0, max: 1, label: "cuánto (0 = como antes)" });

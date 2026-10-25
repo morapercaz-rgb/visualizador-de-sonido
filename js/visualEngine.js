@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025200757";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025201513";
 
 const TAU = Math.PI * 2;
 
@@ -978,10 +978,27 @@ function drawBars(ctx, w, h, audioData, params) {
   // las barras muestran el degradado completo, sean altas o bajas
   const dir = params.barGradient ?? "side";
   const vertical = dir === "up" || dir === "down";
-  const stops = [];
+  // qué tanto hay de cada color a lo alto de la barra:
+  //   barBalance: a qué altura (0 = base, 1 = punta) se pasa del color de abajo al de arriba
+  //   barSoftness: qué tan gradual es ese pasaje (1 = todo el largo, 0 = corte seco)
+  const stops = []; // [posición 0..1 a lo largo del degradado, color]
   if (vertical) {
     const a = params.shapeOpacity * params.barOpacity;
-    for (let k = 0; k <= 12; k++) stops.push(colorStr(hueForIndex(Math.round((k / 12) * (n - 1)), n, audioData, params), params, a));
+    const bal = Math.min(1, Math.max(0, params.barBalance ?? 0.5));
+    const soft = Math.min(1, Math.max(0, params.barSoftness ?? 1));
+    const width = 0.02 + 0.98 * soft;
+    // u = cuánto del "color de arriba" hay en la posición t (0 = todo el de abajo, 1 = todo el de arriba)
+    const mix = (t) => {
+      const u = Math.min(1, Math.max(0, (t - bal) / width + 0.5));
+      return u + (u * u * (3 - 2 * u) - u) * (1 - soft); // con poca suavidad el cambio es más redondeado
+    };
+    const ts = new Set([0, 1]);
+    for (let k = 1; k < 24; k++) ts.add(k / 24);
+    ts.add(Math.min(1, Math.max(0, bal - width / 2)));
+    ts.add(Math.min(1, Math.max(0, bal + width / 2)));
+    for (const t of [...ts].sort((x, y) => x - y)) {
+      stops.push([t, colorStr(hueForIndex(mix(t) * (n - 1), n, audioData, params), params, a)]);
+    }
   }
 
   for (let i = 0; i < n; i++) {
@@ -995,7 +1012,7 @@ function drawBars(ctx, w, h, audioData, params) {
     if (vertical) {
       // de la base (y = h) a la punta (y = h - barH), o al revés
       col = ctx.createLinearGradient(0, dir === "up" ? h : h - barH, 0, dir === "up" ? h - barH : h);
-      stops.forEach((c, k) => col.addColorStop(k / 12, c));
+      for (const [t, c] of stops) col.addColorStop(t, c);
     } else {
       col = colorStr(hueForIndex(i, n, audioData, params), params, params.shapeOpacity * params.barOpacity);
     }
