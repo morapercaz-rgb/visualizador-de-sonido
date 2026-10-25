@@ -200,11 +200,25 @@ function sortAround(list) {
     .map((o) => o.p);
 }
 
+// número "al azar" pero siempre el mismo para el mismo k (así no parpadea entre cuadros)
+const rnd = (k, salt) => {
+  const x = Math.sin(k * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+// superficie rellena que cubren unas formas (para no pasarse de luz)
+// (el relleno cuenta por su superficie y el contorno por su largo por su grosor)
+const fillArea = (list) =>
+  list.reduce((s, p) => s + ((p.fi[3] + p.fo[3]) / 2) * Math.PI * p.r * p.r + p.st[3] * 2 * Math.PI * p.r * Math.max(1, p.lw), 0);
+
 // Dibuja las formas de A transformándose en las de B.
 //   u        → avance de 0 (todo A) a 1 (todo B), ya con la curva aplicada
 //   stagger  → 0 = todas a la vez, 1 = una tras otra dando la vuelta
 //   swirl    → cuánto se curva el camino (0 = recto)
-export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl = 0.18 } = {}) {
+//   scatter  → cuánto se dispersan por el camino: salen para todos lados y se
+//              vuelven a juntar en su lugar de B (0 = van directo)
+//   size     → tamaño de referencia del lienzo (para medir cuánto se dispersan)
+export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl = 0.18, scatter = 0.6, size = 400 } = {}) {
   const A = sortAround(thin(listA));
   const B = sortAround(thin(listB));
   const n = A.length, m = B.length;
@@ -227,11 +241,18 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
   const ghost = (p) => ({ x: p.x, y: p.y, r: 0, fi: clear(p.fi), fo: clear(p.fo), st: clear(p.st), lw: p.lw }); // para lo que no tiene pareja: crece o se achica en su lugar
   const scaleA = (c, k) => [c[0], c[1], c[2], c[3] / k];
 
-  ctx.lineCap = "round";
+  // centro de todo, para saber hacia dónde es "afuera" cuando se dispersan
+  const all = [...A, ...B];
+  const cx = all.reduce((t, q) => t + q.x, 0) / all.length;
+  const cy = all.reduce((t, q) => t + q.y, 0) / all.length;
+
+  // 1) dónde y cómo está cada forma en este instante
+  const items = [];
+  let mixArea = 0;
   for (let k = 0; k < K; k++) {
     const [ia, ib] = pairs[k];
-    let a = ia >= 0 ? A[ia] : ghost(B[ib]);
-    let b = ib >= 0 ? B[ib] : ghost(A[ia]);
+    const a = ia >= 0 ? A[ia] : ghost(B[ib]);
+    const b = ib >= 0 ? B[ib] : ghost(A[ia]);
     const ka = ia >= 0 ? useA[ia] : 1, kb = ib >= 0 ? useB[ib] : 1;
 
     // cada una sale un poquito después que la anterior (stagger)
@@ -241,36 +262,73 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
 
     const dx = b.x - a.x, dy = b.y - a.y;
     const bulge = swirl * Math.sin(Math.PI * p); // el camino se curva: sale por un costado y llega por el otro
-    const x = lerp(a.x, b.x, p) - dy * bulge;
-    const y = lerp(a.y, b.y, p) + dx * bulge;
+    let x = lerp(a.x, b.x, p) - dy * bulge;
+    let y = lerp(a.y, b.y, p) + dx * bulge;
+
+    // dispersión: un desvío que crece hasta la mitad del camino y vuelve a cero al llegar
+    if (scatter > 0) {
+      const mx = (a.x + b.x) / 2 - cx, my = (a.y + b.y) / 2 - cy;
+      const ml = Math.hypot(mx, my) || 1;
+      const ang = rnd(k, 1) * TAU;
+      let ox = (mx / ml) * 0.6 + Math.cos(ang);
+      let oy = (my / ml) * 0.6 + Math.sin(ang);
+      const ol = Math.hypot(ox, oy) || 1;
+      const amount = scatter * size * 0.3 * (0.35 + 0.65 * rnd(k, 2)) * Math.pow(Math.sin(Math.PI * p), 1.2);
+      x += (ox / ol) * amount;
+      y += (oy / ol) * amount;
+    }
+
     const r = lerp(a.r, b.r, p);
     if (r <= 0.05) continue;
-
-    // si una forma rellena crece mucho, el relleno se aclara en la misma medida
-    // (no se acumula luz de más): la cantidad de color total se mantiene
-    const rref = a.r > 0.05 && b.r > 0.05 ? Math.min(a.r, b.r) : Math.max(a.r, b.r);
-    const keep = Math.min(1, (rref * rref) / (r * r));
-    const fi = lerpColor(scaleA(a.fi, ka), scaleA(b.fi, kb), p);
-    const fo = lerpColor(scaleA(a.fo, ka), scaleA(b.fo, kb), p);
-    fi[3] *= keep;
-    fo[3] *= keep;
+    let fi = lerpColor(scaleA(a.fi, ka), scaleA(b.fi, kb), p);
+    let fo = lerpColor(scaleA(a.fo, ka), scaleA(b.fo, kb), p);
     const st = lerpColor(scaleA(a.st, ka), scaleA(b.st, kb), p);
 
+    // nunca solo el contorno: si a mitad de camino una forma tiene aro pero casi
+    // nada de relleno, se le da cuerpo con el color de su aro (en el principio y
+    // el final del camino no cambia nada: ahí se ve A o B tal cual)
+    const body = Math.sin(Math.PI * p);
+    const baseA = Math.max(fi[3], fo[3]);
+    if (body > 0.02 && st[3] > baseA) {
+      const want = st[3] * 0.6 * body;
+      if (want > baseA) {
+        const col = baseA > 0.01 ? fi : st;
+        fi = [col[0], col[1], col[2], want];
+        fo = [col[0], col[1], col[2], want * 0.6];
+      }
+    }
+    mixArea += ((fi[3] + fo[3]) / 2) * Math.PI * r * r + st[3] * 2 * Math.PI * r * Math.max(1, lerp(a.lw, b.lw, p));
+    items.push({ x, y, r, fi, fo, st, lw: lerp(a.lw, b.lw, p) });
+  }
+
+  // 2) límite de luz: lo relleno no puede cubrir mucho más que lo que cubren A o
+  // B por separado (si no, al juntarse muchas formas se quema a blanco). Es un
+  // ajuste parejo para todas, así nada se apaga ni desaparece de golpe.
+  const allowed = 1.3 * Math.max(fillArea(A), fillArea(B), 0.04 * size * size);
+  const g = mixArea > allowed ? allowed / mixArea : 1;
+
+  // 3) se dibujan
+  ctx.lineCap = "round";
+  for (const it of items) {
+    const { x, y, r } = it;
+    const fi = [it.fi[0], it.fi[1], it.fi[2], it.fi[3] * g];
+    const fo = [it.fo[0], it.fo[1], it.fo[2], it.fo[3] * g];
+    const st = [it.st[0], it.st[1], it.st[2], it.st[3] * g]; // el contorno se ajusta igual que el relleno: nunca queda solo
     if (fi[3] > 0.003 || fo[3] > 0.003) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
       if (Math.abs(fi[3] - fo[3]) + Math.abs(fi[0] - fo[0]) + Math.abs(fi[1] - fo[1]) + Math.abs(fi[2] - fo[2]) > 2) {
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, css(fi));
-        g.addColorStop(1, css(fo));
-        ctx.fillStyle = g;
+        const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
+        gr.addColorStop(0, css(fi));
+        gr.addColorStop(1, css(fo));
+        ctx.fillStyle = gr;
       } else ctx.fillStyle = css(fi);
       ctx.fill();
     }
     if (st[3] > 0.003) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
-      ctx.lineWidth = Math.max(0.5, lerp(a.lw, b.lw, p));
+      ctx.lineWidth = Math.max(0.5, it.lw);
       ctx.strokeStyle = css(st);
       ctx.stroke();
     }

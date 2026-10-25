@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025201513";
-import { createDefaultParams } from "./controls.js?v=20261025201513";
-import { silentAudio } from "./audioEngine.js?v=20261025201513";
-import { getPreset } from "./presets.js?v=20261025201513";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025201513";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025201513";
+import { VisualEngine } from "./visualEngine.js?v=20261025205118";
+import { createDefaultParams } from "./controls.js?v=20261025205118";
+import { silentAudio } from "./audioEngine.js?v=20261025205118";
+import { getPreset } from "./presets.js?v=20261025205118";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025205118";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025205118";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -42,7 +42,7 @@ export class Scene {
 
     // transformación de un conjunto en otro (ver morph.js). a y b son
     // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
-    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, time: 0, playing: false };
+    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, time: 0, playing: false };
     // línea de tiempo de varias etapas: cada etapa es un conjunto (de la escena o
     // guardado) con su posición; entre una etapa y la siguiente se transforma
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
@@ -584,7 +584,7 @@ export class Scene {
       ctx.globalAlpha = alpha * mid;
       ctx.globalCompositeOperation = mixed.shapeBlendMode;
       ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount}px)` : "none";
-      drawParticleMorph(ctx, capA.particles, capB.particles, u, this.morph);
+      drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h) });
     }
     ctx.restore();
   }
