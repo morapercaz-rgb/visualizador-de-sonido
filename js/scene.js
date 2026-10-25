@@ -10,14 +10,16 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025174347";
-import { createDefaultParams } from "./controls.js?v=20261025174347";
-import { getPreset } from "./presets.js?v=20261025174347";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025174347";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025174347";
-import { GooSystem, GOO_DEFAULTS, drawBridge, drawSoftBridge } from "./goo.js?v=20261025174347";
+import { VisualEngine } from "./visualEngine.js?v=20261025175055";
+import { createDefaultParams } from "./controls.js?v=20261025175055";
+import { silentAudio } from "./audioEngine.js?v=20261025175055";
+import { getPreset } from "./presets.js?v=20261025175055";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025175055";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025175055";
+import { GooSystem, GOO_DEFAULTS, drawBridge, drawSoftBridge } from "./goo.js?v=20261025175055";
 
 const TAU = Math.PI * 2;
+const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
 
 // los parámetros que se pueden animar con keyframes
@@ -366,11 +368,12 @@ export class Scene {
       if (ends && m.only) continue; // y con "solo estos dos" no se dibuja nada más
       if (inSeq && (inSeq.has(c) || sq.only)) continue; // lo mismo con la línea de tiempo
       if (!c.visible) continue;
-      c.xf = this._transform(c, w, h, audioData, dt);
+      const au = this._audioFor(c, audioData);
+      c.xf = this._transform(c, w, h, au, dt);
       ctx.save();
       ctx.globalAlpha = Math.min(1, Math.max(0, c.params.tOpacity));
       this._apply(ctx, c.xf);
-      c.engine.draw(ctx, w, h, audioData, c.params, dt);
+      c.engine.draw(ctx, w, h, au, c.params, dt);
       ctx.restore();
 
       if (overlay) this._drawHandles(overlay, c);
@@ -477,15 +480,21 @@ export class Scene {
     if (v) this.seqSeek((v.start + v.holdEnd) / 2);
   }
 
+  // el sonido que le llega a un conjunto: el real, o silencio si lo dejaste sin reaccionar
+  _audioFor(c, audio) {
+    return c.params.reactAudio === false ? SILENT : audio;
+  }
+
   // dibuja un conjunto tal cual, con parámetros de movimiento prestados
   _drawDirect(ctx, c, params, w, h, audioData, dt) {
     const orig = c.params;
     c.params = params;
-    c.xf = this._transform(c, w, h, audioData, dt);
+    const au = this._audioFor(c, audioData);
+    c.xf = this._transform(c, w, h, au, dt);
     ctx.save();
     ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity));
     this._apply(ctx, c.xf);
-    c.engine.draw(ctx, w, h, audioData, params, dt);
+    c.engine.draw(ctx, w, h, au, params, dt);
     ctx.restore();
     c.params = orig;
   }
@@ -573,14 +582,14 @@ export class Scene {
     const capA = this._caps.a, capB = this._caps.b;
     capA.begin(w, h);
     capB.begin(w, h);
-    A.engine.draw(capA.ctx, w, h, audioData, A.params, dt);
-    B.engine.draw(capB.ctx, w, h, audioData, B.params, dt);
+    A.engine.draw(capA.ctx, w, h, this._audioFor(A, audioData), A.params, dt);
+    B.engine.draw(capB.ctx, w, h, this._audioFor(B, audioData), B.params, dt);
 
     // la transformación de A se calcula con los parámetros de movimiento ya mezclados
     const mixed = mixParams(pa, pb, u, u < 0.5 ? "a" : "b");
     const origA = A.params;
     A.params = mixed;
-    A.xf = this._transform(A, w, h, audioData, dt);
+    A.xf = this._transform(A, w, h, this._audioFor(A, audioData), dt);
     A.params = origA;
     B.xf = A.xf;
 

@@ -9,7 +9,7 @@
 //
 // Todo es gradual: nada aparece ni desaparece de golpe.
 
-import { hexToRgb } from "./colorUtils.js?v=20261025174347";
+import { hexToRgb } from "./colorUtils.js?v=20261025175055";
 
 export const GOO_DEFAULTS = {
   on: false,

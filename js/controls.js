@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025174347";
+import { listPresets } from "./presets.js?v=20261025175055";
 
 export function createDefaultParams() {
   return {
@@ -27,6 +27,9 @@ export function createDefaultParams() {
     colorA: "#33aaff",
     colorB: "#ff3399",
     hueSpread: 1,
+
+    // si este conjunto reacciona al sonido (apagado: se ve como con silencio)
+    reactAudio: true,
 
     // goo: este conjunto se atrae y se une con los demás (ver "Goo" en el panel)
     gooOn: true,
@@ -247,13 +250,14 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   const picker = { selected: conjunto.id };
   const options = {};
   for (const c of conjuntos) {
-    let key = `${c.visible ? "" : "(oculto) "}${c.name}`;
+    let key = `${c.visible ? "" : "(oculto) "}${c.params.reactAudio === false ? "🔇 " : ""}${c.name}`;
     if (key in options) key += ` #${c.id}`; // dos conjuntos con el mismo nombre
     options[key] = c.id;
   }
   setsF.addInput(picker, "selected", { options, label: "editando" }).on("change", (ev) => actions.selectSet?.(ev.value));
   setsF.addInput(conjunto, "name", { label: "nombre" }).on("change", () => actions.rebuild?.());
   setsF.addInput(conjunto, "visible", { label: "visible" }).on("change", () => actions.rebuild?.());
+  setsF.addInput(params, "reactAudio", { label: "reacciona al sonido" }).on("change", () => actions.rebuild?.());
   setsF.addButton({ title: "+ conjunto nuevo" }).on("click", () => actions.addSet?.());
   setsF.addButton({ title: "duplicar este conjunto" }).on("click", () => actions.duplicateSet?.());
   setsF.addButton({ title: "traer al frente" }).on("click", () => actions.bringToFront?.());

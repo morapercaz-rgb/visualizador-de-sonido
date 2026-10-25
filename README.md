@@ -21,6 +21,7 @@ Podés tener **varios conjuntos** en pantalla al mismo tiempo, cada uno **indepe
 Carpeta **"Conjuntos"** (arriba de todo en el panel):
 - **editando**: elegís qué conjunto estás modificando. Todas las demás carpetas del panel (Formas generativas, Cada cosa, Deformar, Aura de colores, Agarrar y mover, Paleta…) editan **ese** conjunto.
 - **nombre** y **visible** (ocultar un conjunto sin borrarlo).
+- **reacciona al sonido:** tildado (por defecto), el conjunto se mueve con el audio. Destildado, ese conjunto se ve **como con silencio** y los demás siguen reaccionando; sirve para tener unos que laten con la música y otros quietos. En la lista de conjuntos aparece con 🔇. Se guarda con el conjunto y también vale en las transformaciones, la línea de tiempo y las exportaciones.
 - **+ conjunto nuevo**, **duplicar este conjunto** (copia toda la configuración, un poco corrida), **eliminar este conjunto** (siempre queda al menos uno).
 
 **Mis conjuntos guardados** (carpeta justo debajo de "Conjuntos") — tu biblioteca de conjuntos pre-hechos, que **queda guardada en el navegador** y está ahí la próxima vez que entres, aunque cierres la pestaña o apagues la compu:
