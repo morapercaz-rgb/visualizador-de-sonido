@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261025175055";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261025175055";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261025175500";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261025175500";
 
 export { crc32 };
 
@@ -174,7 +174,6 @@ async function renderAnimation(o, onFrame) {
 
   // arranca desde el principio de la animación, sin manijas ni gizmo en la imagen
   scene.clock = 0;
-  scene._gooSys.reset(); // la atracción arranca desde cero (el resultado no depende de cómo estaban en vivo)
   scene.timeline.time = 0;
   scene.timeline.playing = true;
   scene.settings.gizmo = false;

@@ -10,13 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025175055";
-import { createDefaultParams } from "./controls.js?v=20261025175055";
-import { silentAudio } from "./audioEngine.js?v=20261025175055";
-import { getPreset } from "./presets.js?v=20261025175055";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025175055";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025175055";
-import { GooSystem, GOO_DEFAULTS, drawBridge, drawSoftBridge } from "./goo.js?v=20261025175055";
+import { VisualEngine } from "./visualEngine.js?v=20261025175500";
+import { createDefaultParams } from "./controls.js?v=20261025175500";
+import { silentAudio } from "./audioEngine.js?v=20261025175500";
+import { getPreset } from "./presets.js?v=20261025175500";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025175500";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025175500";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -49,9 +48,6 @@ export class Scene {
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
     //   hold = segundos que se queda; trans = segundos que tarda en pasar a la siguiente
     this.seq = { on: false, stops: [], sel: 0, time: 0, playing: false, repeat: "once", ease: "smooth", only: true };
-    // efecto goo: atracción y puente de melaza entre conjuntos que se acercan (ver goo.js)
-    this.goo = { ...GOO_DEFAULTS };
-    this._gooSys = new GooSystem();
     this._caps = { a: new Capture(), b: new Capture() }; // donde se dibuja cada extremo de la transformación
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
     this._nextLibId = -1;
@@ -258,13 +254,12 @@ export class Scene {
       by = pc.y;
     }
 
-    const go = this.goo.on ? this._gooSys.offsetOf(c) : { x: 0, y: 0 }; // cuánto lo atrae el otro conjunto
     return {
       mode: p.pivotMode,
       px: bx + p.pivotX, // el pivote: el punto alrededor del cual se rota y se escala
       py: by + p.pivotY,
-      tx: p.posX + ox + dx + go.x,
-      ty: p.posY + oy + dy + go.y,
+      tx: p.posX + ox + dx,
+      ty: p.posY + oy + dy,
       ang: ((p.rotation + c.spinAngle + swing) * Math.PI) / 180,
       s: Math.max(0.01, p.scale * pulse),
     };
@@ -346,23 +341,6 @@ export class Scene {
     }
     const inSeq = seqOn ? new Set(sched.segs.map((v) => v.c)) : null;
 
-    // goo: atracción y puentes entre los conjuntos que se ven normalmente.
-    // Los puentes se dibujan encima de los conjuntos.
-    let gooBridges = null;
-    if (this.goo.on) {
-      const items = this.conjuntos
-        .filter((c) => c.visible && c.params.gooOn && c.xf)
-        .filter((c) => !(ends && (c === ends.a || c === ends.b || m.only)) && !(inSeq && (inSeq.has(c) || sq.only)))
-        .map((c) => {
-          const off = this._gooSys.offsetOf(c);
-          const f = { ...c.xf, tx: c.xf.tx - off.x, ty: c.xf.ty - off.y }; // el lugar donde lo puso el usuario, sin la atracción
-          return { c, n: this._map(f, c.engine.pieceCenter(w, h, c.params)), r: this._gooRadius(c, w, h) };
-        });
-      gooBridges = this._gooSys.step(items, this.goo, dt);
-    } else if (this._gooSys.off.size || this._gooSys.pairs.size) {
-      this._gooSys.reset();
-    }
-
     for (const c of this.conjuntos) {
       if (ends && (c === ends.a || c === ends.b)) continue; // estos dos se dibujan como transformación
       if (ends && m.only) continue; // y con "solo estos dos" no se dibuja nada más
@@ -377,13 +355,6 @@ export class Scene {
       ctx.restore();
 
       if (overlay) this._drawHandles(overlay, c);
-    }
-
-    if (gooBridges) {
-      for (const br of gooBridges) {
-        if (this.goo.style === "liso") drawBridge(ctx, br, this.goo, this.clock);
-        else drawSoftBridge(ctx, br, this.goo, this.clock);
-      }
     }
 
     if (ends) {
@@ -616,18 +587,6 @@ export class Scene {
       drawParticleMorph(ctx, capA.particles, capB.particles, u, this.morph);
     }
     ctx.restore();
-  }
-
-  // radio aproximado de un conjunto, para saber cuándo "se tocan" (goo).
-  // Si el conjunto tiene un radio propio (params.gooRadius), se usa ese.
-  _gooRadius(c, w, h) {
-    const p = c.params;
-    let r;
-    if (p.gooRadius > 0) r = p.gooRadius;
-    else if (p.visualMode === "grid") r = Math.min(w, h) * 0.35;
-    else if (p.visualMode === "bars") r = Math.min(w, h) * 0.4;
-    else r = p.baseRadius + p.shapeSize;
-    return Math.max(8, r * Math.max(0.05, p.scale));
   }
 
   // las manijas que un motor anotó (ver visualEngine._drawMix), llevadas a la
