@@ -143,10 +143,11 @@ Saturación y luminosidad son sliders aparte que se aplican siempre, sea cual se
 
 Es una carpeta aparte con 6 colores, cada uno con su check para prenderlo o apagarlo — podés usar 2, 3, o los 6 a la vez. El modo "según frecuencia" recorre en orden los que estén prendidos: si el audio suena más grave, el color se acerca al primero de la lista que esté activo; si suena más agudo, se acerca al último. Los que apagás quedan totalmente afuera de la mezcla.
 
-## Barras: dónde reacciona más al sonido
+## Barras: dirección del degradado y dónde reacciona más al sonido
 
 En el modo **barras**, lo que más suena (los graves) caería a la izquierda, porque el espectro va de graves a agudos de izquierda a derecha. Con el **foco** podés poner esa reacción donde quieras; **por defecto queda en el centro**: las barras del medio son las más altas y van bajando hacia los dos costados (los agudos).
-- **Dónde está:** carpeta **"Barras: dónde reacciona más al sonido"** (aparece justo debajo de "Formas generativas" y se abre sola al elegir el modo barras), o directamente con **click / arrastre sobre el lienzo** mientras el conjunto esté en modo barras. Una marca blanca abajo muestra dónde está el foco (solo en pantalla, no sale en lo que se graba).
+- **Dónde está:** carpeta **"Barras: reacción y degradado"** (aparece justo debajo de "Formas generativas" y se abre sola al elegir el modo barras), o directamente con **click / arrastre sobre el lienzo** mientras el conjunto esté en modo barras. Una marca blanca abajo muestra dónde está el foco (solo en pantalla, no sale en lo que se graba).
+- **dirección del degradado** (misma carpeta): **de costado a costado** (como siempre: cada barra tiene su color y los colores van recorriéndose de izquierda a derecha), **de abajo a arriba** o **de arriba a abajo** (el degradado de colores recorre la altura y es el mismo en todas las barras: a una misma altura todas tienen el mismo color, y las barras bajas muestran solo la parte de abajo). Usa los mismos colores que ya tengas elegidos (degradado A→B, paleta o arcoíris).
 - **dónde (izq ↔ der):** la posición del foco (0,5 = centro).
 - **qué tan ancho:** cuántas barras alrededor del foco reaccionan; chico = pocas, ancho = casi todas.
 - **cuánto (0 = como antes):** en 0 las barras quedan como antes (graves a la izquierda, todas parejo); subiéndolo se concentra más en el foco.

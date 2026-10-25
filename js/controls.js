@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025193433";
+import { listPresets } from "./presets.js?v=20261025200610";
 
 export function createDefaultParams() {
   return {
@@ -157,6 +157,7 @@ export function createDefaultParams() {
     spikeOpacity: 1,
     barStyle: "fill",
     barOpacity: 1,
+    barGradient: "side", // dirección del degradado de las barras: side | up | down
     barFocusAmount: 0.85, // 0 = como siempre (graves a la izquierda, parejo); 1 = todo concentrado en el foco
     barFocusX: 0.5, // dónde está el foco (0 = izquierda, 1 = derecha)
     barFocusWidth: 0.35, // qué tan ancho es el foco
@@ -464,13 +465,17 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   shapesF.addInput(params, "glowAmount", { min: 0, max: 40, label: "resplandor (blur)" });
 
   // barras: en qué parte reaccionan más al sonido
-  const barsF = pane.addFolder({ title: "Barras: dónde reacciona más al sonido" });
+  const barsF = pane.addFolder({ title: "Barras: reacción y degradado" });
   barsF.addMonitor({ txt: 'Con el modo "barras": lo más fuerte del sonido queda en el foco (por defecto, el centro). Movelo acá o con click / arrastre sobre el lienzo' }, "txt", { label: "cómo" });
   const focusOn = () => {
     // al mover el foco por primera vez se activa solo (si no, no se notaría nada)
     if (!params.barFocusAmount) params.barFocusAmount = 0.85;
     actions.refreshPanel?.();
   };
+  barsF.addInput(params, "barGradient", {
+    options: { "de costado a costado": "side", "de abajo a arriba": "up", "de arriba a abajo": "down" },
+    label: "dirección del degradado",
+  });
   barsF.addInput(params, "barFocusX", { min: 0, max: 1, label: "dónde (izq ↔ der)" }).on("change", focusOn);
   barsF.addInput(params, "barFocusWidth", { min: 0.03, max: 1, label: "qué tan ancho" }).on("change", focusOn);
   barsF.addInput(params, "barFocusAmount", { min: 0, max: 1, label: "cuánto (0 = como antes)" });
