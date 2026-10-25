@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025151901";
+import { listPresets } from "./presets.js?v=20261025152542";
 
 export function createDefaultParams() {
   return {
@@ -300,6 +300,46 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   mf.addInput(seek, "v", { min: 0, max: 1, label: "ir a (0 = A, 1 = B)" }).on("change", (ev) => actions.morphSeek?.(ev.value));
   mf.addButton({ title: "⬇ exportar la transformación (secuencia de PNG)" }).on("click", () => actions.exportMorph?.());
   mf.addMonitor({ txt: "usa cuadros/seg y fondo de 'Exportar animación'" }, "txt", { label: "nota" });
+
+  // ---- línea de tiempo de varias etapas: conjuntos y posiciones que se van transformando ----
+  const qf = pane.addFolder({ title: "Línea de tiempo (varias etapas)" });
+  const q = scene.seq;
+  const labelOf = (src) => Object.keys(endOpts).find((k) => endOpts[k] === src)?.replace(/ · (en la escena|guardado)$/, "") ?? "⚠ falta";
+  qf.addMonitor({ txt: "cada etapa = un conjunto en una posición; entre etapas se transforma. Agregá etapas y mirá la barra de abajo." }, "txt", { label: "cómo" });
+  const addv = { src: validKeys[0] ?? "" };
+  qf.addInput(addv, "src", { options: endOpts, label: "conjunto" });
+  qf.addButton({ title: "+ agregar etapa al final" }).on("click", () => actions.seqAdd?.(addv.src));
+  if (q.stops.length) {
+    q.sel = Math.min(Math.max(0, q.sel), q.stops.length - 1);
+    const stopOpts = {};
+    q.stops.forEach((s, i) => (stopOpts[`${i + 1} · ${labelOf(s.src)}`] = i));
+    qf.addInput(q, "sel", { options: stopOpts, label: "etapa" }).on("change", (ev) => actions.seqSelect?.(ev.value));
+    const stop = q.stops[q.sel];
+    const srcOpts = { ...endOpts };
+    if (!validKeys.includes(stop.src)) srcOpts["⚠ falta (elegí otro)"] = stop.src;
+    qf.addInput(stop, "src", { options: srcOpts, label: "  conjunto" }).on("change", () => actions.seqChanged?.(true));
+    qf.addInput(stop, "hold", { min: 0, max: 30, step: 0.1, label: "  se queda (s)" }).on("change", () => actions.seqChanged?.());
+    if (q.sel < q.stops.length - 1) qf.addInput(stop, "trans", { min: 0.1, max: 30, step: 0.1, label: "  tarda en pasar (s)" }).on("change", () => actions.seqChanged?.());
+    qf.addInput(stop.pos, "x", { min: -1500, max: 1500, step: 1, label: "  posición X" });
+    qf.addInput(stop.pos, "y", { min: -1000, max: 1000, step: 1, label: "  posición Y" });
+    qf.addInput(stop.pos, "scale", { min: 0.05, max: 5, label: "  escala" });
+    qf.addInput(stop.pos, "rot", { min: -720, max: 720, step: 0.5, label: "  rotación (°)" });
+    qf.addInput(stop.pos, "op", { min: 0, max: 1, label: "  opacidad" });
+    qf.addButton({ title: "tomar la posición que tiene el conjunto" }).on("click", () => actions.seqTake?.());
+    qf.addButton({ title: "duplicar esta etapa" }).on("click", () => actions.seqDup?.());
+    qf.addButton({ title: "▲ subir  (pasa antes)" }).on("click", () => actions.seqMove?.(-1));
+    qf.addButton({ title: "▼ bajar  (pasa después)" }).on("click", () => actions.seqMove?.(1));
+    qf.addButton({ title: "✕ quitar esta etapa" }).on("click", () => actions.seqDel?.());
+  }
+  qf.addInput(q, "repeat", { options: { "una vez": "once", "repetir": "loop", "ida y vuelta": "pingpong" }, label: "al terminar" });
+  qf.addInput(q, "ease", { options: { "suave (arranca y frena)": "smooth", "constante": "linear" }, label: "curva" });
+  qf.addInput(m, "stagger", { min: 0, max: 0.9, step: 0.05, label: "escalonado" });
+  qf.addInput(m, "swirl", { min: -0.6, max: 0.6, step: 0.02, label: "curva del camino" });
+  qf.addInput(q, "only", { label: "solo estas etapas" });
+  qf.addButton({ title: "▶ reproducir la línea de tiempo" }).on("click", () => actions.seqPlay?.());
+  qf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.seqToggle?.());
+  qf.addButton({ title: "■ salir de la línea de tiempo" }).on("click", () => actions.seqStop?.());
+  qf.addButton({ title: "⬇ exportar la línea de tiempo (secuencia de PNG)" }).on("click", () => actions.exportSeq?.());
 
   // ---- transformar, mover y animar el conjunto seleccionado ----
   const xfF = pane.addFolder({ title: "Transformar y mover" });

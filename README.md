@@ -47,6 +47,17 @@ Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos 
 - **escalonado** (0 = todas las piezas salen a la vez; más alto = salen una tras otra dando la vuelta, como una ola) y **curva del camino** (0 = recto; con valores positivos o negativos el camino se curva hacia un lado u otro, con aire de remolino).
 - **⬇ exportar la transformación (secuencia de PNG)**: una imagen por cuadro, desde el primero (todo A) hasta el último (todo B), con la duración que pusiste. Usa los cuadros/seg, el fondo transparente y el "guardar en" (ZIP o carpeta) de "Exportar animación". Se guarda como `transformacion-fecha`, con su `LEEME.txt`; se importa en After igual que cualquier secuencia. Si hay un audio activo, las formas reaccionan a él durante la transformación.
 
+## Línea de tiempo de etapas: varios conjuntos y posiciones que se van transformando
+
+Carpeta **"Línea de tiempo (varias etapas)"** y una **barra abajo de la pantalla** (aparece cuando hay al menos una etapa). Cada **etapa** es un conjunto en una posición; la línea de tiempo recorre las etapas en orden y **entre una y la siguiente se transforma de forma gradual** (cada pieza viaja y se acomoda, como en "Transformación").
+- **Armarla:** elegí un conjunto (de la escena o 💾 guardado) y apretá **+ agregar etapa al final**. Repetí con los demás, o con el mismo en otro lugar. Conviene usar **conjuntos guardados**: los de la escena se pierden al refrescar, y la línea de tiempo recuerda a los guardados.
+- **Cada etapa** tiene: **conjunto**, **se queda (s)** (cuánto tiempo está quieta), **tarda en pasar (s)** (cuánto dura la transformación hacia la siguiente) y su **posición X / Y, escala, rotación y opacidad**. Con **tomar la posición que tiene el conjunto** copiás los valores del conjunto. También podés **duplicar**, **subir / bajar** (cambiar el orden) y **quitar** una etapa.
+- **Poner las posiciones:** elegir una etapa la lleva a su parte quieta. Ahí podés mover los sliders de posición, escala y rotación, o **arrastrar con el mouse sobre el lienzo** para colocarla donde quieras (mientras la línea de tiempo esté pausada).
+- **La barra de abajo:** un bloque de color por etapa (lo que se queda) y una franja con degradé entre etapas (la transformación), con ancho proporcional al tiempo. **Click o arrastre** sobre la barra para ir a cualquier momento; **click en un bloque** elige esa etapa. Botón ▶ / ⏸ para reproducir; el reloj muestra el tiempo.
+- **al terminar:** una vez, repetir, o ida y vuelta. **curva** (suave o constante), **escalonado** y **curva del camino** (los mismos de "Transformación") y **solo estas etapas** (esconde el resto de los conjuntos mientras se ve y se exporta).
+- **⬇ exportar la línea de tiempo (secuencia de PNG):** todos los cuadros de la primera a la última etapa, con la duración total de la línea de tiempo (la suma de los "se queda" y "tarda en pasar"). Usa los cuadros/seg, el fondo transparente y el "guardar en" de "Exportar animación". Se guarda como `linea-de-tiempo-fecha`.
+- **Queda guardada** aunque refresques la página (etapas, tiempos, posiciones y opciones).
+
 ## Transformar, mover y animar un conjunto
 
 Cada conjunto tiene su propia transformación (carpetas "Transformar y mover", "Movimiento continuo" y "Animación (keyframes)"):

@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025151901";
-import { VideoLayer } from "./videoLayer.js?v=20261025151901";
-import { Scene } from "./scene.js?v=20261025151901";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025151901";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025151901";
-import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261025151901";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025151901";
+import { AudioEngine } from "./audioEngine.js?v=20261025152542";
+import { VideoLayer } from "./videoLayer.js?v=20261025152542";
+import { Scene } from "./scene.js?v=20261025152542";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025152542";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025152542";
+import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText } from "./presets.js?v=20261025152542";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025152542";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -36,7 +36,24 @@ try {
   const { a, b, seconds, ease, repeat, only, stagger, swirl } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
   Object.assign(scene.morph, { a: a ?? "", b: b ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true, stagger: stagger ?? 0.35, swirl: swirl ?? 0.18 });
 } catch {}
+const SEQ_KEY = "visualizador-de-sonido.linea-de-tiempo.v1";
+try {
+  const d = JSON.parse(localStorage.getItem(SEQ_KEY) ?? "{}");
+  if (Array.isArray(d.stops)) {
+    scene.seq.stops = d.stops
+      .filter((x) => x && typeof x.src === "string" && x.pos)
+      .map((x) => ({ src: x.src, hold: +x.hold || 0, trans: +x.trans || 1, pos: { x: +x.pos.x || 0, y: +x.pos.y || 0, scale: +x.pos.scale || 1, rot: +x.pos.rot || 0, op: x.pos.op ?? 1 } }));
+  }
+  Object.assign(scene.seq, { sel: d.sel ?? 0, repeat: d.repeat ?? "once", ease: d.ease ?? "smooth", only: d.only ?? true });
+} catch {}
+function saveSeqSettings() {
+  try {
+    const { stops, sel, repeat, ease, only } = scene.seq;
+    localStorage.setItem(SEQ_KEY, JSON.stringify({ stops, sel, repeat, ease, only }));
+  } catch {}
+}
 function saveMorphSettings() {
+  saveSeqSettings();
   try {
     const { a, b, seconds, ease, repeat, only, stagger, swirl } = scene.morph;
     localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, seconds, ease, repeat, only, stagger, swirl }));
@@ -44,6 +61,7 @@ function saveMorphSettings() {
 }
 
 let pane = null;
+let actionsRef = {}; // las acciones del panel, para usarlas también desde la barra de la línea de tiempo
 function buildPanel() {
   let openState = null;
   let scrollTop = 0;
@@ -60,7 +78,7 @@ function buildPanel() {
     openState,
     // (se rearma "enseguida" y no al instante, porque estos callbacks corren
     // adentro de un evento del propio panel que se está por reemplazar)
-    actions: {
+    actions: (actionsRef = {
       resetPiece: () => scene.selected.engine.resetPiece(),
       rebuild: () => setTimeout(buildPanel, 0),
       refreshPanel: () => pane.refresh(),
@@ -70,6 +88,7 @@ function buildPanel() {
       exportPng: () => startExport("seq"),
       morphPlay: () => {
         if (!scene.morphEnds()) { recInfo.textContent = "elegí dos conjuntos (desde y hasta) para ver la transformación"; return; }
+        scene.seq.on = false;
         scene.morphPlay();
         recInfo.textContent = "viendo la transformación: ■ salir la apaga y vuelven los conjuntos separados";
       },
@@ -79,6 +98,68 @@ function buildPanel() {
       exportMorph: () => {
         if (!scene.morphEnds()) { recInfo.textContent = "elegí dos conjuntos (desde y hasta) para exportar la transformación"; return; }
         startExport("seq", { morph: true });
+      },
+      seqAdd: (src) => {
+        if (!src) { recInfo.textContent = "elegí un conjunto para agregar como etapa"; return; }
+        const q = scene.seq;
+        const prev = q.stops[q.stops.length - 1];
+        const st = scene.seqNewStop(src);
+        if (prev) st.pos = { ...prev.pos, x: prev.pos.x + 120 }; // la etapa nueva sale al costado de la anterior, para que se note
+        q.stops.push(st);
+        q.sel = q.stops.length - 1;
+        afterSeqChange(true);
+        scene.seqSeekStop(q.sel);
+      },
+      seqSelect: (i) => { scene.seq.sel = i; scene.seqSeekStop(i); setTimeout(buildPanel, 0); saveSeqSettings(); },
+      seqChanged: (rebuild) => { afterSeqChange(!!rebuild); },
+      seqTake: () => {
+        const q = scene.seq, st = q.stops[q.sel];
+        const c = st && scene._resolveEnd(st.src);
+        if (!c) return;
+        const p = c.params;
+        st.pos = { x: p.posX, y: p.posY, scale: p.scale, rot: p.rotation, op: p.tOpacity };
+        afterSeqChange(true);
+        recInfo.textContent = "tomé la posición que tiene ahora el conjunto";
+      },
+      seqDup: () => {
+        const q = scene.seq, st = q.stops[q.sel];
+        if (!st) return;
+        q.stops.splice(q.sel + 1, 0, structuredClone(st));
+        q.sel++;
+        afterSeqChange(true);
+        scene.seqSeekStop(q.sel);
+      },
+      seqMove: (d) => {
+        const q = scene.seq, j = q.sel + d;
+        if (j < 0 || j >= q.stops.length) return;
+        [q.stops[q.sel], q.stops[j]] = [q.stops[j], q.stops[q.sel]];
+        q.sel = j;
+        afterSeqChange(true);
+        scene.seqSeekStop(j);
+      },
+      seqDel: () => {
+        const q = scene.seq;
+        if (!q.stops.length) return;
+        q.stops.splice(q.sel, 1);
+        q.sel = Math.max(0, Math.min(q.sel, q.stops.length - 1));
+        afterSeqChange(true);
+      },
+      seqPlay: () => {
+        if (!scene.seqSchedule().segs.length) { recInfo.textContent = "agregá al menos una etapa para reproducir la línea de tiempo"; return; }
+        scene.morph.on = false;
+        scene.seqPlay();
+      },
+      seqToggle: () => {
+        const q = scene.seq;
+        if (!scene.seqSchedule().segs.length) return;
+        scene.morph.on = false;
+        if (!q.on || (!q.playing && q.time >= scene.seqTotal())) scene.seqPlay();
+        else Object.assign(q, { on: true, playing: !q.playing });
+      },
+      seqStop: () => { Object.assign(scene.seq, { on: false, playing: false, time: 0 }); recInfo.textContent = "salí de la línea de tiempo"; },
+      exportSeq: () => {
+        if (!scene.seqSchedule().segs.length) { recInfo.textContent = "agregá al menos una etapa para exportar la línea de tiempo"; return; }
+        startExport("seq", { seq: true });
       },
       exportApng: () => startExport("apng", { forceTransparent: false }),
       exportGif: () => startExport("gif"),
@@ -128,7 +209,7 @@ function buildPanel() {
       addKey: () => { scene.addKey(); setTimeout(buildPanel, 0); },
       removeKey: () => { scene.removeKey(); setTimeout(buildPanel, 0); },
       clearKeys: () => { scene.clearKeys(); setTimeout(buildPanel, 0); },
-    },
+    }),
   }));
   pane.on("change", saveMorphSettings);
   const root = document.querySelector(".tp-dfwv");
@@ -542,7 +623,7 @@ convInput?.addEventListener("change", async () => {
   }
 });
 
-async function startExport(kind, { forceTransparent = false, morph = false } = {}) {
+async function startExport(kind, { forceTransparent = false, morph = false, seq = false } = {}) {
   if (exporting || recorder.isRecording) return;
 
   // Para la secuencia, la carpeta (si se eligió guardar en carpeta) se pide ANTES
@@ -585,7 +666,7 @@ async function startExport(kind, { forceTransparent = false, morph = false } = {
     };
 
     if (kind === "seq") {
-      const r = await exportPngSequence({ ...common, seconds: morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, morph });
+      const r = await exportPngSequence({ ...common, seconds: seq ? scene.seqTotal() : morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, morph, seq });
       recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}${note}`;
     } else {
       const run = kind === "gif" ? exportGif : exportApng;
@@ -611,12 +692,106 @@ async function startExport(kind, { forceTransparent = false, morph = false } = {
 nextVideoBtn.addEventListener("click", () => videoLayer.next());
 prevVideoBtn.addEventListener("click", () => videoLayer.prev());
 
+// ---------- barra de la línea de tiempo ----------
+const seqBar = document.getElementById("seqBar");
+const seqTrack = document.getElementById("seqTrack");
+const seqBlocks = document.getElementById("seqBlocks");
+const seqHead = document.getElementById("seqHead");
+const seqTimeEl = document.getElementById("seqTime");
+const seqPlayBtn = document.getElementById("seqPlay");
+
+const stopHue = (i) => (i * 57 + 210) % 360;
+
+// Arma los bloques: uno por cada "se queda" y uno por cada pasaje a la siguiente
+// etapa, con ancho proporcional a su duración.
+function renderSeqBar() {
+  if (!seqBar) return;
+  const { segs, total } = scene.seqSchedule();
+  seqBar.hidden = !segs.length;
+  seqBlocks.replaceChildren();
+  if (!segs.length || total <= 0) return;
+  segs.forEach((v, k) => {
+    const next = segs[k + 1];
+    const add = (dur, bg, label, sel, onClick) => {
+      if (dur <= 0) return;
+      const d = document.createElement("div");
+      d.className = "blk" + (sel ? " sel" : "");
+      d.style.width = `${(dur / total) * 100}%`;
+      d.style.background = bg;
+      d.textContent = label;
+      d.dataset.click = onClick ? "1" : "";
+      if (onClick) d.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
+      seqBlocks.appendChild(d);
+    };
+    const sel = v.i === scene.seq.sel;
+    add(v.holdEnd - v.start, `hsl(${stopHue(v.i)} 55% 38%)`, `${v.i + 1} · ${v.c.name}`, sel, () => actionsRef.seqSelect(v.i));
+    if (next) add(v.end - v.holdEnd, `linear-gradient(90deg, hsl(${stopHue(v.i)} 55% 38%), hsl(${stopHue(next.i)} 55% 38%))`, "⟶", false, null);
+  });
+}
+
+// la cabeza de reproducción y el reloj, en cada cuadro
+function updateSeqBar() {
+  if (!seqBar || seqBar.hidden) return;
+  const total = scene.seqTotal();
+  const q = scene.seq;
+  const t = total > 0 ? scene._seqEffective(total) : 0;
+  seqHead.style.left = `calc(${total > 0 ? (t / total) * 100 : 0}% - 1px)`;
+  seqTimeEl.textContent = `${t.toFixed(1)} / ${total.toFixed(1)} s`;
+  seqPlayBtn.textContent = q.on && q.playing ? "⏸" : "▶";
+}
+
+// al cambiar etapas: se guarda, se rearma la barra y (si hace falta) el panel
+function afterSeqChange(rebuild) {
+  saveSeqSettings();
+  renderSeqBar();
+  if (rebuild) setTimeout(buildPanel, 0);
+}
+
+function seekFromEvent(e) {
+  const r = seqTrack.getBoundingClientRect();
+  const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  scene.morph.on = false;
+  scene.seqSeek(f * scene.seqTotal());
+}
+let seqScrub = false;
+seqTrack?.addEventListener("pointerdown", (e) => {
+  seqScrub = true;
+  try { seqTrack.setPointerCapture(e.pointerId); } catch {} // (si el puntero ya no está activo, no pasa nada)
+  seekFromEvent(e);
+});
+seqTrack?.addEventListener("pointermove", (e) => seqScrub && seekFromEvent(e));
+seqTrack?.addEventListener("pointerup", () => (seqScrub = false));
+seqTrack?.addEventListener("pointercancel", () => (seqScrub = false));
+seqPlayBtn?.addEventListener("click", () => actionsRef.seqToggle());
+renderSeqBar();
+
+// Con la línea de tiempo pausada sobre una etapa, arrastrar sobre el lienzo
+// mueve ESA etapa (su posición X / Y).
+let seqDrag = null;
+function seqDragTarget() {
+  const q = scene.seq;
+  if (!q.on || q.playing) return null;
+  const st = q.stops[q.sel];
+  if (!st) return null;
+  const v = scene.seqSchedule().segs.find((x) => x.i === q.sel);
+  if (!v) return null;
+  const t = scene._seqEffective(scene.seqTotal());
+  return t >= v.start - 1e-6 && t <= v.holdEnd + 1e-6 ? st : null; // solo si la barra está sobre la parte "quieta" de la etapa elegida
+}
+
 // mouse sobre el canvas: agarrar y mover los núcleos, la pieza o los círculos
 // libres (qué se puede agarrar lo decide el motor visual). Doble click sobre
 // un círculo libre lo borra; en otro lado, recentra la pieza.
 canvas.style.touchAction = "none";
 canvas.addEventListener("pointerdown", (e) => {
   const p = toCanvas(e);
+  const target = seqDragTarget();
+  if (target) {
+    seqDrag = { st: target, x0: p.x, y0: p.y, px: target.pos.x, py: target.pos.y };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.style.cursor = "grabbing";
+    return;
+  }
   if (scene.pointerDown(p.x, p.y, e.altKey)) {
     canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = "grabbing";
@@ -624,11 +799,23 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 canvas.addEventListener("pointermove", (e) => {
   const p = toCanvas(e);
+  if (seqDrag) {
+    seqDrag.st.pos.x = Math.round(seqDrag.px + p.x - seqDrag.x0);
+    seqDrag.st.pos.y = Math.round(seqDrag.py + p.y - seqDrag.y0);
+    return;
+  }
   scene.pointerMove(p.x, p.y);
   if (!scene.isDragging) canvas.style.cursor = scene.hover(p.x, p.y) ? "grab" : "default";
 });
 function endDrag(e) {
   const p = toCanvas(e);
+  if (seqDrag) {
+    seqDrag = null;
+    canvas.style.cursor = "default";
+    saveSeqSettings();
+    pane.refresh();
+    return;
+  }
   scene.pointerUp();
   canvas.style.cursor = scene.hover(p.x, p.y) ? "grab" : "default";
 }
@@ -714,6 +901,7 @@ function loop(now = performance.now()) {
 
   if (!pngRec.active || pngRec.includeVideo) videoLayer.draw(ctx, w, h, globalParams, audioData, dt);
   scene.draw(ctx, w, h, audioData, dt, octx);
+  updateSeqBar();
   pngRec.tick(now); // si se está grabando PNG, toma la foto de este cuadro cuando toca
   if (pngRec.active && pngRec.full && !pngFullHandled) {
     pngFullHandled = true;

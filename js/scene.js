@@ -10,11 +10,11 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025151901";
-import { createDefaultParams } from "./controls.js?v=20261025151901";
-import { getPreset } from "./presets.js?v=20261025151901";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025151901";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025151901";
+import { VisualEngine } from "./visualEngine.js?v=20261025152542";
+import { createDefaultParams } from "./controls.js?v=20261025152542";
+import { getPreset } from "./presets.js?v=20261025152542";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025152542";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025152542";
 
 const TAU = Math.PI * 2;
 const DT = 0.016; // ~1 cuadro a 60fps, igual que en los motores
@@ -41,6 +41,11 @@ export class Scene {
     // transformación de un conjunto en otro (ver morph.js). a y b son
     // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
     this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, time: 0, playing: false };
+    // línea de tiempo de varias etapas: cada etapa es un conjunto (de la escena o
+    // guardado) con su posición; entre una etapa y la siguiente se transforma
+    //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
+    //   hold = segundos que se queda; trans = segundos que tarda en pasar a la siguiente
+    this.seq = { on: false, stops: [], sel: 0, time: 0, playing: false, repeat: "once", ease: "smooth", only: true };
     this._caps = { a: new Capture(), b: new Capture() }; // donde se dibuja cada extremo de la transformación
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
     this._nextLibId = -1;
@@ -313,7 +318,10 @@ export class Scene {
     this._tickTimeline(dt);
 
     const m = this.morph;
-    const ends = m.on ? this.morphEnds() : null;
+    const sq = this.seq;
+    const sched = sq.on ? this.seqSchedule() : null;
+    const seqOn = !!sched?.segs.length;
+    const ends = m.on && !seqOn ? this.morphEnds() : null;
     if (ends && m.playing) {
       m.time += dt;
       if (m.repeat === "once" && m.time >= m.seconds) {
@@ -321,10 +329,19 @@ export class Scene {
         m.playing = false;
       }
     }
+    if (seqOn && sq.playing) {
+      sq.time += dt;
+      if (sq.repeat === "once" && sq.time >= sched.total) {
+        sq.time = sched.total;
+        sq.playing = false;
+      }
+    }
+    const inSeq = seqOn ? new Set(sched.segs.map((v) => v.c)) : null;
 
     for (const c of this.conjuntos) {
       if (ends && (c === ends.a || c === ends.b)) continue; // estos dos se dibujan como transformación
       if (ends && m.only) continue; // y con "solo estos dos" no se dibuja nada más
+      if (inSeq && (inSeq.has(c) || sq.only)) continue; // lo mismo con la línea de tiempo
       if (!c.visible) continue;
       c.xf = this._transform(c, w, h, audioData, dt);
       ctx.save();
@@ -341,7 +358,121 @@ export class Scene {
       if (overlay) for (const c of [ends.a, ends.b]) if (this.conjuntos.includes(c)) this._drawHandles(overlay, c);
     }
 
+    if (seqOn) this._drawSeq(ctx, w, h, audioData, dt, sched);
+
     if (overlay && this.settings.gizmo) this._drawGizmo(overlay);
+  }
+
+  // ---------- línea de tiempo de etapas ----------
+
+  // cuándo empieza y termina cada etapa (solo las que tienen un conjunto que existe)
+  seqSchedule() {
+    const segs = [];
+    let t = 0;
+    const valid = [];
+    this.seq.stops.forEach((s, i) => {
+      const c = this._resolveEnd(s.src);
+      if (c) valid.push({ i, s, c });
+    });
+    valid.forEach((v, k) => {
+      const last = k === valid.length - 1;
+      const hold = Math.max(0, v.s.hold);
+      const trans = last ? 0 : Math.max(0.05, v.s.trans);
+      segs.push({ ...v, start: t, holdEnd: t + hold, end: t + hold + trans });
+      t += hold + trans;
+    });
+    return { segs, total: t };
+  }
+
+  // el momento de la línea de tiempo con la repetición aplicada
+  _seqEffective(total) {
+    const q = this.seq;
+    if (total <= 0) return 0;
+    if (q.repeat === "loop") return q.time % total;
+    if (q.repeat === "pingpong") {
+      const p = q.time % (2 * total);
+      return p <= total ? p : 2 * total - p;
+    }
+    return Math.min(q.time, total);
+  }
+
+  // en qué etapa está (o entre cuáles dos) en el momento t
+  seqStateAt(t, segs) {
+    for (let k = 0; k < segs.length; k++) {
+      const s = segs[k];
+      if (t <= s.holdEnd || k === segs.length - 1) return { a: s, b: null, u: 0 };
+      if (t <= s.end) return { a: s, b: segs[k + 1], u: (t - s.holdEnd) / (s.end - s.holdEnd) };
+    }
+    return null;
+  }
+
+  // parámetros de un conjunto con la posición que tiene en esa etapa
+  _stopParams(v) {
+    const p = v.s.pos;
+    return { ...v.c.params, posX: p.x, posY: p.y, scale: p.scale, rotation: p.rot, tOpacity: p.op };
+  }
+
+  // etapa nueva a partir de un conjunto: arranca con la posición que ese conjunto ya tiene
+  seqNewStop(src, hold = 1, trans = 2) {
+    const c = this._resolveEnd(src);
+    const p = c?.params ?? createDefaultParams();
+    return { src, hold, trans, pos: { x: p.posX, y: p.posY, scale: p.scale, rot: p.rotation, op: p.tOpacity } };
+  }
+
+  seqTotal() {
+    return this.seqSchedule().total;
+  }
+
+  // avance 0..1 de toda la línea de tiempo
+  seqProgress() {
+    const total = this.seqTotal();
+    return total > 0 ? this._seqEffective(total) / total : 0;
+  }
+
+  seqPlay() {
+    Object.assign(this.seq, { on: true, time: 0, playing: true });
+  }
+
+  // ir a un momento (en segundos) y dejarla pausada ahí
+  seqSeek(t) {
+    const q = this.seq;
+    q.on = true;
+    q.playing = false;
+    q.time = Math.min(Math.max(0, t), this.seqTotal());
+  }
+
+  // ir a la mitad del tiempo en que la etapa i se queda quieta
+  seqSeekStop(i) {
+    const v = this.seqSchedule().segs.find((x) => x.i === i);
+    if (v) this.seqSeek((v.start + v.holdEnd) / 2);
+  }
+
+  // dibuja un conjunto tal cual, con parámetros de movimiento prestados
+  _drawDirect(ctx, c, params, w, h, audioData, dt) {
+    const orig = c.params;
+    c.params = params;
+    c.xf = this._transform(c, w, h, audioData, dt);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity));
+    this._apply(ctx, c.xf);
+    c.engine.draw(ctx, w, h, audioData, params, dt);
+    ctx.restore();
+    c.params = orig;
+  }
+
+  _drawSeq(ctx, w, h, audioData, dt, sched) {
+    const st = this.seqStateAt(this._seqEffective(sched.total), sched.segs);
+    if (!st) return;
+    const pa = this._stopParams(st.a);
+    if (!st.b) return this._drawDirect(ctx, st.a.c, pa, w, h, audioData, dt);
+    const u = easeMorph(st.u, this.seq.ease);
+    const pb = this._stopParams(st.b);
+    if (st.a.c === st.b.c) {
+      // el mismo conjunto en otro lugar: solo se mueve
+      this._drawDirect(ctx, st.a.c, mixParams(pa, pb, u, "a"), w, h, audioData, dt);
+    } else {
+      this._drawMorph(ctx, w, h, audioData, dt, st.a.c, st.b.c, u, pa, pb);
+    }
   }
 
   // ---------- transformación de un conjunto en otro ----------
@@ -405,7 +536,7 @@ export class Scene {
   // Al principio se ve A tal cual y al final B tal cual; en el medio, cada forma
   // de A viaja hasta una de B (ver morphParticles.js). La transformación (posición,
   // rotación, escala, opacidad, giro) va pasando de la de A a la de B.
-  _drawMorph(ctx, w, h, audioData, dt, A, B, u) {
+  _drawMorph(ctx, w, h, audioData, dt, A, B, u, pa = A.params, pb = B.params) {
     const EDGE = 0.1; // cuánto dura el pasaje de "A tal cual" a "formas en viaje"
     const smooth = (x) => x * x * (3 - 2 * x);
     const capA = this._caps.a, capB = this._caps.b;
@@ -415,7 +546,7 @@ export class Scene {
     B.engine.draw(capB.ctx, w, h, audioData, B.params, dt);
 
     // la transformación de A se calcula con los parámetros de movimiento ya mezclados
-    const mixed = mixParams(A.params, B.params, u, u < 0.5 ? "a" : "b");
+    const mixed = mixParams(pa, pb, u, u < 0.5 ? "a" : "b");
     const origA = A.params;
     A.params = mixed;
     A.xf = this._transform(A, w, h, audioData, dt);

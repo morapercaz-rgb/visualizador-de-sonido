@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261025151901";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261025151901";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261025152542";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261025152542";
 
 export { crc32 };
 
@@ -166,6 +166,7 @@ async function renderAnimation(o, onFrame) {
     timeline: { ...scene.timeline },
     gizmo: scene.settings.gizmo,
     morph: { ...scene.morph },
+    seq: { ...scene.seq },
     conjuntos: scene.conjuntos.map((c) => ({ c, spin: c.spinAngle, lastT: c._lastT, handles: c.params.mixHandles })),
   };
   const video = o.includeVideo === false ? null : videoLayer.active?.el ?? null;
@@ -178,6 +179,7 @@ async function renderAnimation(o, onFrame) {
   scene.settings.gizmo = false;
   // exportar la transformación: el avance va exacto de A (primer cuadro) a B (último)
   if (o.morph) Object.assign(scene.morph, { on: true, playing: false, repeat: "once", time: 0 });
+  if (o.seq) Object.assign(scene.seq, { on: true, playing: false, repeat: "once", time: 0 });
   for (const { c } of saved.conjuntos) {
     c.spinAngle = 0;
     c._lastT = null;
@@ -198,6 +200,7 @@ async function renderAnimation(o, onFrame) {
       if (video && video.duration) await seek(video, (i / fps) % video.duration);
 
       if (o.morph) scene.morph.time = frames > 1 ? (i / (frames - 1)) * seconds : 0;
+      if (o.seq) scene.seq.time = frames > 1 ? (i / (frames - 1)) * seconds : 0;
       ctx.clearRect(0, 0, W, H);
       if (!transparent) {
         ctx.fillStyle = globalParams.bgColor;
@@ -214,6 +217,7 @@ async function renderAnimation(o, onFrame) {
     scene.clock = saved.clock;
     Object.assign(scene.timeline, saved.timeline);
     Object.assign(scene.morph, saved.morph);
+    Object.assign(scene.seq, saved.seq);
     scene.settings.gizmo = saved.gizmo;
     for (const s of saved.conjuntos) {
       s.c.spinAngle = s.spin;
@@ -230,7 +234,7 @@ async function renderAnimation(o, onFrame) {
 // si es null, se arma un ZIP y se descarga.
 // Devuelve { frames, mode, name }.
 export async function exportPngSequence(o) {
-  const name = `${o.morph ? "transformacion" : "secuencia-png"}-${stampNow()}`;
+  const name = `${o.seq ? "linea-de-tiempo" : o.morph ? "transformacion" : "secuencia-png"}-${stampNow()}`;
   const { width: W, height: H, seconds, fps, transparent } = o;
 
   let sub = null;
@@ -238,7 +242,7 @@ export async function exportPngSequence(o) {
   if (o.dirHandle) sub = await o.dirHandle.getDirectoryHandle(name, { create: true });
 
   const readme =
-    `Secuencia de PNG exportada del Visualizador de sonido${o.morph ? " (un conjunto que se transforma en otro: el primer cuadro es el conjunto de origen y el último el de destino)" : ""}.\n\n` +
+    `Secuencia de PNG exportada del Visualizador de sonido${o.seq ? " (línea de tiempo de etapas: conjuntos que se transforman uno en otro, de la primera etapa a la última)" : o.morph ? " (un conjunto que se transforma en otro: el primer cuadro es el conjunto de origen y el último el de destino)" : ""}.\n\n` +
     `Tamaño: ${W} x ${H} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
     `Fondo: ${transparent ? "transparente (solo los colores)" : "con color de fondo"}\n` +
     `Video de fondo: ${o.includeVideo === false ? "no incluido" : "incluido"}\n\n` +

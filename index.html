@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Visualizador de sonido</title>
-  <link rel="stylesheet" href="style.css?v=20261025151901" />
+  <link rel="stylesheet" href="style.css?v=20261025152542" />
 </head>
 <body>
   <canvas id="stage"></canvas>
@@ -52,6 +52,15 @@
     <div id="videoList" class="mediaList"></div>
   </div>
 
+  <div id="seqBar" hidden>
+    <button id="seqPlay" title="Reproducir / pausar la línea de tiempo">▶</button>
+    <div id="seqTrack" title="Click o arrastrá para ir a un momento. Click en una etapa para elegirla.">
+      <div id="seqBlocks"></div>
+      <div id="seqHead"></div>
+    </div>
+    <span id="seqTime">0.0 / 0.0 s</span>
+  </div>
+
   <div id="animPreview" hidden>
     <div class="previewCard">
       <div class="previewTitle">Así quedó (se mueve):</div>
@@ -64,6 +73,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=20261025151901"></script>
+  <script type="module" src="js/main.js?v=20261025152542"></script>
 </body>
 </html>
