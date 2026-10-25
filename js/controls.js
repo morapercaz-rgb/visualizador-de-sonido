@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025205118";
+import { listPresets } from "./presets.js?v=20261025205646";
 
 export function createDefaultParams() {
   return {
