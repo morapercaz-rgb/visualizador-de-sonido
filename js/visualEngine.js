@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025181139";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025181657";
 
 const TAU = Math.PI * 2;
 
@@ -929,16 +929,22 @@ function drawBars(ctx, w, h, audioData, params) {
   const spectrum = audioData.spectrum;
   const n = spectrum.length;
   const barW = w / n;
-  // foco de la reacción: las barras cercanas a barFocusX reaccionan al sonido a
-  // pleno y las lejanas cada vez menos (barFocusAmount = 0: todas parejo, como siempre)
+  // foco de la reacción: lo que más suena (los graves, que en el espectro están
+  // a la izquierda) se pone en el foco, y los agudos se reparten hacia los dos
+  // lados; además las barras lejanas al foco reaccionan menos.
+  // barFocusAmount = 0: todo queda como siempre (graves a la izquierda, parejo).
   const amount = params.barFocusAmount ?? 0;
   const focus = params.barFocusX ?? 0.5;
   const spread = Math.max(0.02, params.barFocusWidth ?? 0.25);
+  const far = Math.max(focus, 1 - focus, 0.001); // distancia al borde más lejano
 
   for (let i = 0; i < n; i++) {
-    const dist = ((i + 0.5) / n - focus) / spread;
+    const x = (i + 0.5) / n;
+    const idx = Math.min(n - 1, Math.round((Math.abs(x - focus) / far) * (n - 1)));
+    const level = (1 - amount) * spectrum[i] + amount * spectrum[idx];
+    const dist = (x - focus) / spread;
     const weight = 1 - amount + amount * Math.exp(-0.5 * dist * dist);
-    const barH = spectrum[i] * h * 0.6 * params.overallReactivity * weight + params.shapeSize;
+    const barH = level * h * 0.6 * params.overallReactivity * weight + params.shapeSize;
     const hue = hueForIndex(i, n, audioData, params);
     const col = colorStr(hue, params, params.shapeOpacity * params.barOpacity);
     ctx.beginPath();

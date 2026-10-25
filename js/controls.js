@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025181139";
+import { listPresets } from "./presets.js?v=20261025181657";
 
 export function createDefaultParams() {
   return {
@@ -156,9 +156,9 @@ export function createDefaultParams() {
     spikeOpacity: 1,
     barStyle: "fill",
     barOpacity: 1,
-    barFocusAmount: 0, // 0 = todas las barras reaccionan igual; 1 = solo las cercanas al foco
+    barFocusAmount: 0.85, // 0 = como siempre (graves a la izquierda, parejo); 1 = todo concentrado en el foco
     barFocusX: 0.5, // dónde está el foco (0 = izquierda, 1 = derecha)
-    barFocusWidth: 0.25, // qué tan ancho es el foco
+    barFocusWidth: 0.35, // qué tan ancho es el foco
 
     auraMax: 40, // máximo de gotas/auras a la vez
     auraStyle: "fill",
@@ -427,7 +427,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   audioF.addInput(params, "overallReactivity", { min: 0, max: 3, label: "general" });
 
   const shapesF = pane.addFolder({ title: "Formas generativas" });
-  shapesF.addInput(params, "visualMode", {
+  const shapesModeInput = shapesF.addInput(params, "visualMode", {
     options: {
       anillo: "ring",
       grilla: "grid",
@@ -461,6 +461,22 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     label: "mezcla",
   });
   shapesF.addInput(params, "glowAmount", { min: 0, max: 40, label: "resplandor (blur)" });
+
+  // barras: en qué parte reaccionan más al sonido
+  const barsF = pane.addFolder({ title: "Barras: dónde reacciona más al sonido" });
+  barsF.addMonitor({ txt: 'Con el modo "barras": lo más fuerte del sonido queda en el foco (por defecto, el centro). Movelo acá o con click / arrastre sobre el lienzo' }, "txt", { label: "cómo" });
+  const focusOn = () => {
+    // al mover el foco por primera vez se activa solo (si no, no se notaría nada)
+    if (!params.barFocusAmount) params.barFocusAmount = 0.85;
+    actions.refreshPanel?.();
+  };
+  barsF.addInput(params, "barFocusX", { min: 0, max: 1, label: "dónde (izq ↔ der)" }).on("change", focusOn);
+  barsF.addInput(params, "barFocusWidth", { min: 0.03, max: 1, label: "qué tan ancho" }).on("change", focusOn);
+  barsF.addInput(params, "barFocusAmount", { min: 0, max: 1, label: "cuánto (0 = como antes)" });
+  // al elegir el modo barras, esta carpeta se abre sola
+  shapesModeInput.on("change", (ev) => {
+    if (ev.value === "bars") barsF.expanded = true;
+  });
 
   // degradado de tono y forma de los ecos
   const styleF = pane.addFolder({ title: "Degradados y forma" });
@@ -531,9 +547,6 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   spikesF.addInput(params, "spikeOpacity", { min: 0, max: 1, label: "opacidad picos" });
   spikesF.addInput(params, "barStyle", { options: STYLE, label: "estilo barras" });
   spikesF.addInput(params, "barOpacity", { min: 0, max: 1, label: "opacidad barras" });
-  spikesF.addInput(params, "barFocusAmount", { min: 0, max: 1, label: "foco de reacción (0 = parejo)" });
-  spikesF.addInput(params, "barFocusX", { min: 0, max: 1, label: "  dónde (izq ↔ der)" });
-  spikesF.addInput(params, "barFocusWidth", { min: 0.03, max: 1, label: "  qué tan ancho" });
 
   const aurasF = eachF.addFolder({ title: "Gotas / auras" });
   aurasF.addInput(params, "auraMax", { min: 1, max: 100, step: 1, label: "máx. a la vez" });
@@ -740,7 +753,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     for (const child of container.children) {
       if (!("expanded" in child)) continue; // los sliders no son carpetas
       const key = path + "/" + child.title;
-      child.expanded = openState ? !!openState[key] : path === "" && ["Conjuntos", "Formas generativas"].includes(child.title);
+      child.expanded = openState ? !!openState[key] : path === "" && (["Conjuntos", "Formas generativas"].includes(child.title) || (params.visualMode === "bars" && child.title.startsWith("Barras:")));
       apply(child, key);
     }
   };

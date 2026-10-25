@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025181139";
-import { VideoLayer } from "./videoLayer.js?v=20261025181139";
-import { Scene } from "./scene.js?v=20261025181139";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025181139";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025181139";
-import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025181139";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025181139";
+import { AudioEngine } from "./audioEngine.js?v=20261025181657";
+import { VideoLayer } from "./videoLayer.js?v=20261025181657";
+import { Scene } from "./scene.js?v=20261025181657";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025181657";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025181657";
+import { listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025181657";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025181657";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -746,6 +746,34 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
 nextVideoBtn.addEventListener("click", () => videoLayer.next());
 prevVideoBtn.addEventListener("click", () => videoLayer.prev());
 
+// una marca abajo del lienzo que muestra dónde está el foco de las barras (solo
+// en pantalla: está en la capa de encima, nunca entra en lo que se graba)
+function drawBarFocusMarker() {
+  const c = scene.selected;
+  if (!octx || !c?.visible || c.params.visualMode !== "bars" || !(c.params.barFocusAmount > 0) || !c.xf) return;
+  const w = canvas.width, h = canvas.height;
+  const fx = c.params.barFocusX * w;
+  const half = c.params.barFocusWidth * w;
+  const a = scene._map(c.xf, { x: Math.max(0, fx - half), y: h });
+  const b = scene._map(c.xf, { x: Math.min(w, fx + half), y: h });
+  const m = scene._map(c.xf, { x: fx, y: h });
+  octx.save();
+  octx.strokeStyle = "rgba(255,255,255,0.55)";
+  octx.lineWidth = 3;
+  octx.beginPath();
+  octx.moveTo(a.x, a.y - 4);
+  octx.lineTo(b.x, b.y - 4);
+  octx.stroke();
+  octx.fillStyle = "#fff";
+  octx.beginPath();
+  octx.moveTo(m.x, m.y - 6);
+  octx.lineTo(m.x - 8, m.y - 22);
+  octx.lineTo(m.x + 8, m.y - 22);
+  octx.closePath();
+  octx.fill();
+  octx.restore();
+}
+
 // ---------- barra de la línea de tiempo ----------
 const seqBar = document.getElementById("seqBar");
 const seqTrack = document.getElementById("seqTrack");
@@ -837,6 +865,16 @@ function seqDragTarget() {
 // libres (qué se puede agarrar lo decide el motor visual). Doble click sobre
 // un círculo libre lo borra; en otro lado, recentra la pieza.
 canvas.style.touchAction = "none";
+// En el modo barras no hay nada para agarrar: click / arrastrar sobre el lienzo
+// pone el foco de reacción (dónde las barras reaccionan más al sonido).
+let barDrag = false;
+function setBarFocus(p) {
+  const c = scene.selected;
+  const q = scene._toLocal(c, p.x, p.y);
+  c.params.barFocusX = Math.min(1, Math.max(0, q.x / canvas.width));
+  if (!c.params.barFocusAmount) c.params.barFocusAmount = 0.85;
+  paramsDirty = true;
+}
 canvas.addEventListener("pointerdown", (e) => {
   const p = toCanvas(e);
   const target = seqDragTarget();
@@ -849,10 +887,18 @@ canvas.addEventListener("pointerdown", (e) => {
   if (scene.pointerDown(p.x, p.y, e.altKey)) {
     canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = "grabbing";
+  } else if (scene.selected.params.visualMode === "bars" && scene.selected.visible) {
+    barDrag = true;
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
+    setBarFocus(p);
   }
 });
 canvas.addEventListener("pointermove", (e) => {
   const p = toCanvas(e);
+  if (barDrag) {
+    setBarFocus(p);
+    return;
+  }
   if (seqDrag) {
     seqDrag.st.pos.x = Math.round(seqDrag.px + p.x - seqDrag.x0);
     seqDrag.st.pos.y = Math.round(seqDrag.py + p.y - seqDrag.y0);
@@ -863,6 +909,11 @@ canvas.addEventListener("pointermove", (e) => {
 });
 function endDrag(e) {
   const p = toCanvas(e);
+  if (barDrag) {
+    barDrag = false;
+    pane.refresh();
+    return;
+  }
   if (seqDrag) {
     seqDrag = null;
     canvas.style.cursor = "default";
@@ -955,6 +1006,7 @@ function loop(now = performance.now()) {
 
   if (!pngRec.active || pngRec.includeVideo) videoLayer.draw(ctx, w, h, globalParams, audioData, dt);
   scene.draw(ctx, w, h, audioData, dt, octx);
+  drawBarFocusMarker();
   updateSeqBar();
   pngRec.tick(now); // si se está grabando PNG, toma la foto de este cuadro cuando toca
   if (pngRec.active && pngRec.full && !pngFullHandled) {

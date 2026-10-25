@@ -145,10 +145,11 @@ Es una carpeta aparte con 6 colores, cada uno con su check para prenderlo o apag
 
 ## Barras: dónde reacciona más al sonido
 
-En el modo **barras** (carpeta "Picos radiales y barras") podés elegir **en qué parte reaccionan más**:
-- **foco de reacción (0 = parejo):** en 0 todas las barras reaccionan igual (como siempre). Subiéndolo, solo reaccionan las que están cerca del foco y las demás se quedan bajas; en 1 reaccionan únicamente las del foco.
-- **dónde (izq ↔ der):** la posición del foco, de la izquierda (0) a la derecha (1).
-- **qué tan ancho:** cuántas barras alrededor del foco reaccionan; chico = unas pocas, ancho = casi todas.
+En el modo **barras**, lo que más suena (los graves) caería a la izquierda, porque el espectro va de graves a agudos de izquierda a derecha. Con el **foco** podés poner esa reacción donde quieras; **por defecto queda en el centro**: las barras del medio son las más altas y van bajando hacia los dos costados (los agudos).
+- **Dónde está:** carpeta **"Barras: dónde reacciona más al sonido"** (aparece justo debajo de "Formas generativas" y se abre sola al elegir el modo barras), o directamente con **click / arrastre sobre el lienzo** mientras el conjunto esté en modo barras. Una marca blanca abajo muestra dónde está el foco (solo en pantalla, no sale en lo que se graba).
+- **dónde (izq ↔ der):** la posición del foco (0,5 = centro).
+- **qué tan ancho:** cuántas barras alrededor del foco reaccionan; chico = pocas, ancho = casi todas.
+- **cuánto (0 = como antes):** en 0 las barras quedan como antes (graves a la izquierda, todas parejo); subiéndolo se concentra más en el foco.
 Es por conjunto y se guarda con el conjunto.
 
 ## Alcance del aura: que las auras se fundan de más lejos
