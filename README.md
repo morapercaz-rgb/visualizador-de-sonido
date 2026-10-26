@@ -76,11 +76,14 @@ Carpeta **"Línea de tiempo (varias etapas)"** y una **barra abajo de la pantall
 
 ## Agrandar varios conjuntos a la vez
 
-Carpeta **"Agrandar varios conjuntos a la vez"** (arriba, debajo de "Conjuntos"). Sirve para agrandar o achicar **dos o más conjuntos juntos** con un solo control, sin ir de a uno:
+Carpeta **"Agrandar varios conjuntos a la vez"** (arriba, debajo de "Conjuntos"). Sirve para cambiar **dos o más conjuntos juntos** con un solo control, sin ir de a uno:
 1. En cada conjunto que quieras, tildá **este conjunto entra en el grupo** (o usá **tildar todos los de aura de colores**, que mete en el grupo a todos los que estén en ese modo; **destildar todos** los saca).
-2. Movés **escala del grupo** (de ×0,1 a ×8, viene en ×1) y **todos los del grupo se agrandan o achican a la vez**, cada uno alrededor de su propio centro. Los que no estén en el grupo no cambian.
-3. **Atajo:** las teclas **+** y **−** (o **=** y **_**) agrandan y achican el grupo de a 5 % (mientras no estés escribiendo en un campo). Abajo a la izquierda aparece la escala actual.
-- **volver a tamaño normal (×1)** la deja como estaba. La escala del grupo se multiplica con la escala propia de cada conjunto ("Transformar y mover"), así que no pierde lo que ya les hayas puesto. Vale también para las exportaciones. La pertenencia al grupo se guarda con cada conjunto; la escala del grupo en sí vuelve a ×1 al recargar la página.
+2. Hay **dos controles distintos** (no hacen lo mismo):
+   - **tamaño de cada mancha (aura de colores)** (de ×0,1 a ×40): agranda **cada mancha / luz** del aura de los conjuntos del grupo, sin hacer zoom: el conjunto ocupa el mismo lugar y las manchas se hacen más grandes. Es el que multiplica el "tamaño" de cada conjunto del grupo (no pisa el que ya les hayas puesto).
+   - **zoom (agranda todo el conjunto)** (de ×0,1 a ×8): agranda o achica **todo el conjunto**, posición y movimiento incluidos, alrededor de su propio centro.
+3. Los conjuntos que no estén en el grupo no cambian.
+- **Atajos** (mientras no estés escribiendo en un campo): **]** y **[** agrandan y achican las manchas del grupo (de a 8 %); **+** y **−** hacen zoom (de a 5 %). Abajo a la izquierda aparece el valor actual.
+- **volver a tamaño normal (×1)** deja los dos controles como estaban. Vale también para las exportaciones. La pertenencia al grupo se guarda con cada conjunto; los valores del grupo vuelven a ×1 al recargar la página.
 
 ## Transformar, mover y animar un conjunto
 

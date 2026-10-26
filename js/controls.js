@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261026011831";
-import { defaultMixColor } from "./colorUtils.js?v=20261026011831";
+import { listPresets } from "./presets.js?v=20261026012224";
+import { defaultMixColor } from "./colorUtils.js?v=20261026012224";
 
 let mixRebuildTimer = 0;
 
@@ -282,7 +282,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   // ---- agrandar varios conjuntos a la vez ----
   const grpF = pane.addFolder({ title: "Agrandar varios conjuntos a la vez" });
   const inGroupCount = conjuntos.filter((c) => c.params.inGroup).length;
-  grpF.addMonitor({ txt: `${inGroupCount} en el grupo · atajo: teclas + y − (o = y _)` }, "txt", { label: "grupo" });
+  grpF.addMonitor({ txt: `${inGroupCount} en el grupo · atajos: + y − = zoom · ] y [ = manchas` }, "txt", { label: "grupo" });
   grpF.addInput(params, "inGroup", { label: "este conjunto entra en el grupo" }).on("change", () => actions.rebuild?.());
   grpF.addButton({ title: "tildar todos los de aura de colores" }).on("click", () => {
     for (const c of conjuntos) if (c.params.visualMode === "mix") c.params.inGroup = true;
@@ -292,9 +292,11 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     for (const c of conjuntos) c.params.inGroup = false;
     actions.rebuild?.();
   });
-  grpF.addInput(scene, "groupScale", { min: 0.1, max: 8, step: 0.01, label: "escala del grupo" });
+  grpF.addInput(scene, "groupBlobScale", { min: 0.1, max: 40, step: 0.05, label: "tamaño de cada mancha (aura de colores)" });
+  grpF.addInput(scene, "groupScale", { min: 0.1, max: 8, step: 0.01, label: "zoom (agranda todo el conjunto)" });
   grpF.addButton({ title: "volver a tamaño normal (×1)" }).on("click", () => {
     scene.groupScale = 1;
+    scene.groupBlobScale = 1;
     actions.refreshPanel?.();
   });
 

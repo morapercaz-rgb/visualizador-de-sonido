@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261026011831";
-import { VideoLayer } from "./videoLayer.js?v=20261026011831";
-import { Scene } from "./scene.js?v=20261026011831";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026011831";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026011831";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026011831";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026011831";
+import { AudioEngine } from "./audioEngine.js?v=20261026012224";
+import { VideoLayer } from "./videoLayer.js?v=20261026012224";
+import { Scene } from "./scene.js?v=20261026012224";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026012224";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026012224";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026012224";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026012224";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -823,10 +823,18 @@ window.addEventListener("keydown", (e) => {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.metaKey || e.ctrlKey || e.altKey) return;
   const up = e.key === "+" || e.key === "=";
   const down = e.key === "-" || e.key === "_";
-  if (!up && !down) return;
+  const blobUp = e.key === "]";
+  const blobDown = e.key === "[";
+  if (!up && !down && !blobUp && !blobDown) return;
   e.preventDefault();
-  scene.groupScale = Math.min(8, Math.max(0.1, scene.groupScale * (up ? 1.05 : 1 / 1.05)));
-  recInfo.textContent = `escala del grupo: ×${scene.groupScale.toFixed(2)} (${scene.conjuntos.filter((c) => c.params.inGroup).length} conjuntos)`;
+  const n = scene.conjuntos.filter((c) => c.params.inGroup).length;
+  if (up || down) {
+    scene.groupScale = Math.min(8, Math.max(0.1, scene.groupScale * (up ? 1.05 : 1 / 1.05)));
+    recInfo.textContent = `zoom del grupo: ×${scene.groupScale.toFixed(2)} (${n} conjuntos)`;
+  } else {
+    scene.groupBlobScale = Math.min(40, Math.max(0.1, scene.groupBlobScale * (blobUp ? 1.08 : 1 / 1.08)));
+    recInfo.textContent = `tamaño de las manchas del grupo: ×${scene.groupBlobScale.toFixed(2)} (${n} conjuntos)`;
+  }
   paramsDirty = true;
 });
 

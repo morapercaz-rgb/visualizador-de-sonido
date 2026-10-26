@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261026011831";
-import { createDefaultParams } from "./controls.js?v=20261026011831";
-import { silentAudio } from "./audioEngine.js?v=20261026011831";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261026011831";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261026011831";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261026011831";
+import { VisualEngine } from "./visualEngine.js?v=20261026012224";
+import { createDefaultParams } from "./controls.js?v=20261026012224";
+import { silentAudio } from "./audioEngine.js?v=20261026012224";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261026012224";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261026012224";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261026012224";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -48,7 +48,8 @@ export class Scene {
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
     //   hold = segundos que se queda; trans = segundos que tarda en pasar a la siguiente
     this.seq = { on: false, stops: [], sel: 0, time: 0, playing: false, repeat: "once", ease: "smooth", only: true };
-    this.groupScale = 1; // escala común de los conjuntos que están en el grupo
+    this.groupScale = 1; // zoom común de los conjuntos que están en el grupo
+    this.groupBlobScale = 1; // tamaño común de las manchas (luces) de los conjuntos del grupo
     this.renderScale = 1; // al exportar a más resolución que el lienzo (ver exporter.js): cuántas veces
     this._caps = { a: new Capture(), b: new Capture() }; // donde se dibuja cada extremo de la transformación
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
@@ -349,7 +350,7 @@ export class Scene {
       if (inSeq && (inSeq.has(c) || sq.only)) continue; // lo mismo con la línea de tiempo
       if (!c.visible) continue;
       const au = this._audioFor(c, audioData);
-      c.engine.renderScale = this.renderScale;
+      this._prep(c);
       c.xf = this._transform(c, w, h, au, dt);
       ctx.save();
       ctx.globalAlpha = Math.min(1, Math.max(0, c.params.tOpacity));
@@ -454,6 +455,13 @@ export class Scene {
     if (v) this.seqSeek((v.start + v.holdEnd) / 2);
   }
 
+  // lo que el motor de un conjunto necesita saber antes de dibujar: a qué resolución se
+  // dibuja y cuánto agrandar sus manchas si está en el grupo
+  _prep(c) {
+    c.engine.renderScale = this.renderScale;
+    c.engine.groupBlob = c.params.inGroup ? this.groupBlobScale : 1;
+  }
+
   // el sonido que le llega a un conjunto: el real, o silencio si lo dejaste sin reaccionar
   _audioFor(c, audio) {
     return c.params.reactAudio === false ? SILENT : audio;
@@ -464,7 +472,7 @@ export class Scene {
     const orig = c.params;
     c.params = params;
     const au = this._audioFor(c, audioData);
-    c.engine.renderScale = this.renderScale;
+    this._prep(c);
     c.xf = this._transform(c, w, h, au, dt);
     ctx.save();
     ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity));
@@ -557,7 +565,8 @@ export class Scene {
     const capA = this._caps.a, capB = this._caps.b;
     capA.begin(w, h, this.renderScale);
     capB.begin(w, h, this.renderScale);
-    A.engine.renderScale = B.engine.renderScale = this.renderScale;
+    this._prep(A);
+    this._prep(B);
     A.engine.draw(capA.ctx, w, h, this._audioFor(A, audioData), A.params, dt);
     B.engine.draw(capB.ctx, w, h, this._audioFor(B, audioData), B.params, dt);
 

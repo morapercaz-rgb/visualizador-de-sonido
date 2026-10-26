@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261026011831";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261026012224";
 
 const TAU = Math.PI * 2;
 
@@ -433,7 +433,7 @@ export class VisualEngine {
         l.vx = 0;
         l.vy = 0;
         // la pared está donde llega el cuerpo del aura, no el centro
-        const size = params.mixSize * (params.mixSizeMul ?? 1);
+        const size = params.mixSize * (params.mixSizeMul ?? 1) * (this.groupBlob ?? 1);
         const mx = Math.min(size * 0.5, w * 0.3); // (con auras enormes, que igual recorran la pantalla)
         const my = Math.min(size * 0.5, h * 0.3);
         if (l.x < mx) { l.x = mx; l.hx = Math.abs(l.hx); }
@@ -455,6 +455,7 @@ export class VisualEngine {
       const R =
         params.mixSize *
         (params.mixSizeMul ?? 1) *
+        (this.groupBlob ?? 1) * // (si está en el grupo: el tamaño de manchas que se eligió para todo el grupo)
         (0.8 + 0.4 * ((i * 0.618) % 1)) *
         (1 + audioData.bass * params.bassReactivity * 0.35 + band * params.overallReactivity * 0.6);
       // flotar: un vaivén lento y propio de cada luz, que no cambia dónde "está"
