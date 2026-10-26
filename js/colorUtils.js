@@ -66,3 +66,20 @@ export function paletteColorRgb(colors, t) {
     b: a.b + (b.b - a.b) * localT,
   };
 }
+
+// color "h, s%, l%" → "#rrggbb"
+export function hslToHex(h, s, l) {
+  const S = s / 100, L = l / 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = S * Math.min(L, 1 - L);
+  const f = (n) => L - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const hex = (v) => Math.round(v * 255).toString(16).padStart(2, "0");
+  return "#" + hex(f(0)) + hex(f(8)) + hex(f(4));
+}
+
+// colores iniciales del aura de colores: los 8 de siempre y, para pasar de 8 luces,
+// colores nuevos bien distintos entre sí (saltando 137,5° en la rueda de colores)
+const MIX_BASE = ["#ff3b6b", "#ffb02e", "#3de0ff", "#8a5bff", "#3dff9a", "#ff6bd6", "#fff06b", "#5b8bff"];
+export function defaultMixColor(i) {
+  return i < MIX_BASE.length ? MIX_BASE[i] : hslToHex((i * 137.5 + 20) % 360, 85, 62);
+}

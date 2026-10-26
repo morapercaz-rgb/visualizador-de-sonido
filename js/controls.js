@@ -9,7 +9,10 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025211437";
+import { listPresets } from "./presets.js?v=20261025222242";
+import { defaultMixColor } from "./colorUtils.js?v=20261025222242";
+
+let mixRebuildTimer = 0;
 
 export function createDefaultParams() {
   return {
@@ -568,8 +571,21 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
 
   // ---- aura de colores ----
   const mixF = pane.addFolder({ title: "Aura de colores (mezcla)" });
-  mixF.addInput(params, "mixCount", { min: 1, max: 8, step: 1, label: "cantidad de colores" });
-  for (let i = 1; i <= 8; i++) mixF.addInput(params, "mixColor" + i, { label: "color " + i });
+  // cantidad de luces: la que quieras (hasta 100); cada una con su selector de color.
+  // Al subir la cantidad, los colores nuevos se generan solos (se pueden cambiar).
+  mixF.addInput(params, "mixCount", { min: 1, max: 100, step: 1, label: "cantidad de colores" }).on("change", () => {
+    const n = Math.max(1, Math.round(params.mixCount));
+    for (let i = 1; i <= n; i++) if (!params["mixColor" + i]) params["mixColor" + i] = defaultMixColor(i - 1);
+    // se rearma el panel para mostrar un selector por cada color (un instante después
+    // de que dejes de mover el slider, para no cortarte el arrastre)
+    clearTimeout(mixRebuildTimer);
+    mixRebuildTimer = setTimeout(() => actions.rebuild?.(), 500);
+  });
+  const nMix = Math.max(1, Math.round(params.mixCount));
+  for (let i = 1; i <= nMix; i++) {
+    if (!params["mixColor" + i]) params["mixColor" + i] = defaultMixColor(i - 1);
+    mixF.addInput(params, "mixColor" + i, { label: "color " + i });
+  }
   mixF.addInput(params, "mixSize", { min: 60, max: 600, label: "tamaño" });
   mixF.addInput(params, "mixOpacity", { min: 0, max: 1, label: "opacidad" });
   mixF.addInput(params, "mixBlend", {

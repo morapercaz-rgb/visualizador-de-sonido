@@ -104,7 +104,7 @@ function clean(p) {
       centerOffset: mover(st.centerOffset),
       coreOffsets: { a: mover(st.coreOffsets?.a), b: mover(st.coreOffsets?.b) },
       freeCircles: pts(st.freeCircles, 60, ["x", "y", "vx", "vy", "hueShift", "size"]),
-      lights: (Array.isArray(st.lights) ? st.lights : []).slice(0, 8).map((l) => ({
+      lights: (Array.isArray(st.lights) ? st.lights : []).slice(0, 100).map((l) => ({
         ...Object.fromEntries(Object.entries(l ?? {}).filter(([k, v]) => /^[A-Za-z0-9_]{1,30}$/.test(k) && Number.isFinite(v))),
         vx: 0,
         vy: 0,

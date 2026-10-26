@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025211437";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261025222242";
 
 const TAU = Math.PI * 2;
 
@@ -373,7 +373,7 @@ export class VisualEngine {
   }
 
   // aura de colores: UN aura grande hecha de varias luces de distinto color
-  // (mixCount, hasta 8, cada una con su selector de color en el panel). Cada
+  // (mixCount, la cantidad que quieras, cada una con su selector de color en el panel). Cada
   // luz se puede agarrar y mover; donde se superponen, los colores se mezclan.
   // Las luces tienen física suave: persiguen al mouse con retraso, siguen
   // deslizando al soltarlas, y una leve atracción (mixPull) las va juntando
@@ -385,8 +385,8 @@ export class VisualEngine {
       const i = this.lights.length;
       const a = i * 2.4; // en espiral, para que arranquen cerca y se mezclen
       this.lights.push({
-        x: w / 2 + Math.cos(a) * 50 * (1 + i * 0.18),
-        y: h / 2 + Math.sin(a) * 50 * (1 + i * 0.18),
+        x: w / 2 + Math.cos(a) * Math.min(50 * (1 + i * 0.18), Math.min(w, h) * 0.3),
+        y: h / 2 + Math.sin(a) * Math.min(50 * (1 + i * 0.18), Math.min(w, h) * 0.3),
         vx: 0,
         vy: 0,
         seed: i * 1.7,
@@ -459,8 +459,9 @@ export class VisualEngine {
       const px = l.x + Math.sin(this.time * 0.5 + l.seed) * params.mixDrift * R * 0.18;
       const py = l.y + Math.cos(this.time * 0.4 + l.seed * 1.3) * params.mixDrift * R * 0.18;
 
-      lightGradient(ctx, px, py, R, hexToRgb(params["mixColor" + (i + 1)]), params.mixOpacity, params);
-      placed.push({ l, px, py, R, rgb: hexToRgb(params["mixColor" + (i + 1)]) });
+      const rgb = hexToRgb(params["mixColor" + (i + 1)] ?? defaultMixColor(i)); // (más de 8 luces: los colores que no elegiste se generan)
+      lightGradient(ctx, px, py, R, rgb, params.mixOpacity, params);
+      placed.push({ l, px, py, R, rgb });
     }
     ctx.restore();
 
