@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025210357";
+import { listPresets } from "./presets.js?v=20261025211152";
 
 export function createDefaultParams() {
   return {
@@ -680,6 +680,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
         "Full HD 1920 × 1080 (16:9)": "1920x1080",
         "HD 1280 × 720 (16:9)": "1280x720",
         "4K 3840 × 2160 (16:9, pesado)": "3840x2160",
+        "8K 7680 × 4320 (16:9, muy pesado)": "7680x4320",
         "vertical 1080 × 1920 (9:16, reels)": "1080x1920",
         "cuadrado 1080 × 1080 (1:1)": "1080x1080",
         "vertical 1080 × 1350 (4:5)": "1080x1350",
@@ -697,12 +698,12 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
       actions.applyCanvas?.();
       setTimeout(() => actions.refreshPanel?.(), 30);
     });
-  canvasF.addInput(gp, "canvasW", { min: 64, max: 7680, step: 2, label: "ancho (px)" }).on("change", () => {
+  canvasF.addInput(gp, "canvasW", { min: 64, max: 32000, step: 2, label: "ancho (px)" }).on("change", () => {
     gp.canvasPreset = "custom";
     actions.applyCanvas?.();
     setTimeout(() => actions.refreshPanel?.(), 30);
   });
-  canvasF.addInput(gp, "canvasH", { min: 64, max: 4320, step: 2, label: "alto (px)" }).on("change", () => {
+  canvasF.addInput(gp, "canvasH", { min: 64, max: 16000, step: 2, label: "alto (px)" }).on("change", () => {
     gp.canvasPreset = "custom";
     actions.applyCanvas?.();
     setTimeout(() => actions.refreshPanel?.(), 30);
@@ -726,7 +727,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     label: "formato",
   });
   recF.addInput(gp, "recFps", { options: { "24 cuadros/seg (cine)": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
-  recF.addInput(gp, "recBitrate", { min: 2, max: 80, step: 1, label: "calidad (Mbps, solo video)" });
+  recF.addInput(gp, "recBitrate", { min: 2, max: 200, step: 1, label: "calidad (Mbps, solo video)" });
   recF.addInput(gp, "pngSaveTo", {
     options: { "un ZIP (se descarga solo)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
     label: "PNG: guardar en",
@@ -740,7 +741,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   const animF = exportF.addFolder({ title: "Un solo archivo que se mueve (PNG animado / GIF)" });
   animF.addInput(gp, "animSeconds", { min: 1, max: 120, step: 0.5, label: "duración (s)" }).on("change", () => actions.syncAnimDuration?.());
   animF.addInput(gp, "animFps", { options: { "12 cuadros/seg": 12, "15 cuadros/seg": 15, "20 cuadros/seg": 20, "24 cuadros/seg": 24, "30 cuadros/seg": 30 }, label: "cuadros/seg" });
-  animF.addInput(gp, "animWidth", { min: 160, max: 1920, step: 10, label: "ancho del archivo (px)" });
+  animF.addInput(gp, "animWidth", { min: 160, max: 4096, step: 10, label: "ancho del archivo (px)" });
   animF.addInput(gp, "pngTransparent", { label: "fondo transparente (PNG animado y secuencia)" });
   animF.addInput(gp, "gifTransparent", { label: "GIF: fondo transparente" });
   animF.addInput(gp, "pngIncludeVideo", { label: "incluir el video cargado" });

@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter } from "./exporter.js?v=20261025210357";
+import { ZipWriter } from "./exporter.js?v=20261025211152";
 
 export class ScreenRecorder {
   constructor() {
@@ -13,6 +13,7 @@ export class ScreenRecorder {
     this.chunks = [];
     this.startedAt = 0;
     this.mimeType = "";
+    this.sizeFallback = false; // true si se pidió MP4 pero la imagen es demasiado grande para H.264
   }
 
   get isRecording() {
@@ -39,7 +40,10 @@ export class ScreenRecorder {
     const mp4 = ["video/mp4;codecs=avc1,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4"];
     const vp9 = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp9", "video/webm"];
     const vp8 = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp8", "video/webm"];
-    const order = format === "mp4" ? [mp4, vp9, vp8] : format === "webm8" ? [vp8, vp9, mp4] : [vp9, vp8, mp4];
+    // el video MP4 (H.264) no admite imágenes muy grandes (más de unos 9 millones de
+    // píxeles, o un lado de más de 8192): en ese caso se graba WebM, que sí las admite
+    this.sizeFallback = format === "mp4" && (canvas.width * canvas.height > 9_437_184 || canvas.width > 8192 || canvas.height > 8192);
+    const order = this.sizeFallback ? [vp9, vp8, mp4] : format === "mp4" ? [mp4, vp9, vp8] : format === "webm8" ? [vp8, vp9, mp4] : [vp9, vp8, mp4];
     this.mimeType = order.flat().find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
 
     this.chunks = [];

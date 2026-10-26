@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025210357";
-import { VideoLayer } from "./videoLayer.js?v=20261025210357";
-import { Scene } from "./scene.js?v=20261025210357";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025210357";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025210357";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025210357";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025210357";
+import { AudioEngine } from "./audioEngine.js?v=20261025211152";
+import { VideoLayer } from "./videoLayer.js?v=20261025211152";
+import { Scene } from "./scene.js?v=20261025211152";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025211152";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025211152";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025211152";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025211152";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -295,8 +295,17 @@ function applyCanvasSize() {
   const g = globalParams;
   let W = window.innerWidth, H = window.innerHeight;
   if (g.canvasPreset !== "window") {
-    W = Math.min(7680, Math.max(64, Math.round(g.canvasW)));
-    H = Math.min(4320, Math.max(64, Math.round(g.canvasH)));
+    // hasta 32000 px de lado (el máximo que acepta el navegador es unos 32.700) y
+    // unos 268 millones de píxeles en total (por ejemplo 16000 × 16000)
+    W = Math.min(32000, Math.max(64, Math.round(g.canvasW)));
+    H = Math.min(32000, Math.max(64, Math.round(g.canvasH)));
+    const MAX_AREA = 268_000_000;
+    if (W * H > MAX_AREA) {
+      const k = Math.sqrt(MAX_AREA / (W * H));
+      W = Math.floor(W * k);
+      H = Math.floor(H * k);
+      recInfo.textContent = `ese tamaño es más de lo que aguanta el navegador: se achicó a ${W - (W % 2)} × ${H - (H % 2)}`;
+    }
   }
   W -= W % 2; // el video H.264 necesita medidas pares
   H -= H % 2;
@@ -557,7 +566,17 @@ recBtn.addEventListener("click", async () => {
   });
   recBtn.classList.add("recording");
   recBtn.textContent = "■ Detener";
-  const note = used !== wanted ? ` (este navegador no puede ${wanted}: usa ${used})` : "";
+  let note = recorder.sizeFallback
+    ? " · el MP4 no admite un lienzo tan grande: se graba WebM (lo abre el navegador; para After, secuencia de PNG)"
+    : used !== wanted
+      ? ` (este navegador no puede ${wanted}: usa ${used})`
+      : "";
+  if (canvas.width > 8192 || canvas.height > 8192 || canvas.width * canvas.height > 33_000_000) {
+    note += " · tamaño muy grande para video: si sale cortado o falla, grabá secuencia de PNG (sin límite de tamaño)";
+  }
+  if (canvas.width * canvas.height > 8_000_000 && globalParams.recBitrate < 40) {
+    note += " · con este tamaño conviene subir la calidad (Mbps) en 'Grabación'";
+  }
   recTimer = setInterval(() => {
     const s = Math.floor(recorder.elapsed);
     recInfo.textContent = `grabando ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${canvas.width}×${canvas.height}${note}`;
