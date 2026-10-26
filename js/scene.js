@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025234016";
-import { createDefaultParams } from "./controls.js?v=20261025234016";
-import { silentAudio } from "./audioEngine.js?v=20261025234016";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261025234016";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025234016";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025234016";
+import { VisualEngine } from "./visualEngine.js?v=20261026003753";
+import { createDefaultParams } from "./controls.js?v=20261026003753";
+import { silentAudio } from "./audioEngine.js?v=20261026003753";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261026003753";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261026003753";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261026003753";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -48,6 +48,7 @@ export class Scene {
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
     //   hold = segundos que se queda; trans = segundos que tarda en pasar a la siguiente
     this.seq = { on: false, stops: [], sel: 0, time: 0, playing: false, repeat: "once", ease: "smooth", only: true };
+    this.groupScale = 1; // escala común de los conjuntos que están en el grupo
     this.renderScale = 1; // al exportar a más resolución que el lienzo (ver exporter.js): cuántas veces
     this._caps = { a: new Capture(), b: new Capture() }; // donde se dibuja cada extremo de la transformación
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
@@ -262,7 +263,7 @@ export class Scene {
       tx: p.posX + ox + dx,
       ty: p.posY + oy + dy,
       ang: ((p.rotation + c.spinAngle + swing) * Math.PI) / 180,
-      s: Math.max(0.01, p.scale * pulse),
+      s: Math.max(0.01, p.scale * pulse * (p.inGroup ? this.groupScale : 1)), // el grupo se agranda junto (ver "Agrandar varios conjuntos a la vez")
     };
   }
 

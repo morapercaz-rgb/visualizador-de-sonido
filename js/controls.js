@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025234016";
-import { defaultMixColor } from "./colorUtils.js?v=20261025234016";
+import { listPresets } from "./presets.js?v=20261026003753";
+import { defaultMixColor } from "./colorUtils.js?v=20261026003753";
 
 let mixRebuildTimer = 0;
 
@@ -33,6 +33,9 @@ export function createDefaultParams() {
 
     // qué tan lejos llega el halo de las auras (1 = normal): con más alcance, dos auras se funden a más distancia
     auraReach: 1,
+
+    // si este conjunto entra en el grupo que se agranda junto (carpeta "Agrandar varios conjuntos a la vez")
+    inGroup: false,
 
     // si este conjunto reacciona al sonido (apagado: se ve como con silencio)
     reactAudio: true,
@@ -274,6 +277,25 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   setsF.addButton({ title: "duplicar este conjunto" }).on("click", () => actions.duplicateSet?.());
   setsF.addButton({ title: "traer al frente" }).on("click", () => actions.bringToFront?.());
   setsF.addButton({ title: "eliminar este conjunto" }).on("click", () => actions.removeSet?.());
+
+  // ---- agrandar varios conjuntos a la vez ----
+  const grpF = pane.addFolder({ title: "Agrandar varios conjuntos a la vez" });
+  const inGroupCount = conjuntos.filter((c) => c.params.inGroup).length;
+  grpF.addMonitor({ txt: `${inGroupCount} en el grupo · atajo: teclas + y − (o = y _)` }, "txt", { label: "grupo" });
+  grpF.addInput(params, "inGroup", { label: "este conjunto entra en el grupo" }).on("change", () => actions.rebuild?.());
+  grpF.addButton({ title: "tildar todos los de aura de colores" }).on("click", () => {
+    for (const c of conjuntos) if (c.params.visualMode === "mix") c.params.inGroup = true;
+    actions.rebuild?.();
+  });
+  grpF.addButton({ title: "destildar todos" }).on("click", () => {
+    for (const c of conjuntos) c.params.inGroup = false;
+    actions.rebuild?.();
+  });
+  grpF.addInput(scene, "groupScale", { min: 0.1, max: 8, step: 0.01, label: "escala del grupo" });
+  grpF.addButton({ title: "volver a tamaño normal (×1)" }).on("click", () => {
+    scene.groupScale = 1;
+    actions.refreshPanel?.();
+  });
 
   // ---- rendimiento: si la compu se traba ----
   const perfF = pane.addFolder({ title: "Rendimiento (si la compu se traba)" });

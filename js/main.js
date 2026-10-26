@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025234016";
-import { VideoLayer } from "./videoLayer.js?v=20261025234016";
-import { Scene } from "./scene.js?v=20261025234016";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025234016";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025234016";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025234016";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025234016";
+import { AudioEngine } from "./audioEngine.js?v=20261026003753";
+import { VideoLayer } from "./videoLayer.js?v=20261026003753";
+import { Scene } from "./scene.js?v=20261026003753";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026003753";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026003753";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026003753";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026003753";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -816,6 +816,19 @@ function drawBarFocusMarker() {
   octx.fill();
   octx.restore();
 }
+
+// atajo del grupo: las teclas + y − agrandan y achican de a poco los conjuntos del grupo
+window.addEventListener("keydown", (e) => {
+  const tag = e.target?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.metaKey || e.ctrlKey || e.altKey) return;
+  const up = e.key === "+" || e.key === "=";
+  const down = e.key === "-" || e.key === "_";
+  if (!up && !down) return;
+  e.preventDefault();
+  scene.groupScale = Math.min(8, Math.max(0.1, scene.groupScale * (up ? 1.05 : 1 / 1.05)));
+  recInfo.textContent = `escala del grupo: ×${scene.groupScale.toFixed(2)} (${scene.conjuntos.filter((c) => c.params.inGroup).length} conjuntos)`;
+  paramsDirty = true;
+});
 
 // ---------- barra de la línea de tiempo ----------
 const seqBar = document.getElementById("seqBar");

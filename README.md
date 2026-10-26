@@ -74,6 +74,14 @@ Carpeta **"Línea de tiempo (varias etapas)"** y una **barra abajo de la pantall
 - **⬇ exportar la línea de tiempo (secuencia de PNG):** todos los cuadros de la primera a la última etapa, con la duración total de la línea de tiempo (la suma de los "se queda" y "tarda en pasar"). Usa los cuadros/seg, el fondo transparente y el "guardar en" de "Exportar animación". Se guarda como `linea-de-tiempo-fecha`.
 - **Queda guardada** aunque refresques la página (etapas, tiempos, posiciones y opciones).
 
+## Agrandar varios conjuntos a la vez
+
+Carpeta **"Agrandar varios conjuntos a la vez"** (arriba, debajo de "Conjuntos"). Sirve para agrandar o achicar **dos o más conjuntos juntos** con un solo control, sin ir de a uno:
+1. En cada conjunto que quieras, tildá **este conjunto entra en el grupo** (o usá **tildar todos los de aura de colores**, que mete en el grupo a todos los que estén en ese modo; **destildar todos** los saca).
+2. Movés **escala del grupo** (de ×0,1 a ×8, viene en ×1) y **todos los del grupo se agrandan o achican a la vez**, cada uno alrededor de su propio centro. Los que no estén en el grupo no cambian.
+3. **Atajo:** las teclas **+** y **−** (o **=** y **_**) agrandan y achican el grupo de a 5 % (mientras no estés escribiendo en un campo). Abajo a la izquierda aparece la escala actual.
+- **volver a tamaño normal (×1)** la deja como estaba. La escala del grupo se multiplica con la escala propia de cada conjunto ("Transformar y mover"), así que no pierde lo que ya les hayas puesto. Vale también para las exportaciones. La pertenencia al grupo se guarda con cada conjunto; la escala del grupo en sí vuelve a ×1 al recargar la página.
+
 ## Transformar, mover y animar un conjunto
 
 Cada conjunto tiene su propia transformación (carpetas "Transformar y mover", "Movimiento continuo" y "Animación (keyframes)"):
