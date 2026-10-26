@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025222242";
-import { VideoLayer } from "./videoLayer.js?v=20261025222242";
-import { Scene } from "./scene.js?v=20261025222242";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025222242";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025222242";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025222242";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025222242";
+import { AudioEngine } from "./audioEngine.js?v=20261025224837";
+import { VideoLayer } from "./videoLayer.js?v=20261025224837";
+import { Scene } from "./scene.js?v=20261025224837";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025224837";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025224837";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025224837";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025224837";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -286,6 +286,13 @@ document.getElementById("presetInput")?.addEventListener("change", async (e) => 
 // se exporta) y se MUESTRA achicado para que entre en la ventana. Con el
 // preset "ventana" el tamaño sigue al de la ventana, como antes.
 let pendingResize = false;
+// Vista previa liviana: mientras trabajás, el lienzo se dibuja con menos píxeles
+// (globalParams.previewScale) para que la compu no se trabe; al grabar se pasa
+// a resolución completa y al exportar se usa siempre el tamaño completo.
+// logicalW / logicalH = el tamaño "de verdad" de la composición (las posiciones
+// y las exportaciones se miden en eso); viewScale = qué fracción se dibuja en pantalla.
+let logicalW = 1920, logicalH = 1080, viewScale = 1;
+let fullRes = false; // true mientras se graba: ahí siempre se dibuja completo
 function applyCanvasSize() {
   if (recorder.isRecording || pngRec.active || exporting) {
     pendingResize = true; // se aplica apenas termine, para no romper el video
@@ -309,17 +316,22 @@ function applyCanvasSize() {
   }
   W -= W % 2; // el video H.264 necesita medidas pares
   H -= H % 2;
-  if (canvas.width !== W || canvas.height !== H) {
-    canvas.width = W;
-    canvas.height = H;
+  logicalW = W;
+  logicalH = H;
+  viewScale = fullRes ? 1 : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
+  const PW = Math.max(2, Math.round((W * viewScale) / 2) * 2); // píxeles que realmente se dibujan
+  const PH = Math.max(2, Math.round((H * viewScale) / 2) * 2);
+  if (canvas.width !== PW || canvas.height !== PH) {
+    canvas.width = PW;
+    canvas.height = PH;
   }
   const fit = g.canvasPreset === "window" ? 1 : Math.min(window.innerWidth / W, window.innerHeight / H);
   canvas.style.width = `${W * fit}px`;
   canvas.style.height = `${H * fit}px`;
   if (overlay) {
-    if (overlay.width !== W || overlay.height !== H) {
-      overlay.width = W;
-      overlay.height = H;
+    if (overlay.width !== PW || overlay.height !== PH) {
+      overlay.width = PW;
+      overlay.height = PH;
     }
     overlay.style.width = canvas.style.width;
     overlay.style.height = canvas.style.height;
@@ -332,7 +344,7 @@ applyCanvasSize();
 // el mouse viene en píxeles de la ventana; el dibujo está en píxeles del lienzo
 function toCanvas(e) {
   const r = canvas.getBoundingClientRect();
-  return { x: ((e.clientX - r.left) * canvas.width) / r.width, y: ((e.clientY - r.top) * canvas.height) / r.height };
+  return { x: ((e.clientX - r.left) * logicalW) / r.width, y: ((e.clientY - r.top) * logicalH) / r.height };
 }
 
 const audioInput = document.getElementById("audioInput");
@@ -469,6 +481,8 @@ async function startPngRecording() {
   if (pngRec.active || recorder.isRecording || exporting) return;
   const target = await askSaveTarget();
   if (!target) return;
+  fullRes = true; // al grabar, siempre a resolución completa
+  applyCanvasSize();
   const opts = {
     canvas,
     fps: globalParams.recFps,
@@ -485,6 +499,8 @@ async function startPngRecording() {
       note = ` · no se pudo escribir en esa carpeta (${e.message}): va a un ZIP`;
     } catch (e2) {
       recInfo.textContent = `error: ${e2.message}`;
+      fullRes = false;
+      applyCanvasSize();
       return;
     }
   }
@@ -522,10 +538,9 @@ async function stopPngRecording() {
     recPngBtn.textContent = "● Grabar PNG";
   }
   canvas.classList.remove("transparent");
-  if (pendingResize) {
-    pendingResize = false;
-    applyCanvasSize();
-  }
+  pendingResize = false;
+  fullRes = false; // se vuelve a la vista previa liviana
+  applyCanvasSize();
 }
 let pngFullHandled = false;
 
@@ -548,10 +563,9 @@ recBtn.addEventListener("click", async () => {
     recBtn.classList.remove("recording");
     recBtn.textContent = "● Grabar";
     recInfo.textContent = "listo: se descargó el video";
-    if (pendingResize) {
-      pendingResize = false;
-      applyCanvasSize();
-    }
+    pendingResize = false;
+    fullRes = false; // se vuelve a la vista previa liviana
+    applyCanvasSize();
     return;
   }
   // si en el panel el formato elegido es "Secuencia de PNG", este botón graba PNG
@@ -559,6 +573,8 @@ recBtn.addEventListener("click", async () => {
 
   // ---- video ----
   const wanted = globalParams.recFormat;
+  fullRes = true; // al grabar, siempre a resolución completa
+  applyCanvasSize();
   const used = recorder.start(canvas, audio.recordingStream, {
     format: wanted,
     fps: globalParams.recFps,
@@ -730,8 +746,8 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
       videoLayer,
       globalParams,
       audioFile,
-      width: canvas.width,
-      height: canvas.height,
+      width: logicalW,
+      height: logicalH,
       transparent,
       includeVideo,
       onProgress: ({ phase, i, total }) => (recInfo.textContent = `${phase} ${i}/${total}${note}`),
@@ -776,7 +792,7 @@ prevVideoBtn.addEventListener("click", () => videoLayer.prev());
 function drawBarFocusMarker() {
   const c = scene.selected;
   if (!octx || !c?.visible || c.params.visualMode !== "bars" || !(c.params.barFocusAmount > 0) || !c.xf) return;
-  const w = canvas.width, h = canvas.height;
+  const w = logicalW, h = logicalH;
   const fx = c.params.barFocusX * w;
   const half = c.params.barFocusWidth * w;
   const a = scene._map(c.xf, { x: Math.max(0, fx - half), y: h });
@@ -896,7 +912,7 @@ let barDrag = false;
 function setBarFocus(p) {
   const c = scene.selected;
   const q = scene._toLocal(c, p.x, p.y);
-  c.params.barFocusX = Math.min(1, Math.max(0, q.x / canvas.width));
+  c.params.barFocusX = Math.min(1, Math.max(0, q.x / logicalW));
   if (!c.params.barFocusAmount) c.params.barFocusAmount = 0.85;
   paramsDirty = true;
 }
@@ -990,8 +1006,9 @@ scene.onParamsChanged = () => {
 let lastTime = performance.now();
 
 function loop(now = performance.now()) {
-  const w = canvas.width;
-  const h = canvas.height;
+  const w = logicalW;
+  const h = logicalH;
+  const s = viewScale;
 
   // segundos reales desde el cuadro anterior. Se limita a 50 ms: si la
   // pestaña estuvo en segundo plano y vuelve, no se salta de golpe un rato largo.
@@ -1017,20 +1034,29 @@ function loop(now = performance.now()) {
   // (queda transparente, con el damero de CSS detrás) y el video cargado solo
   // se dibuja si se pidió incluirlo.
   const transparentLive = pngRec.active && pngRec.transparent;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (transparentLive) {
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
   } else {
     ctx.fillStyle = globalParams.bgColor;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  octx?.clearRect(0, 0, w, h);
+  if (octx) {
+    octx.setTransform(1, 0, 0, 1, 0, 0);
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    octx.setTransform(s, 0, 0, s, 0, 0); // lo de encima (manijas, gizmo) se dibuja en medidas del lienzo "de verdad"
+  }
 
   // el audio se analiza una sola vez (con la máxima cantidad de franjas); cada
   // conjunto lo ajusta después a su propia cantidad de picos/barras
   const audioData = audio.analyze(128);
 
-  if (!pngRec.active || pngRec.includeVideo) videoLayer.draw(ctx, w, h, globalParams, audioData, dt);
+  // el video (con sus efectos) se dibuja sobre los píxeles reales del lienzo; la escena, en medidas lógicas
+  if (!pngRec.active || pngRec.includeVideo) videoLayer.draw(ctx, canvas.width, canvas.height, globalParams, audioData, dt);
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  scene.renderScale = s;
   scene.draw(ctx, w, h, audioData, dt, octx);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   drawBarFocusMarker();
   updateSeqBar();
   pngRec.tick(now); // si se está grabando PNG, toma la foto de este cuadro cuando toca

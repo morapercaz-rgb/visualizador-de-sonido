@@ -40,6 +40,12 @@ El mouse recorre los conjuntos de arriba hacia abajo: si agarrás algo, se mueve
 
 Al cambiar de conjunto el panel se rearma pero **conserva qué carpetas tenías abiertas** y la posición del scroll.
 
+## Rendimiento: si la compu se traba
+
+Carpeta **"Rendimiento (si la compu se traba)"** (arriba, debajo de "Conjuntos"). **vista previa** hace que el lienzo se dibuje en pantalla con menos píxeles mientras trabajás: completa (100 %), liviana (75 %), media (50 %), baja (35 %) o muy baja (25 %). Se ve más pixelada solo en pantalla; **todo lo demás sigue en el tamaño completo**: al **grabar** (video o PNG en vivo) pasa solo a resolución completa y vuelve después, y las **exportaciones** (secuencia de PNG, PNG animado, GIF) siempre se hacen en el tamaño real del lienzo. Las posiciones, el mouse y los conjuntos guardados no cambian. Medido con un lienzo 4K y un aura de colores con resplandor: 214 ms por cuadro a 100 %, 46 ms a 50 % y 12 ms a 25 %.
+
+Otras cosas que ayudan: un **lienzo más chico** mientras armás (subilo recién al exportar; para más calidad está "calidad (resolución)" de la secuencia de PNG), bajar el **resplandor (blur)**, usar **menos cantidad** de cosas (sobre todo luces del aura de colores, picos y copias), no activar la **deformación** si no la necesitás, y cerrar otras pestañas y programas. Los efectos de video (desenfoque, pixelado, etc.) también pesan mucho.
+
 ## Transformación: un conjunto que se convierte en otro
 
 Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos guardados"). Elegís dos conjuntos y cuánto dura, y ves cómo el primero se va transformando en el segundo; también se puede exportar como secuencia de PNG.
