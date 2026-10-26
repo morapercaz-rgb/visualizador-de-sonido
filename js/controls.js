@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261026014535";
-import { defaultMixColor } from "./colorUtils.js?v=20261026014535";
+import { listPresets } from "./presets.js?v=20261026015525";
+import { defaultMixColor } from "./colorUtils.js?v=20261026015525";
 
 let mixRebuildTimer = 0;
 

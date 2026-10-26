@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261026014535";
-import { VideoLayer } from "./videoLayer.js?v=20261026014535";
-import { Scene } from "./scene.js?v=20261026014535";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026014535";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026014535";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026014535";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026014535";
+import { AudioEngine } from "./audioEngine.js?v=20261026015525";
+import { VideoLayer } from "./videoLayer.js?v=20261026015525";
+import { Scene } from "./scene.js?v=20261026015525";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026015525";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026015525";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026015525";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026015525";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -524,7 +524,8 @@ async function startPngRecording() {
   }
   recTimer = setInterval(() => {
     const s = Math.floor((performance.now() - pngRec.t0) / 1000);
-    recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.frames} cuadros · ${canvas.width}×${canvas.height}${note}`;
+    const bad = pngRec.nullBlobs > 0 ? " · ⚠ al navegador le cuesta guardar imágenes de este tamaño" : "";
+    recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.saved}/${pngRec.frames} cuadros guardados · ${canvas.width}×${canvas.height}${note}${bad}`;
   }, 250);
 }
 
@@ -538,7 +539,7 @@ async function stopPngRecording() {
       `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado (descomprimilo antes de abrirlo en After)"}` +
       (r.repeated ? ` · ${r.repeated} cuadros repetidos porque la compu no llegó (probá un lienzo más chico)` : "");
   } catch (e) {
-    recInfo.textContent = `error: ${e.message}`;
+    recInfo.textContent = e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
   }
   recBtn.classList.remove("recording");
   recBtn.textContent = "● Grabar";
@@ -1182,6 +1183,10 @@ function loop(now = performance.now()) {
   drawBarFocusMarker();
   updateSeqBar();
   pngRec.tick(now); // si se está grabando PNG, toma la foto de este cuadro cuando toca
+  if (pngRec.active && pngRec.broken && !pngFullHandled) {
+    pngFullHandled = true;
+    stopPngRecording(); // no se puede seguir: se corta y se explica por qué
+  }
   if (pngRec.active && pngRec.full && !pngFullHandled) {
     pngFullHandled = true;
     stopPngRecording().then(() => (recInfo.textContent += " · se llenó la memoria: se guardó lo grabado hasta ahí (probá un lienzo más chico, o guardar en una carpeta)"));

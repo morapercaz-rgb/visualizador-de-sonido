@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter } from "./exporter.js?v=20261026014535";
+import { ZipWriter } from "./exporter.js?v=20261026015525";
 
 export class ScreenRecorder {
   constructor() {
@@ -114,6 +114,9 @@ export class PngSequenceRecorder {
     this.sub = dirHandle ? await dirHandle.getDirectoryHandle(this.name, { create: true }) : null;
     this.zip = this.sub ? null : new ZipWriter();
     this.slots = 0; // cuántos cuadros ya tienen número (incluye los repetidos)
+    this.saved = 0; // cuántos cuadros se guardaron de verdad
+    this.nullBlobs = 0; // cuántas veces el navegador no pudo armar la imagen
+    this.broken = null; // si algo impide seguir grabando: el motivo, en palabras
     this.repeated = 0; // cuántos se rellenaron repitiendo el anterior
     this.inflight = 0;
     this.chain = Promise.resolve();
@@ -135,6 +138,15 @@ export class PngSequenceRecorder {
     this.inflight++;
     // toBlob toma la foto del canvas JUSTO ahora y codifica después
     this.canvas.toBlob((blob) => {
+      if (!blob) {
+        // el navegador no pudo codificar este PNG (suele pasar con lienzos enormes o poca memoria)
+        this.nullBlobs++;
+        if (this.saved === 0 && this.nullBlobs >= 3) {
+          this.broken = "el navegador no puede guardar imágenes de este tamaño (o se quedó sin memoria): bajá el tamaño del lienzo o usá \"Secuencia de PNG\" en Exportar, que arma los cuadros uno por uno";
+        }
+        this.inflight--;
+        return;
+      }
       this.chain = this.chain
         .then(() => this._save(blob, first, count))
         .catch((e) => (this.error = e))
@@ -144,6 +156,7 @@ export class PngSequenceRecorder {
 
   async _save(blob, first, count) {
     if (!blob) return;
+    this.saved += count;
     const pad = (n) => String(n).padStart(5, "0");
     for (let k = 0; k < count; k++) {
       const file = `${this.name}_${pad(first + k)}.png`;
@@ -165,6 +178,17 @@ export class PngSequenceRecorder {
     while (this.inflight > 0) await new Promise((r) => setTimeout(r, 25));
     await this.chain;
     if (this.error) throw this.error;
+    // si no se guardó ni un cuadro, no se entrega un ZIP vacío: se explica por qué
+    if (this.saved === 0) {
+      const e = new Error(
+        this.broken ??
+          (document.hidden || this.slots === 0
+            ? "no se guardó ningún cuadro: la grabación necesita que esta pestaña esté visible (si cambiás de ventana o de pestaña, el navegador frena el dibujo). Probá de nuevo sin salir de la pestaña, y esperá un par de segundos antes de detener"
+            : "no se guardó ningún cuadro: el navegador no pudo armar las imágenes. Probá con un lienzo más chico o con \"Secuencia de PNG\" en Exportar")
+      );
+      e.friendly = true;
+      throw e;
+    }
 
     const readme =
       `Secuencia de PNG grabada en vivo del Visualizador de sonido.\n\n` +
