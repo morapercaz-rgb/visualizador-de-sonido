@@ -9,7 +9,7 @@
 // una sola vez sobre el canvas visible, con el filtro (blur/contraste/etc),
 // la opacidad y el modo de mezcla aplicados ahí.
 
-import { hexToRgb } from "./colorUtils.js?v=20261025224837";
+import { hexToRgb } from "./colorUtils.js?v=20261025234016";
 
 export class VideoLayer {
   constructor() {

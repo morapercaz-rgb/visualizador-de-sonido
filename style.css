@@ -308,3 +308,18 @@ button:hover {
 }
 #seqTime { min-width: 84px; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 900px) { #seqBar { left: 16px; right: 16px; bottom: 210px; } }
+
+/* contador de cuadros por segundo (Rendimiento) */
+#fpsMeter {
+  position: fixed;
+  left: 12px;
+  top: 10px;
+  z-index: 20;
+  font: 12px ui-monospace, Menlo, monospace;
+  color: #9fffa8;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+#fpsMeter[hidden] { display: none; }

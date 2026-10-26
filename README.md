@@ -42,7 +42,12 @@ Al cambiar de conjunto el panel se rearma pero **conserva qué carpetas tenías 
 
 ## Rendimiento: si la compu se traba
 
-Carpeta **"Rendimiento (si la compu se traba)"** (arriba, debajo de "Conjuntos"). **vista previa** hace que el lienzo se dibuje en pantalla con menos píxeles mientras trabajás: completa (100 %), liviana (75 %), media (50 %), baja (35 %) o muy baja (25 %). Se ve más pixelada solo en pantalla; **todo lo demás sigue en el tamaño completo**: al **grabar** (video o PNG en vivo) pasa solo a resolución completa y vuelve después, y las **exportaciones** (secuencia de PNG, PNG animado, GIF) siempre se hacen en el tamaño real del lienzo. Las posiciones, el mouse y los conjuntos guardados no cambian. Medido con un lienzo 4K y un aura de colores con resplandor: 214 ms por cuadro a 100 %, 46 ms a 50 % y 12 ms a 25 %.
+Carpeta **"Rendimiento (si la compu se traba)"** (arriba, debajo de "Conjuntos"). Tiene tres cosas:
+- **vista previa** — viene en **automática**: si la compu no llega a ir fluida, el programa **baja solo la resolución con que dibuja en pantalla** (hasta el 20 %) y la vuelve a subir cuando le sobra. También la podés fijar a mano (más abajo).
+- **mostrar cuadros por segundo** — un contador arriba a la izquierda, con la resolución que se está usando.
+- **🔍 diagnosticar qué es lo que más pesa** — mide cuánto tarda cada conjunto, el video y el panel, y avisa cuál es el más pesado y qué conviene bajar (resplandor, cantidad de colores, tamaño…); el resultado aparece en el texto de abajo a la izquierda.
+
+**vista previa**, a mano, hace que el lienzo se dibuje en pantalla con menos píxeles mientras trabajás: completa (100 %), liviana (75 %), media (50 %), baja (35 %) o muy baja (25 %). Se ve más pixelada solo en pantalla; **todo lo demás sigue en el tamaño completo**: al **grabar** (video o PNG en vivo) pasa solo a resolución completa y vuelve después, y las **exportaciones** (secuencia de PNG, PNG animado, GIF) siempre se hacen en el tamaño real del lienzo. Las posiciones, el mouse y los conjuntos guardados no cambian. Medido con un lienzo 4K y un aura de colores con resplandor: 214 ms por cuadro a 100 %, 46 ms a 50 % y 12 ms a 25 %.
 
 Otras cosas que ayudan: un **lienzo más chico** mientras armás (subilo recién al exportar; para más calidad está "calidad (resolución)" de la secuencia de PNG), bajar el **resplandor (blur)**, usar **menos cantidad** de cosas (sobre todo luces del aura de colores, picos y copias), no activar la **deformación** si no la necesitás, y cerrar otras pestañas y programas. Los efectos de video (desenfoque, pixelado, etc.) también pesan mucho.
 

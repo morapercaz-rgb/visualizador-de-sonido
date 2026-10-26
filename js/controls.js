@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025224837";
-import { defaultMixColor } from "./colorUtils.js?v=20261025224837";
+import { listPresets } from "./presets.js?v=20261025234016";
+import { defaultMixColor } from "./colorUtils.js?v=20261025234016";
 
 let mixRebuildTimer = 0;
 
@@ -219,7 +219,8 @@ export function createDefaultParams() {
     canvasPreset: "window", // window | 1920x1080 | 1280x720 | 3840x2160 | 1080x1920 | 1080x1080 | 1080x1350 | custom
     canvasW: 1920,
     canvasH: 1080,
-    previewScale: 1, // vista previa liviana: qué fracción de los píxeles se dibuja en pantalla mientras trabajás (1 = completa)
+    previewScale: "auto", // vista previa: "auto" (se adapta sola) o qué fracción de los píxeles se dibuja en pantalla mientras trabajás (1 = completa)
+    showFps: false, // mostrar el contador de cuadros por segundo
 
     // grabación
     recFormat: "mp4", // mp4 (lo lee After Effects) | webm9 | webm8
@@ -279,13 +280,15 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   perfF.addMonitor({ txt: "Bajá la vista previa: se ve más pixelada solo mientras trabajás; al grabar y exportar se usa todo el tamaño" }, "txt", { label: "tip" });
   perfF
     .addInput(gp, "previewScale", {
-      options: { "completa (100 %)": 1, "liviana (75 %)": 0.75, "media (50 %)": 0.5, "baja (35 %)": 0.35, "muy baja (25 %)": 0.25 },
+      options: { "automática (se adapta sola)": "auto", "completa (100 %)": 1, "liviana (75 %)": 0.75, "media (50 %)": 0.5, "baja (35 %)": 0.35, "muy baja (25 %)": 0.25 },
       label: "vista previa",
     })
     .on("change", () => {
       actions.applyCanvas?.();
       setTimeout(() => actions.refreshPanel?.(), 30);
     });
+  perfF.addInput(gp, "showFps", { label: "mostrar cuadros por segundo" });
+  perfF.addButton({ title: "🔍 diagnosticar qué es lo que más pesa" }).on("click", () => actions.diagnose?.());
 
   // ---- biblioteca: conjuntos guardados que quedan para la próxima vez ----
   const libF = pane.addFolder({ title: "Mis conjuntos guardados" });

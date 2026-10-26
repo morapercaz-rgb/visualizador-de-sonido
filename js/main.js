@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025224837";
-import { VideoLayer } from "./videoLayer.js?v=20261025224837";
-import { Scene } from "./scene.js?v=20261025224837";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025224837";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025224837";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025224837";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025224837";
+import { AudioEngine } from "./audioEngine.js?v=20261025234016";
+import { VideoLayer } from "./videoLayer.js?v=20261025234016";
+import { Scene } from "./scene.js?v=20261025234016";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025234016";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025234016";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025234016";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025234016";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -201,6 +201,7 @@ function buildPanel() {
         if (!scene.seqSchedule().segs.length) { recInfo.textContent = "agregá al menos una etapa para exportar la línea de tiempo"; return; }
         startExport("seq", { seq: true });
       },
+      diagnose: () => diagnose(),
       exportApng: () => startExport("apng", { forceTransparent: false }),
       exportGif: () => startExport("gif"),
       selectSet: (id) => { scene.select(id); setTimeout(buildPanel, 0); },
@@ -292,6 +293,7 @@ let pendingResize = false;
 // logicalW / logicalH = el tamaño "de verdad" de la composición (las posiciones
 // y las exportaciones se miden en eso); viewScale = qué fracción se dibuja en pantalla.
 let logicalW = 1920, logicalH = 1080, viewScale = 1;
+let autoScale = 1; // con la vista previa "automática": la resolución que se está usando ahora
 let fullRes = false; // true mientras se graba: ahí siempre se dibuja completo
 function applyCanvasSize() {
   if (recorder.isRecording || pngRec.active || exporting) {
@@ -318,7 +320,7 @@ function applyCanvasSize() {
   H -= H % 2;
   logicalW = W;
   logicalH = H;
-  viewScale = fullRes ? 1 : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
+  viewScale = fullRes ? 1 : g.previewScale === "auto" ? autoScale : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
   const PW = Math.max(2, Math.round((W * viewScale) / 2) * 2); // píxeles que realmente se dibujan
   const PH = Math.max(2, Math.round((H * viewScale) / 2) * 2);
   if (canvas.width !== PW || canvas.height !== PH) {
@@ -1005,6 +1007,95 @@ scene.onParamsChanged = () => {
 
 let lastTime = performance.now();
 
+// ---------- rendimiento: contador de cuadros y vista previa automática ----------
+const fpsEl = document.createElement("div");
+fpsEl.id = "fpsMeter";
+fpsEl.hidden = true;
+document.body.appendChild(fpsEl);
+let emaMs = 16; // duración promedio de un cuadro (ms)
+let fpsFrames = 0, fpsT0 = performance.now(), lastAutoChange = 0;
+function perfTick(now, rawMs) {
+  // (si la pestaña estuvo oculta no cuenta; los cuadros lentos SÍ: son justamente lo que hay que medir)
+  if (!document.hidden && rawMs < 3000) emaMs += (rawMs - emaMs) * (rawMs > 100 ? 0.5 : 0.08);
+  fpsFrames++;
+  if (now - fpsT0 >= 500) {
+    fpsEl.hidden = !globalParams.showFps;
+    if (globalParams.showFps) {
+      const fps = Math.round((fpsFrames * 1000) / (now - fpsT0));
+      fpsEl.textContent = `${fps} cuadros/seg · dibujando ${canvas.width}×${canvas.height} (${Math.round(viewScale * 100)} %${globalParams.previewScale === "auto" ? ", auto" : ""})`;
+    }
+    fpsFrames = 0;
+    fpsT0 = now;
+  }
+  // automática: si la compu no llega, baja sola la resolución; si le sobra, la sube de a poco
+  if (globalParams.previewScale === "auto" && !fullRes && now - lastAutoChange > 1500) {
+    let next = autoScale;
+    // lo que cuesta dibujar crece con el cuadrado de la resolución: se calcula cuánto bajar para llegar a ~30 ms
+    if (emaMs > 45 && autoScale > 0.2) next = Math.max(0.2, autoScale * Math.min(0.9, Math.max(0.4, Math.sqrt(30 / emaMs))));
+    else if (emaMs < 20 && autoScale < 1 && now - lastAutoChange > 5000) next = Math.min(1, autoScale / 0.85);
+    if (next !== autoScale) {
+      autoScale = next;
+      lastAutoChange = now;
+      emaMs = 25;
+      applyCanvasSize();
+    }
+  }
+}
+
+// mide cuánto tarda en dibujar cada parte y avisa cuál es la que más pesa
+const MODE_NAMES = { ring: "anillo", grid: "grilla", spikes: "picos", bars: "barras", spiral: "espiral", auras: "auras/gotas", vortex: "remolino", echoes: "ecos", ambient: "aura envolvente", mix: "aura de colores" };
+function diagnose() {
+  recInfo.textContent = "midiendo…";
+  setTimeout(() => {
+    const w = logicalW, h = logicalH, s = viewScale;
+    const audioData = audio.analyze(128);
+    const tc = document.createElement("canvas");
+    tc.width = canvas.width;
+    tc.height = canvas.height;
+    const tctx = tc.getContext("2d");
+    const sync = () => tctx.getImageData(0, 0, 1, 1); // fuerza a terminar de dibujar, para medir de verdad
+    const time = (fn, n = 4) => {
+      fn();
+      sync();
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) {
+        fn();
+        sync();
+      }
+      return (performance.now() - t0) / n;
+    };
+    const parts = [];
+    if (videoLayer.active && !pngRec.active) {
+      parts.push({ name: "video de fondo y sus efectos", ms: time(() => { tctx.setTransform(1, 0, 0, 1, 0, 0); videoLayer.draw(tctx, tc.width, tc.height, globalParams, audioData, 1 / 60); }) });
+    }
+    for (const c of scene.conjuntos) {
+      if (!c.visible) continue;
+      const ms = time(() => {
+        tctx.setTransform(s, 0, 0, s, 0, 0);
+        c.engine.renderScale = s;
+        c.engine.draw(tctx, w, h, audioData, c.params, 1 / 60);
+        tctx.setTransform(1, 0, 0, 1, 0, 0);
+      });
+      const p = c.params;
+      const hints = [];
+      if (p.glowAmount > 3 && ms > 12) hints.push("bajale el resplandor (blur)");
+      if (p.visualMode === "mix" && p.mixCount > 12 && ms > 12) hints.push("bajá la cantidad de colores");
+      if (p.mixSize > 300 && p.visualMode === "mix" && ms > 12) hints.push("bajá el tamaño");
+      parts.push({ name: `${c.name} (${MODE_NAMES[p.visualMode] ?? p.visualMode})`, ms, hints });
+    }
+    const t0 = performance.now();
+    pane.refresh();
+    parts.push({ name: "panel de controles", ms: performance.now() - t0 });
+    parts.sort((a, b) => b.ms - a.ms);
+    const total = parts.reduce((t, x) => t + x.ms, 0);
+    const lines = parts.slice(0, 4).map((x) => `${x.name}: ${Math.round(x.ms)} ms${x.hints?.length ? " → " + x.hints.join(", ") : ""}`);
+    const tips = [];
+    if (logicalW * logicalH > 8_000_000 && viewScale > 0.5) tips.push(`el lienzo es grande (${logicalW}×${logicalH}): bajá la vista previa en "Rendimiento"`);
+    if (total > 40) tips.push("en total tarda " + Math.round(total) + " ms por cuadro (para ir fluido tendría que ser menos de 17)");
+    recInfo.textContent = `lo que más pesa (a ${Math.round(viewScale * 100)} % de vista): ${lines.join(" · ")}${tips.length ? " · " + tips.join(" · ") : ""}`;
+  }, 50);
+}
+
 function loop(now = performance.now()) {
   const w = logicalW;
   const h = logicalH;
@@ -1012,8 +1103,10 @@ function loop(now = performance.now()) {
 
   // segundos reales desde el cuadro anterior. Se limita a 50 ms: si la
   // pestaña estuvo en segundo plano y vuelve, no se salta de golpe un rato largo.
-  const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+  const rawMs = now - lastTime;
+  const dt = Math.min(0.05, Math.max(0.001, rawMs / 1000));
   lastTime = now;
+  perfTick(now, rawMs);
 
   if (exporting) {
     // la exportación usa la escena para dibujar sus propios cuadros: el dibujo en vivo espera
