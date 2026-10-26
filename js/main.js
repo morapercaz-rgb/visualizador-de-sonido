@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261026003753";
-import { VideoLayer } from "./videoLayer.js?v=20261026003753";
-import { Scene } from "./scene.js?v=20261026003753";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026003753";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026003753";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026003753";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026003753";
+import { AudioEngine } from "./audioEngine.js?v=20261026011831";
+import { VideoLayer } from "./videoLayer.js?v=20261026011831";
+import { Scene } from "./scene.js?v=20261026011831";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026011831";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026011831";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026011831";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026011831";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -1093,7 +1093,7 @@ function diagnose() {
       const hints = [];
       if (p.glowAmount > 3 && ms > 12) hints.push("bajale el resplandor (blur)");
       if (p.visualMode === "mix" && p.mixCount > 12 && ms > 12) hints.push("bajá la cantidad de colores");
-      if (p.mixSize > 300 && p.visualMode === "mix" && ms > 12) hints.push("bajá el tamaño");
+      if (p.mixSize * (p.mixSizeMul ?? 1) > 300 && p.visualMode === "mix" && ms > 12) hints.push("bajá el tamaño");
       parts.push({ name: `${c.name} (${MODE_NAMES[p.visualMode] ?? p.visualMode})`, ms, hints });
     }
     const t0 = performance.now();

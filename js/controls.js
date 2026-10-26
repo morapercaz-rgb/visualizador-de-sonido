@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261026003753";
-import { defaultMixColor } from "./colorUtils.js?v=20261026003753";
+import { listPresets } from "./presets.js?v=20261026011831";
+import { defaultMixColor } from "./colorUtils.js?v=20261026011831";
 
 let mixRebuildTimer = 0;
 
@@ -101,6 +101,7 @@ export function createDefaultParams() {
     // --- aura de colores (modo "aura de colores") ---
     mixCount: 5, // cuántas luces de color tiene el aura
     mixSize: 220,
+    mixSizeMul: 1, // multiplicador del tamaño del aura: para hacerla mucho más grande (1 = normal)
     mixOpacity: 0.9,
     mixBlend: "source-over", // cómo se mezclan los colores: source-over | screen | lighter
     mixPull: 0, // atracción hacia el centro del grupo (0 = cada luz se queda donde la soltás)
@@ -625,7 +626,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     if (!params["mixColor" + i]) params["mixColor" + i] = defaultMixColor(i - 1);
     mixF.addInput(params, "mixColor" + i, { label: "color " + i });
   }
-  mixF.addInput(params, "mixSize", { min: 60, max: 600, label: "tamaño" });
+  mixF.addInput(params, "mixSize", { min: 60, max: 3000, label: "tamaño" });
+  mixF.addInput(params, "mixSizeMul", { min: 1, max: 40, step: 0.1, label: "agrandar (×, para hacerla enorme)" });
   mixF.addInput(params, "mixOpacity", { min: 0, max: 1, label: "opacidad" });
   mixF.addInput(params, "mixBlend", {
     options: { "mezclar (normal)": "source-over", "pantalla (más claro)": "screen", "luz (suma, se quema a blanco)": "lighter" },
