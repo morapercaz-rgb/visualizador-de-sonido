@@ -9,7 +9,7 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261025211152";
+import { listPresets } from "./presets.js?v=20261025211437";
 
 export function createDefaultParams() {
   return {
@@ -233,6 +233,7 @@ export function createDefaultParams() {
 
     // exportar secuencia de PNG (cuadro a cuadro, sin perder calidad)
     pngSeconds: 10,
+    pngScale: 1, // resolución de la secuencia de PNG: 1 = el tamaño del lienzo; 2, 3 o 4 = más píxeles (más calidad)
     pngFps: 30,
     pngTransparent: true, // fondo transparente (sin color de fondo)
     pngIncludeVideo: false, // con fondo transparente: ¿incluir también el video cargado?
@@ -754,6 +755,10 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   pngF.addInput(gp, "pngSaveTo", {
     options: { "un ZIP (se descarga solo)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
     label: "guardar en",
+  });
+  pngF.addInput(gp, "pngScale", {
+    options: { "×1 (tamaño del lienzo)": 1, "×2 (el doble de resolución)": 2, "×3 (el triple)": 3, "×4 (cuatro veces, muy pesado)": 4 },
+    label: "calidad (resolución)",
   });
   pngF.addInput(gp, "pngSeconds", { min: 1, max: 120, step: 1, label: "duración (s)" });
   pngF.addInput(gp, "pngFps", { options: { "24 cuadros/seg": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });

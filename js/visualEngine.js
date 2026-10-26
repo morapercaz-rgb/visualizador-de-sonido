@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025211152";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl } from "./colorUtils.js?v=20261025211437";
 
 const TAU = Math.PI * 2;
 
@@ -106,7 +106,7 @@ export class VisualEngine {
     ctx.globalCompositeOperation = params.shapeBlendMode;
     // "resplandor": un desenfoque parejo sobre todo lo generativo, para que
     // las formas se vean más como luz que como figuras con bordes duros.
-    ctx.filter = params.glowAmount > 0 ? `blur(${params.glowAmount}px)` : "none";
+    ctx.filter = params.glowAmount > 0 ? `blur(${params.glowAmount * (this.renderScale ?? 1)}px)` : "none"; // (al exportar a más resolución, el desenfoque crece igual)
 
     // la pieza (sin los círculos libres) se dibuja corrida por centerOffset
     ctx.save();

@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261025211152";
-import { VideoLayer } from "./videoLayer.js?v=20261025211152";
-import { Scene } from "./scene.js?v=20261025211152";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025211152";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025211152";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025211152";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025211152";
+import { AudioEngine } from "./audioEngine.js?v=20261025211437";
+import { VideoLayer } from "./videoLayer.js?v=20261025211437";
+import { Scene } from "./scene.js?v=20261025211437";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261025211437";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261025211437";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261025211437";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261025211437";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -724,7 +724,7 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
     const audioFile = audio.tracks[audio.currentIndex]?.file ?? null;
     // Sin audio activo las formas no reaccionan al sonido: solo se mueve lo que
     // esté animado (keyframes, giro, órbita…). Se avisa para que no sorprenda.
-    const note = audioFile ? "" : " · sin audio activo: no hay reacción al sonido";
+    let note = audioFile ? "" : " · sin audio activo: no hay reacción al sonido";
     const common = {
       scene,
       videoLayer,
@@ -739,7 +739,13 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
     };
 
     if (kind === "seq") {
-      const r = await exportPngSequence({ ...common, seconds: seq ? scene.seqTotal() : morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, morph, seq });
+      // calidad: el tamaño final es el del lienzo por la resolución elegida (×1 a ×4), sin pasarse de lo que aguanta el navegador
+      let scale = Math.round(globalParams.pngScale);
+      const fits = (k) => common.width * k <= 32000 && common.height * k <= 32000 && common.width * common.height * k * k <= 268_000_000;
+      while (scale > 1 && !fits(scale)) scale--;
+      if (scale !== Math.round(globalParams.pngScale)) note += ` · la resolución se bajó a ×${scale}: más grande no aguanta el navegador`;
+      if (scale > 1) note += ` · ${common.width * scale}×${common.height * scale} px`;
+      const r = await exportPngSequence({ ...common, scale, seconds: seq ? scene.seqTotal() : morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, morph, seq });
       recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}${note}`;
     } else {
       const run = kind === "gif" ? exportGif : exportApng;

@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261025211152";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261025211152";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261025211437";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261025211437";
 
 export { crc32 };
 
@@ -187,10 +187,20 @@ async function renderAnimation(o, onFrame) {
   }
   if (video) video.pause();
 
+  // calidad: con o.scale > 1 se dibuja a más resolución que el lienzo (W × H son el
+  // tamaño "lógico": las posiciones y tamaños no cambian, solo hay más píxeles)
+  const K = Math.max(1, Math.round(o.scale ?? 1));
   const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = W * K;
+  canvas.height = H * K;
   const ctx = canvas.getContext("2d");
+  scene.renderScale = K;
+  // el video y sus efectos se dibujan siempre a tamaño lógico y después se agrandan
+  const vtmp = K > 1 && o.includeVideo !== false ? document.createElement("canvas") : null;
+  if (vtmp) {
+    vtmp.width = W;
+    vtmp.height = H;
+  }
 
   try {
     for (let i = 0; i < frames; i++) {
@@ -201,12 +211,21 @@ async function renderAnimation(o, onFrame) {
 
       if (o.morph) scene.morph.time = frames > 1 ? (i / (frames - 1)) * seconds : 0;
       if (o.seq) scene.seq.time = frames > 1 ? (i / (frames - 1)) * seconds : 0;
-      ctx.clearRect(0, 0, W, H);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(K, 0, 0, K, 0, 0);
       if (!transparent) {
         ctx.fillStyle = globalParams.bgColor;
         ctx.fillRect(0, 0, W, H);
       }
-      if (o.includeVideo !== false) videoLayer.draw(ctx, W, H, globalParams, audioFrames[i], dt);
+      if (o.includeVideo !== false) {
+        if (vtmp) {
+          const vctx = vtmp.getContext("2d");
+          vctx.clearRect(0, 0, W, H);
+          videoLayer.draw(vctx, W, H, globalParams, audioFrames[i], dt);
+          ctx.drawImage(vtmp, 0, 0, W, H);
+        } else videoLayer.draw(ctx, W, H, globalParams, audioFrames[i], dt);
+      }
       scene.draw(ctx, W, H, audioFrames[i], dt);
 
       await onFrame(canvas, i);
@@ -214,6 +233,7 @@ async function renderAnimation(o, onFrame) {
     }
   } finally {
     // se deja todo como estaba
+    scene.renderScale = 1;
     scene.clock = saved.clock;
     Object.assign(scene.timeline, saved.timeline);
     Object.assign(scene.morph, saved.morph);
@@ -243,7 +263,7 @@ export async function exportPngSequence(o) {
 
   const readme =
     `Secuencia de PNG exportada del Visualizador de sonido${o.seq ? " (línea de tiempo de etapas: conjuntos que se transforman uno en otro, de la primera etapa a la última)" : o.morph ? " (un conjunto que se transforma en otro: el primer cuadro es el conjunto de origen y el último el de destino)" : ""}.\n\n` +
-    `Tamaño: ${W} x ${H} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
+    `Tamaño: ${W * Math.max(1, Math.round(o.scale ?? 1))} x ${H * Math.max(1, Math.round(o.scale ?? 1))} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
     `Fondo: ${transparent ? "transparente (solo los colores)" : "con color de fondo"}\n` +
     `Video de fondo: ${o.includeVideo === false ? "no incluido" : "incluido"}\n\n` +
     `Esto es una carpeta con UNA IMAGEN POR CUADRO: al reproducirlas en orden se ven en movimiento.\n\n` +

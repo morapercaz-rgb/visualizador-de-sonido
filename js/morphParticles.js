@@ -43,15 +43,18 @@ export class Capture {
   constructor() {
     this.canvas = document.createElement("canvas");
     this.ctx = this.canvas.getContext("2d");
+    this.k = 1;
     this.margin = 0; // espacio de sobra alrededor, para que no se corte lo que se salga del lienzo
     this.particles = [];
     this._install();
   }
 
   // prepara un cuadro nuevo: lienzo limpio, sin formas anotadas
-  begin(w, h) {
+  begin(w, h, k = 1) {
+    // k = cuántas veces más resolución que el tamaño lógico (al exportar a más calidad)
+    this.k = k;
     const m = Math.round(Math.min(w, h) * 0.25);
-    const cw = w + m * 2, ch = h + m * 2;
+    const cw = Math.round((w + m * 2) * k), ch = Math.round((h + m * 2) * k);
     if (this.canvas.width !== cw || this.canvas.height !== ch) {
       this.canvas.width = cw;
       this.canvas.height = ch;
@@ -60,7 +63,7 @@ export class Capture {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
-    ctx.setTransform(1, 0, 0, 1, m, m); // así lo que el motor dibuja en (0,0) cae dentro del margen
+    ctx.setTransform(k, 0, 0, k, m * k, m * k); // así lo que el motor dibuja en (0,0) cae dentro del margen
     this.particles = [];
   }
 
@@ -76,7 +79,7 @@ export class Capture {
     }
     function pt(x, y) {
       const m = ctx.getTransform();
-      return { x: m.a * x + m.c * y + m.e - self.margin, y: m.b * x + m.d * y + m.f - self.margin };
+      return { x: (m.a * x + m.c * y + m.e) / self.k - self.margin, y: (m.b * x + m.d * y + m.f) / self.k - self.margin };
     }
 
     ctx.beginPath = () => {
@@ -98,7 +101,7 @@ export class Capture {
     ctx.arc = (x, y, r, a0, a1, ccw) => {
       const m = ctx.getTransform();
       const c = pt(x, y);
-      path.arcs.push({ x: c.x, y: c.y, r: r * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) });
+      path.arcs.push({ x: c.x, y: c.y, r: (r * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c))) / self.k });
       P.arc.call(ctx, x, y, r, a0, a1, ccw);
     };
     ctx.createRadialGradient = (...a) => {
@@ -156,7 +159,7 @@ export class Capture {
       const p = particleFor();
       if (p) {
         p.st = paintColors(ctx.strokeStyle).inner;
-        p.lw = ctx.lineWidth * Math.sqrt(Math.abs(ctx.getTransform().a * ctx.getTransform().d));
+        p.lw = (ctx.lineWidth * Math.sqrt(Math.abs(ctx.getTransform().a * ctx.getTransform().d))) / self.k;
       }
       P.stroke.apply(ctx, a);
     };

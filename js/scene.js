@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025211152";
-import { createDefaultParams } from "./controls.js?v=20261025211152";
-import { silentAudio } from "./audioEngine.js?v=20261025211152";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261025211152";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025211152";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025211152";
+import { VisualEngine } from "./visualEngine.js?v=20261025211437";
+import { createDefaultParams } from "./controls.js?v=20261025211437";
+import { silentAudio } from "./audioEngine.js?v=20261025211437";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261025211437";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025211437";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025211437";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -48,6 +48,7 @@ export class Scene {
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
     //   hold = segundos que se queda; trans = segundos que tarda en pasar a la siguiente
     this.seq = { on: false, stops: [], sel: 0, time: 0, playing: false, repeat: "once", ease: "smooth", only: true };
+    this.renderScale = 1; // al exportar a más resolución que el lienzo (ver exporter.js): cuántas veces
     this._caps = { a: new Capture(), b: new Capture() }; // donde se dibuja cada extremo de la transformación
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
     this._nextLibId = -1;
@@ -347,6 +348,7 @@ export class Scene {
       if (inSeq && (inSeq.has(c) || sq.only)) continue; // lo mismo con la línea de tiempo
       if (!c.visible) continue;
       const au = this._audioFor(c, audioData);
+      c.engine.renderScale = this.renderScale;
       c.xf = this._transform(c, w, h, au, dt);
       ctx.save();
       ctx.globalAlpha = Math.min(1, Math.max(0, c.params.tOpacity));
@@ -461,6 +463,7 @@ export class Scene {
     const orig = c.params;
     c.params = params;
     const au = this._audioFor(c, audioData);
+    c.engine.renderScale = this.renderScale;
     c.xf = this._transform(c, w, h, au, dt);
     ctx.save();
     ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity));
@@ -551,8 +554,9 @@ export class Scene {
     const EDGE = 0.1; // cuánto dura el pasaje de "A tal cual" a "formas en viaje"
     const smooth = (x) => x * x * (3 - 2 * x);
     const capA = this._caps.a, capB = this._caps.b;
-    capA.begin(w, h);
-    capB.begin(w, h);
+    capA.begin(w, h, this.renderScale);
+    capB.begin(w, h, this.renderScale);
+    A.engine.renderScale = B.engine.renderScale = this.renderScale;
     A.engine.draw(capA.ctx, w, h, this._audioFor(A, audioData), A.params, dt);
     B.engine.draw(capB.ctx, w, h, this._audioFor(B, audioData), B.params, dt);
 
@@ -573,17 +577,17 @@ export class Scene {
     this._apply(ctx, A.xf);
     if (sA < 1) {
       ctx.globalAlpha = alpha * (1 - sA);
-      ctx.drawImage(capA.canvas, -m, -m);
+      ctx.drawImage(capA.canvas, -m, -m, capA.canvas.width / capA.k, capA.canvas.height / capA.k);
     }
     if (sB < 1) {
       ctx.globalAlpha = alpha * (1 - sB);
-      ctx.drawImage(capB.canvas, -capB.margin, -capB.margin);
+      ctx.drawImage(capB.canvas, -capB.margin, -capB.margin, capB.canvas.width / capB.k, capB.canvas.height / capB.k);
     }
     const mid = Math.min(sA, sB);
     if (mid > 0.001) {
       ctx.globalAlpha = alpha * mid;
       ctx.globalCompositeOperation = mixed.visualMode === "mix" ? mixed.mixBlend : mixed.shapeBlendMode; // la misma mezcla que usa el conjunto
-      ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount}px)` : "none";
+      ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount * this.renderScale}px)` : "none";
       drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h) });
     }
     ctx.restore();
