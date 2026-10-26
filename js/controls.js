@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261026012224";
-import { defaultMixColor } from "./colorUtils.js?v=20261026012224";
+import { listPresets } from "./presets.js?v=20261026014535";
+import { defaultMixColor } from "./colorUtils.js?v=20261026014535";
 
 let mixRebuildTimer = 0;
 
@@ -266,13 +266,28 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   const picker = { selected: conjunto.id };
   const options = {};
   for (const c of conjuntos) {
-    let key = `${c.visible ? "" : "(oculto) "}${c.params.reactAudio === false ? "🔇 " : ""}${c.name}`;
+    let key = `${c.locked ? "🔒 " : ""}${c.visible ? "" : "(oculto) "}${c.params.reactAudio === false ? "🔇 " : ""}${c.name}`;
     if (key in options) key += ` #${c.id}`; // dos conjuntos con el mismo nombre
     options[key] = c.id;
   }
   setsF.addInput(picker, "selected", { options, label: "editando" }).on("change", (ev) => actions.selectSet?.(ev.value));
   setsF.addInput(conjunto, "name", { label: "nombre" }).on("change", () => actions.rebuild?.());
-  setsF.addInput(conjunto, "visible", { label: "visible" }).on("change", () => actions.rebuild?.());
+  const visIn = setsF.addInput(conjunto, "visible", { label: "visible" }).on("change", () => actions.rebuild?.());
+  // bloquear: el tilde queda en la misma fila que "visible" (al lado)
+  const lockIn = setsF.addInput(conjunto, "locked", { label: "bloqueado" }).on("change", () => actions.rebuild?.());
+  {
+    const host = visIn.element.querySelector(".tp-lblv_v");
+    const check = lockIn.element.querySelector(".tp-lblv_v")?.firstElementChild;
+    if (host && check) {
+      const tag = document.createElement("span");
+      tag.textContent = "🔒 bloquear";
+      tag.title = "Bloqueado: no se mueve con el mouse, no se edita desde el panel y no se puede borrar ni reemplazar";
+      tag.style.cssText = "font-size:11px;opacity:.85;white-space:nowrap;margin-left:2px";
+      host.style.cssText += ";display:flex;align-items:center;gap:8px";
+      host.append(check, tag);
+      lockIn.element.style.display = "none"; // (la fila vacía de "bloqueado" se esconde; el tilde ya está al lado de "visible")
+    }
+  }
   setsF.addInput(params, "reactAudio", { label: "reacciona al sonido" }).on("change", () => actions.rebuild?.());
   setsF.addButton({ title: "+ conjunto nuevo" }).on("click", () => actions.addSet?.());
   setsF.addButton({ title: "duplicar este conjunto" }).on("click", () => actions.duplicateSet?.());
@@ -822,6 +837,18 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   pngF.addInput(gp, "pngSeconds", { min: 1, max: 120, step: 1, label: "duración (s)" });
   pngF.addInput(gp, "pngFps", { options: { "24 cuadros/seg": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
   pngF.addButton({ title: "▶ exportar secuencia de PNG" }).on("click", () => actions.exportPng?.());
+
+  // Conjunto bloqueado: las carpetas que lo editan quedan apagadas (se pueden abrir y mirar,
+  // pero no tocar). Para editarlo hay que sacar el 🔒.
+  if (conjunto.locked) {
+    const editing = ["Transformar y mover", "Movimiento continuo", "Animación (keyframes)", "Reactividad audio", "Formas generativas", "Barras:", "Degradados y forma", "Deformar", "Cada cosa", "Aura de colores", "Agarrar y mover", "Paleta", "Agrandar varios"];
+    for (const child of pane.children) {
+      if (!("expanded" in child) || !editing.some((t) => child.title.startsWith(t))) continue;
+      const body = child.element.querySelector(".tp-fldv_c");
+      if (body) body.style.cssText += ";pointer-events:none;opacity:.45";
+    }
+    for (const b of setsF.children) if (b.title === "eliminar este conjunto") b.disabled = true;
+  }
 
   // Carpetas abiertas/cerradas. Al arrancar: todo cerrado menos "Conjuntos" y
   // "Formas generativas" (con tantas carpetas abiertas el panel es larguísimo).

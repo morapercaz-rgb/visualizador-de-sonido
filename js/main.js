@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261026012224";
-import { VideoLayer } from "./videoLayer.js?v=20261026012224";
-import { Scene } from "./scene.js?v=20261026012224";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026012224";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026012224";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026012224";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026012224";
+import { AudioEngine } from "./audioEngine.js?v=20261026014535";
+import { VideoLayer } from "./videoLayer.js?v=20261026014535";
+import { Scene } from "./scene.js?v=20261026014535";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261026014535";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261026014535";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261026014535";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261026014535";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -207,7 +207,11 @@ function buildPanel() {
       selectSet: (id) => { scene.select(id); setTimeout(buildPanel, 0); },
       addSet: () => { scene.add(); setTimeout(buildPanel, 0); },
       duplicateSet: () => { scene.duplicate(); setTimeout(buildPanel, 0); },
-      removeSet: () => { scene.remove(); setTimeout(buildPanel, 0); },
+      removeSet: () => {
+        if (scene.selected.locked) recInfo.textContent = "ese conjunto está bloqueado 🔒: sacale el bloqueo para borrarlo";
+        else scene.remove();
+        setTimeout(buildPanel, 0);
+      },
       bringToFront: () => { scene.bringToFront(); setTimeout(buildPanel, 0); },
       savePreset: (name) => {
         const r = savePreset(name, scene.selected);
@@ -227,7 +231,10 @@ function buildPanel() {
       replacePreset: (name) => {
         const p = getPreset(name);
         if (!p) return;
-        scene.replaceFromPreset(p);
+        if (!scene.replaceFromPreset(p)) {
+          recInfo.textContent = "ese conjunto está bloqueado 🔒: sacale el bloqueo para reemplazarlo";
+          return;
+        }
         recInfo.textContent = `el conjunto que editabas ahora es "${p.name}"`;
         setTimeout(buildPanel, 0);
       },
@@ -934,6 +941,7 @@ canvas.style.touchAction = "none";
 let barDrag = false;
 function setBarFocus(p) {
   const c = scene.selected;
+  if (c.locked) return;
   const q = scene._toLocal(c, p.x, p.y);
   c.params.barFocusX = Math.min(1, Math.max(0, q.x / logicalW));
   if (!c.params.barFocusAmount) c.params.barFocusAmount = 0.85;
@@ -951,7 +959,7 @@ canvas.addEventListener("pointerdown", (e) => {
   if (scene.pointerDown(p.x, p.y, e.altKey)) {
     canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = "grabbing";
-  } else if (scene.selected.params.visualMode === "bars" && scene.selected.visible) {
+  } else if (scene.selected.params.visualMode === "bars" && scene.selected.visible && !scene.selected.locked) {
     barDrag = true;
     try { canvas.setPointerCapture(e.pointerId); } catch {}
     setBarFocus(p);

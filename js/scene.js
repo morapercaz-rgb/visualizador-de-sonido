@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261026012224";
-import { createDefaultParams } from "./controls.js?v=20261026012224";
-import { silentAudio } from "./audioEngine.js?v=20261026012224";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261026012224";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261026012224";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261026012224";
+import { VisualEngine } from "./visualEngine.js?v=20261026014535";
+import { createDefaultParams } from "./controls.js?v=20261026014535";
+import { silentAudio } from "./audioEngine.js?v=20261026014535";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261026014535";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261026014535";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261026014535";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -73,6 +73,7 @@ export class Scene {
       id,
       name: `Conjunto ${id}`,
       visible: true,
+      locked: false, // bloqueado: no se mueve con el mouse ni se edita desde el panel
       params: createDefaultParams(),
       engine: new VisualEngine(),
       keys: [], // keyframes: [{ t, v: { posX, posY, rotation, scale, tOpacity } }]
@@ -110,6 +111,7 @@ export class Scene {
   // reemplaza la configuración del conjunto seleccionado por la de un preset
   replaceFromPreset(p) {
     const c = this.selected;
+    if (c.locked) return null; // bloqueado: no se pisa
     this._applyPreset(c, p);
     c.name = p.name;
     return c;
@@ -126,7 +128,7 @@ export class Scene {
 
   // borra el seleccionado (siempre queda al menos uno)
   remove() {
-    if (this.conjuntos.length <= 1) return false;
+    if (this.conjuntos.length <= 1 || this.selected.locked) return false;
     this.conjuntos = this.conjuntos.filter((c) => c.id !== this.selectedId);
     this.selectedId = this.conjuntos[this.conjuntos.length - 1].id;
     return true;
@@ -148,6 +150,7 @@ export class Scene {
   // línea de tiempo, con los valores que tengan ahora sus parámetros
   addKey() {
     const c = this.selected;
+    if (c.locked) return;
     const t = this.timeline.time;
     const v = {};
     for (const k of KEY_PARAMS) v[k] = c.params[k];
@@ -160,6 +163,7 @@ export class Scene {
   // borra el keyframe más cercano al momento actual
   removeKey() {
     const c = this.selected;
+    if (c.locked) return;
     if (!c.keys.length) return;
     const t = this.timeline.time;
     let best = 0;
@@ -170,6 +174,7 @@ export class Scene {
   }
 
   clearKeys() {
+    if (this.selected.locked) return;
     this.selected.keys = [];
   }
 
@@ -625,7 +630,7 @@ export class Scene {
 
   _gizmoPoints() {
     const c = this.selected;
-    if (!c?.visible || !c.xf) return null;
+    if (!c?.visible || c.locked || !c.xf) return null;
     const f = c.xf;
     // la cruz del centro va sobre el punto de pivote del dibujo (donde cae en pantalla)
     const { x: cx, y: cy } = this._map(f, { x: f.px, y: f.py });
@@ -786,7 +791,7 @@ export class Scene {
     if (this.settings.gizmo && this._gizmoDown(x, y, altKey)) return true;
     for (let i = this.conjuntos.length - 1; i >= 0; i--) {
       const c = this.conjuntos[i];
-      if (!c.visible) continue;
+      if (!c.visible || c.locked) continue;
       const p = this._toLocal(c, x, y);
       if (c.engine.pointerDown(p.x, p.y)) {
         this.active = c;
@@ -820,7 +825,7 @@ export class Scene {
   hover(x, y) {
     if (this.settings.gizmo && this._gizmoHit(x, y)) return true;
     return this.conjuntos.some((c) => {
-      if (!c.visible) return false;
+      if (!c.visible || c.locked) return false;
       const p = this._toLocal(c, x, y);
       return c.engine.hover(p.x, p.y);
     });
@@ -831,7 +836,7 @@ export class Scene {
   doubleClick(x, y) {
     for (let i = this.conjuntos.length - 1; i >= 0; i--) {
       const c = this.conjuntos[i];
-      if (!c.visible) continue;
+      if (!c.visible || c.locked) continue;
       const p = this._toLocal(c, x, y);
       if (c.engine.hover(p.x, p.y)) {
         c.engine.doubleClick(p.x, p.y);
@@ -839,6 +844,6 @@ export class Scene {
         return;
       }
     }
-    for (const c of this.conjuntos) c.engine.resetPiece();
+    for (const c of this.conjuntos) if (!c.locked) c.engine.resetPiece();
   }
 }

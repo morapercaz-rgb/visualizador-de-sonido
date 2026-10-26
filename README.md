@@ -20,7 +20,7 @@ Podés tener **varios conjuntos** en pantalla al mismo tiempo, cada uno **indepe
 
 Carpeta **"Conjuntos"** (arriba de todo en el panel):
 - **editando**: elegís qué conjunto estás modificando. Todas las demás carpetas del panel (Formas generativas, Cada cosa, Deformar, Aura de colores, Agarrar y mover, Paleta…) editan **ese** conjunto.
-- **nombre** y **visible** (ocultar un conjunto sin borrarlo).
+- **nombre** y **visible** (ocultar un conjunto sin borrarlo). **🔒 bloquear** (el tilde que está al lado de "visible"): un conjunto bloqueado **no se puede mover con el mouse** (ni agarrar sus núcleos, luces o círculos, ni mover con el gizmo, ni recentrar con doble click), **no se edita desde el panel** (las carpetas que lo modifican quedan apagadas, se pueden abrir y mirar), y **no se puede borrar, reemplazar por uno guardado ni cambiarle los keyframes**. Sirve para dejar fijo lo que ya está bien mientras trabajás en otro conjunto. En la lista de conjuntos aparece con 🔒. Sigue reaccionando al sonido, reproduciendo sus keyframes y siendo visible; solo no se toca. Para editarlo, destildá el bloqueo. (El bloqueo no se guarda con el conjunto guardado ni sobrevive a recargar la página.)
 - **reacciona al sonido:** tildado (por defecto), el conjunto se mueve con el audio. Destildado, ese conjunto se ve **como con silencio** y los demás siguen reaccionando; sirve para tener unos que laten con la música y otros quietos. En la lista de conjuntos aparece con 🔇. Se guarda con el conjunto y también vale en las transformaciones, la línea de tiempo y las exportaciones.
 - **+ conjunto nuevo**, **duplicar este conjunto** (copia toda la configuración, un poco corrida), **eliminar este conjunto** (siempre queda al menos uno).
 

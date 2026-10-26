@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter } from "./exporter.js?v=20261026012224";
+import { ZipWriter } from "./exporter.js?v=20261026014535";
 
 export class ScreenRecorder {
   constructor() {
