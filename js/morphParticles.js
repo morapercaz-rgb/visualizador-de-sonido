@@ -244,6 +244,14 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
   const cx = all.reduce((t, q) => t + q.x, 0) / all.length;
   const cy = all.reduce((t, q) => t + q.y, 0) / all.length;
 
+  // tamaño total de cada conjunto (qué tan lejos del centro llega su borde): la
+  // transformación no se puede pasar de ahí, así el conjunto no se agranda de
+  // más y vuelve a achicarse: su tamaño va de A a B sin pasarse
+  // (una forma suave, de las que se apagan hacia el borde, se ve hasta un 70 % de su radio)
+  const seen = (r, fi, fo) => r * (fo[3] < fi[3] * 0.5 ? 0.7 : 1);
+  const reach = (list) => list.reduce((mx, q) => Math.max(mx, Math.hypot(q.x - cx, q.y - cy) + seen(q.r, q.fi, q.fo)), 0);
+  const extA = reach(A), extB = reach(B);
+
   // 1) dónde y cómo está cada forma en este instante
   const items = [];
   let mixArea = 0;
@@ -284,6 +292,16 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
     let fi = lerpColor(a.fi, b.fi, p);
     let fo = lerpColor(a.fo, b.fo, p);
     const st = lerpColor(a.st, b.st, p);
+
+    // sin pasarse del tamaño: si con el desvío la forma saldría del tamaño que
+    // tiene el conjunto en este momento, se la trae hacia adentro
+    const lim = lerp(extA, extB, u);
+    const ddx = x - cx, ddy = y - cy, dd = Math.hypot(ddx, ddy);
+    if (dd + seen(r, fi, fo) > lim && dd > 0) {
+      const nd = Math.max(0, lim - seen(r, fi, fo));
+      x = cx + (ddx / dd) * nd;
+      y = cy + (ddy / dd) * nd;
+    }
 
     // nunca solo el contorno: si a mitad de camino una forma tiene aro pero casi
     // nada de relleno, se le da cuerpo con el color de su aro (en el principio y
@@ -332,12 +350,16 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
     if (fi[3] > 0.003 || fo[3] > 0.003) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
-      if (Math.abs(fi[3] - fo[3]) + Math.abs(fi[0] - fo[0]) + Math.abs(fi[1] - fo[1]) + Math.abs(fi[2] - fo[2]) > 2) {
-        const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
-        gr.addColorStop(0, css(fi));
-        gr.addColorStop(1, css(fo));
-        ctx.fillStyle = gr;
-      } else ctx.fillStyle = css(fi);
+      // siempre con degradado: del color del centro a un borde suave, con la caída de
+      // un aura de verdad (fuerte en el centro, se apaga rápido hacia el borde). Si la
+      // forma era plana (un círculo lleno), el borde se suaviza: en ningún momento queda un color liso
+      const edge = Math.min(fo[3], fi[3] * 0.35);
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
+      for (const rho of [0, 0.25, 0.5, 0.75, 1]) {
+        const a = fi[3] * Math.pow(1 - rho, 1.5) + edge * Math.pow(rho, 1.5);
+        gr.addColorStop(rho, css([lerp(fi[0], fo[0], rho), lerp(fi[1], fo[1], rho), lerp(fi[2], fo[2], rho), a]));
+      }
+      ctx.fillStyle = gr;
       ctx.fill();
     }
     if (st[3] > 0.003) {

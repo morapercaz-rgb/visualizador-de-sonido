@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261025205646";
-import { createDefaultParams } from "./controls.js?v=20261025205646";
-import { silentAudio } from "./audioEngine.js?v=20261025205646";
-import { getPreset } from "./presets.js?v=20261025205646";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025205646";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025205646";
+import { VisualEngine } from "./visualEngine.js?v=20261025210357";
+import { createDefaultParams } from "./controls.js?v=20261025210357";
+import { silentAudio } from "./audioEngine.js?v=20261025210357";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261025210357";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261025210357";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261025210357";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -113,7 +113,7 @@ export class Scene {
   }
 
   _applyPreset(c, p) {
-    c.params = { ...createDefaultParams(), ...structuredClone(p.params) };
+    c.params = paramsFromPreset(p.params, createDefaultParams());
     c.keys = structuredClone(p.keys ?? []);
     c.engine = new VisualEngine(); // arranca limpio, sin restos del conjunto anterior
     c.engine.importState(p.state); // y con lo que habías movido, donde lo dejaste
@@ -502,7 +502,7 @@ export class Scene {
             id: this._nextLibId--,
             name: p.name,
             visible: true,
-            params: { ...createDefaultParams(), ...structuredClone(p.params) },
+            params: paramsFromPreset(p.params, createDefaultParams()),
             keys: [],
             engine: new VisualEngine(),
             spinAngle: p.spin ?? 0,
@@ -582,7 +582,7 @@ export class Scene {
     const mid = Math.min(sA, sB);
     if (mid > 0.001) {
       ctx.globalAlpha = alpha * mid;
-      ctx.globalCompositeOperation = mixed.shapeBlendMode;
+      ctx.globalCompositeOperation = mixed.visualMode === "mix" ? mixed.mixBlend : mixed.shapeBlendMode; // la misma mezcla que usa el conjunto
       ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount}px)` : "none";
       drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h) });
     }

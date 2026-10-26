@@ -16,6 +16,30 @@
 // Para pasarle conjuntos a alguien sin tocar la página: un link que los lleva
 // adentro (ver encodePresets / decodePresets).
 
+// Parámetros que se agregaron DESPUÉS de que existieran los conjuntos guardados.
+// Si un conjunto guardado no los tiene (porque se guardó antes), se usa el valor
+// "neutro" que equivale a como se veía entonces, y no el valor inicial nuevo
+// (si no, un conjunto viejo cambiaría de aspecto solo).
+export const LEGACY_PARAMS = {
+  mixSpeed: 0, // las luces del aura de colores no recorrían la pantalla
+  barFocusAmount: 0, // las barras reaccionaban parejo
+  barFocusX: 0.5,
+  barFocusWidth: 0.25,
+  barGradient: "side",
+  barBalance: 0.5,
+  barSoftness: 1,
+  auraReach: 1,
+  reactAudio: true,
+};
+
+// parámetros completos de un conjunto guardado: los suyos + los iniciales para lo
+// que falte (con los valores neutros de arriba para lo que se agregó después)
+export function paramsFromPreset(saved, defaults) {
+  const base = { ...defaults };
+  for (const [k, v] of Object.entries(LEGACY_PARAMS)) if (!(k in saved)) base[k] = v;
+  return { ...base, ...structuredClone(saved) };
+}
+
 const KEY = "visualizador-de-sonido.conjuntos.v1";
 
 let shared = []; // los de la página (solo lectura)
