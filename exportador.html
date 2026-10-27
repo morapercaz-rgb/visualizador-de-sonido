@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Exportador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261027123410" />
+  <link rel="stylesheet" href="exportador.css?v=20261027124532" />
 </head>
 <body>
   <main>
@@ -55,13 +55,26 @@
       </p>
     </section>
 
-    <!-- 4 · probar -->
+    <!-- 4 · en vivo -->
     <section class="card">
-      <h2>4 · Probar antes de exportar</h2>
-      <label class="row"><span>probar desde el segundo</span><input type="range" id="testAt" min="0" max="60" step="0.5" value="0" /><output id="testAtOut"></output></label>
-      <div class="actions small"><button id="test">▶ probar 4 segundos (miniatura)</button></div>
-      <canvas id="testCanvas" width="480" height="270"></canvas>
-      <p class="hint" id="testHint">Arma una vista previa chica con los ajustes de arriba, para ver cómo reacciona sin exportar todo.</p>
+      <h2>4 · En vivo: ver, mover y grabar tus movimientos</h2>
+      <div class="livebox">
+        <canvas id="live" width="640" height="360"></canvas>
+        <canvas id="liveOv" width="640" height="360"></canvas>
+      </div>
+      <div class="actions small">
+        <button id="playBtn">▶ reproducir audio</button>
+        <button id="recMoves">● grabar mis movimientos</button>
+        <button id="recenter">recentrar</button>
+        <button id="restart">volver a empezar</button>
+        <label class="inl"><input type="checkbox" id="handles" checked /> manijas</label>
+      </div>
+      <p class="status" id="liveInfo">Cargá un audio y tocá ▶ para ver cómo reacciona.</p>
+      <p class="hint">
+        Movés las auras con el mouse como en el programa principal (agarrá una luz, un núcleo o la pieza entera). Con <b>● grabar mis movimientos</b> queda anotado todo lo que hagas
+        y por dónde va el audio; después, en el paso 5, se exporta <b>en máxima calidad repitiendo exactamente lo que hiciste</b>, sin lag y sincronizado con el audio.
+        Lo que ves acá es una vista liviana, solo para moverte.
+      </p>
     </section>
 
     <!-- 5 · exportar -->
@@ -99,7 +112,8 @@
       </label>
       <p class="hint" id="destHint"></p>
       <div class="actions">
-        <button id="go" class="primary">▶ Exportar secuencia de PNG</button>
+        <button id="goMoves" class="primary" disabled>▶ Exportar lo que moví (grabé: ninguno todavía)</button>
+        <button id="go">▶ Exportar sin mis movimientos</button>
         <button id="cancel" disabled>■ Cancelar (se guarda lo hecho)</button>
       </div>
       <progress id="bar" value="0" max="1"></progress>
@@ -107,6 +121,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/exportador.js?v=20261027123410"></script>
+  <script type="module" src="js/exportador.js?v=20261027124532"></script>
 </body>
 </html>

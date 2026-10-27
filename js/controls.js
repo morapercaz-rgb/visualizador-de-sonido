@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261027123410";
-import { defaultMixColor } from "./colorUtils.js?v=20261027123410";
+import { listPresets } from "./presets.js?v=20261027124532";
+import { defaultMixColor } from "./colorUtils.js?v=20261027124532";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261027123410";
+import { createDefaultParams } from "./params.js?v=20261027124532";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -634,7 +634,6 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   animF.addButton({ title: "▶ exportar PNG animado" }).on("click", () => actions.exportApng?.());
   animF.addButton({ title: "▶ exportar GIF" }).on("click", () => actions.exportGif?.());
 
-  exportF.addButton({ title: "🚀 abrir el Exportador (programa aparte, liviano)" }).on("click", () => actions.openExporter?.());
   exportF.addButton({ title: "⇄ convertir un PNG animado / GIF ya hecho a secuencia…" }).on("click", () => actions.pickConvert?.());
 
   const pngF = exportF.addFolder({ title: "Secuencia de PNG (carpeta de imágenes, para After)" });

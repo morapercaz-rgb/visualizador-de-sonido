@@ -9,9 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027123410";
-import { exportPngSequence, renderAnimation, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027123410";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027123410";
+import { Scene } from "./scene.js?v=20261027124532";
+import { AudioEngine } from "./audioEngine.js?v=20261027124532";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027124532";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027124532";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -57,9 +58,13 @@ function renderConjuntos() {
     const upd = () => {
       row.classList.toggle("off", !inc.checked);
       save();
+      onSelectionChanged();
     };
     inc.addEventListener("change", upd);
-    re.addEventListener("change", save);
+    re.addEventListener("change", () => {
+      save();
+      onSelectionChanged();
+    });
     row.classList.toggle("off", !inc.checked);
     row.append(name, inc, re);
     box.appendChild(row);
@@ -74,10 +79,12 @@ function renderConjuntos() {
 $("allOn").addEventListener("click", () => {
   for (const r of document.querySelectorAll(".crow")) (r.querySelector(".inc").checked = true), r.classList.remove("off");
   save();
+  onSelectionChanged();
 });
 $("allOff").addEventListener("click", () => {
   for (const r of document.querySelectorAll(".crow")) (r.querySelector(".inc").checked = false), r.classList.add("off");
   save();
+  onSelectionChanged();
 });
 $("importFile").addEventListener("change", async (e) => {
   const f = e.target.files?.[0];
@@ -155,8 +162,10 @@ async function selectAudio(id) {
   renderAudios();
   if (!a) return onAudioChanged();
   $("offset").max = Math.max(0, a.duration - 0.5);
-  $("testAt").max = Math.max(0.5, a.duration - 0.5);
   if (+$("offset").value > a.duration) $("offset").value = 0;
+  await audioEng.loadFile(a.file); // se deja listo para sonar en la vista en vivo (no suena hasta tocar ▶)
+  audioEng.audioEl.currentTime = +$("offset").value || 0;
+  setPlayLabel();
   if (!a.raw) {
     $("waveHint").textContent = "analizando el audio…";
     try {
@@ -175,6 +184,8 @@ function onAudioChanged() {
     ? 'Se ve cómo suena: <span class="k kb">graves</span> <span class="k km">medios</span> <span class="k kt">agudos</span> (ya con la fuerza y el suavizado que elegiste). La zona clara es lo que se va a exportar.'
     : 'Cargá un audio para ver cómo suena: <span class="k kb">graves</span> <span class="k km">medios</span> <span class="k kt">agudos</span>.';
   drawWave();
+rebuildLive(); // arranca la vista en vivo con lo que está tildado
+requestAnimationFrame(liveLoop);
   save();
 }
 
@@ -212,13 +223,10 @@ function drawWave() {
   line("treble", "#5dc2ff");
   line("mid", "#5dff9a");
   line("bass", "#ff5d7a");
-  // marca de "probar desde"
-  x.fillStyle = "#fff";
-  x.fillRect(X(+$("testAt").value || 0), 0, 2, c.height);
 }
 
 $("offset").addEventListener("input", () => {
-  $("testAt").value = Math.max(+$("testAt").value, +$("offset").value);
+  if (audioEng.audioEl) audioEng.audioEl.currentTime = +$("offset").value || 0; // el audio se ubica donde se va a empezar
   onAudioChanged();
 });
 
@@ -233,6 +241,8 @@ function initRanges() {
     $(id).addEventListener("input", () => {
       set();
       if (id === "gain" || id === "smooth") drawWave();
+rebuildLive(); // arranca la vista en vivo con lo que está tildado
+requestAnimationFrame(liveLoop);
       save();
     });
   }
@@ -256,73 +266,189 @@ function buildScene() {
     const c = i === 0 ? sc.replaceFromPreset(p) : sc.addFromPreset(p);
     c.params.reactAudio = r.querySelector(".re").checked;
     // los tres multiplicadores se aplican sobre lo que cada conjunto ya tenía guardado
-    c.params.bassReactivity *= +$("kBass").value;
-    c.params.midReactivity *= +$("kMid").value;
-    c.params.overallReactivity *= +$("kAll").value;
+    c._base = { b: c.params.bassReactivity, m: c.params.midReactivity, o: c.params.overallReactivity };
+    applyReact(c);
   });
   return sc;
 }
 
-// ---------- 4 · probar ----------
+// ---------- 4 · en vivo: ver, mover y grabar los movimientos ----------
 
-let testBitmaps = [];
-let testRaf = 0;
+const audioEng = new AudioEngine();
+let liveScene = null;
+let rec = null; // grabación de movimientos en curso: { start, events, snap, W, H }
+let lastRec = null; // la última grabación terminada (se exporta con "Exportar lo que moví")
+let prevLive = null; // para el suavizado en vivo
 
-$("testAt").addEventListener("input", () => {
-  $("testAtOut").textContent = fmt(+$("testAt").value);
-  drawWave();
-});
+const logicalSize = () => [Math.max(64, Math.round((+$("w").value || 1920) / 2) * 2), Math.max(64, Math.round((+$("h").value || 1080) / 2) * 2)];
 
-$("test").addEventListener("click", async () => {
-  if (busy) return;
-  cancelAnimationFrame(testRaf);
-  $("test").disabled = true;
+// los multiplicadores de reacción se aplican sobre lo que cada conjunto traía guardado
+function applyReact(c) {
+  c.params.bassReactivity = c._base.b * +$("kBass").value;
+  c.params.midReactivity = c._base.m * +$("kMid").value;
+  c.params.overallReactivity = c._base.o * +$("kAll").value;
+}
+
+function rebuildLive(message) {
   try {
-    const sc = buildScene();
-    const W = +$("w").value || 1920, H = +$("h").value || 1080;
-    const pw = 480, ph = Math.max(2, Math.round((480 * H) / W));
-    const fps = 24;
-    testBitmaps = [];
-    $("testCanvas").width = pw;
-    $("testCanvas").height = ph;
-    $("testHint").textContent = "armando la vista previa…";
-    await renderAnimation(
-      {
-        scene: sc,
-        videoLayer: { active: null, draw() {} },
-        globalParams: { bgColor: $("bg").value },
-        audioFile: active()?.file ?? null,
-        audioOffset: +$("testAt").value,
-        audioGain: +$("gain").value,
-        audioSmooth: +$("smooth").value,
-        width: pw,
-        height: ph,
-        scale: 1,
-        transparent: $("transparent").checked,
-        includeVideo: false,
-        seconds: 4,
-        fps,
-        onProgress: ({ phase, i, total }) => ($("testHint").textContent = `${phase} ${i}/${total}`),
-      },
-      async (canvas) => {
-        testBitmaps.push(await createImageBitmap(canvas));
-      }
-    );
-    $("testHint").textContent = "Así reacciona (se repite). Cambiá los ajustes de arriba y volvé a probar.";
-    const t0 = performance.now(), ctx = $("testCanvas").getContext("2d");
-    const play = () => {
-      const i = Math.floor(((performance.now() - t0) / 1000) * fps) % testBitmaps.length;
-      ctx.clearRect(0, 0, pw, ph);
-      ctx.drawImage(testBitmaps[i], 0, 0);
-      testRaf = requestAnimationFrame(play);
-    };
-    play();
+    liveScene = buildScene();
+    for (const c of liveScene.conjuntos) c.params.mixHandles = $("handles").checked;
+    $("liveInfo").textContent = message ?? "Listo: movés las auras con el mouse.";
   } catch (e) {
-    $("testHint").textContent = e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
-  } finally {
-    $("test").disabled = false;
+    liveScene = null;
+    $("liveInfo").textContent = e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
   }
+}
+
+// lo mismo que adjustAudio (exporter.js) pero cuadro a cuadro, para la vista en vivo
+function liveAdjust(f, dt) {
+  const g = +$("gain").value, sm = +$("smooth").value;
+  const keep = sm > 0 ? Math.pow(Math.min(0.97, sm), 30 * dt) : 0;
+  const cl = (v) => Math.max(0, Math.min(1, v));
+  const cur = { ...f, bass: cl(f.bass * g), mid: cl(f.mid * g), treble: cl(f.treble * g), overall: cl(f.overall * g), spectrum: f.spectrum.map((v) => cl(v * g)) };
+  if (prevLive && keep > 0) {
+    for (const k of ["bass", "mid", "treble", "overall"]) cur[k] = prevLive[k] * keep + cur[k] * (1 - keep);
+    cur.spectrum = cur.spectrum.map((v, i) => (prevLive.spectrum[i] ?? 0) * keep + v * (1 - keep));
+  }
+  prevLive = cur;
+  return cur;
+}
+
+const liveCv = $("live"), liveCtx = liveCv.getContext("2d");
+const ovCv = $("liveOv"), ovCtx = ovCv.getContext("2d");
+let lastT = performance.now(), infoT = 0;
+
+function liveLoop(now) {
+  requestAnimationFrame(liveLoop);
+  const dt = Math.min(0.05, Math.max(0.001, (now - lastT) / 1000));
+  lastT = now;
+  if (busy) return; // mientras exporta, la vista en vivo espera
+  const [W, H] = logicalSize();
+  const s = Math.min(1, 640 / W); // la vista en vivo es liviana: como mucho 640 px de ancho
+  const PW = Math.max(2, Math.round(W * s)), PH = Math.max(2, Math.round(H * s));
+  if (liveCv.width !== PW || liveCv.height !== PH) {
+    liveCv.width = ovCv.width = PW;
+    liveCv.height = ovCv.height = PH;
+  }
+  liveCtx.setTransform(1, 0, 0, 1, 0, 0);
+  liveCtx.clearRect(0, 0, PW, PH);
+  if (!$("transparent").checked) {
+    liveCtx.fillStyle = $("bg").value;
+    liveCtx.fillRect(0, 0, PW, PH);
+  }
+  ovCtx.setTransform(1, 0, 0, 1, 0, 0);
+  ovCtx.clearRect(0, 0, PW, PH);
+  if (!liveScene) return;
+  ovCtx.setTransform(s, 0, 0, s, 0, 0);
+  liveCtx.setTransform(s, 0, 0, s, 0, 0);
+  liveScene.renderScale = s;
+  liveScene.timeline.playing = true; // (los keyframes de los conjuntos también se ven, como saldrán)
+  liveScene.draw(liveCtx, W, H, liveAdjust(audioEng.analyze(128), dt), dt, ovCtx);
+  if (now - infoT > 250) {
+    infoT = now;
+    if (rec) $("liveInfo").textContent = `● grabando ${fmt((now - rec.start) / 1000)} · ${rec.events.length} movimientos anotados`;
+    else if (audioEng.audioEl) $("liveInfo").textContent = `audio ${fmt(audioEng.audioEl.currentTime)} / ${fmt(audioEng.audioEl.duration || 0)}${audioEng.isPlaying ? "" : " (en pausa)"}`;
+  }
+}
+
+// el mouse sobre la vista en vivo (mismo manejo que en el programa principal)
+const toLogical = (e) => {
+  const r = liveCv.getBoundingClientRect();
+  const [W, H] = logicalSize();
+  return { x: ((e.clientX - r.left) * W) / r.width, y: ((e.clientY - r.top) * H) / r.height };
+};
+const note = (k, p, a = false) => rec?.events.push({ t: (performance.now() - rec.start) / 1000, k, x: p.x, y: p.y, a });
+liveCv.addEventListener("pointerdown", (e) => {
+  if (!liveScene) return;
+  const p = toLogical(e);
+  if (liveScene.pointerDown(p.x, p.y, e.altKey)) {
+    try {
+      liveCv.setPointerCapture(e.pointerId);
+    } catch {} // (si el puntero ya no está activo, no pasa nada)
+    liveCv.style.cursor = "grabbing";
+  }
+  note("d", p, e.altKey);
 });
+liveCv.addEventListener("pointermove", (e) => {
+  if (!liveScene) return;
+  const p = toLogical(e);
+  liveScene.pointerMove(p.x, p.y);
+  if (!liveScene.isDragging) liveCv.style.cursor = liveScene.hover(p.x, p.y) ? "grab" : "default";
+  if (rec) note("m", p);
+});
+const up = (e) => {
+  if (!liveScene) return;
+  liveScene.pointerUp();
+  liveCv.style.cursor = "default";
+  note("u", toLogical(e));
+};
+liveCv.addEventListener("pointerup", up);
+liveCv.addEventListener("pointercancel", up);
+liveCv.addEventListener("dblclick", (e) => {
+  if (!liveScene) return;
+  const p = toLogical(e);
+  liveScene.doubleClick(p.x, p.y);
+  note("x", p);
+});
+
+function setPlayLabel() {
+  $("playBtn").textContent = audioEng.isPlaying ? "⏸ pausar audio" : "▶ reproducir audio";
+}
+$("playBtn").addEventListener("click", () => {
+  if (!audioEng.audioEl) {
+    $("liveInfo").textContent = "Primero cargá un audio (paso 2).";
+    return;
+  }
+  audioEng.isPlaying ? audioEng.pause() : audioEng.play();
+  setPlayLabel();
+});
+$("recenter").addEventListener("click", () => liveScene?.conjuntos.forEach((c) => c.engine.resetPiece()));
+$("restart").addEventListener("click", () => rebuildLive("Empezó de nuevo, con los conjuntos como los guardaste."));
+$("handles").addEventListener("change", () => liveScene?.conjuntos.forEach((c) => (c.params.mixHandles = $("handles").checked)));
+
+$("recMoves").addEventListener("click", () => {
+  if (busy) return;
+  if (rec) {
+    // parar: queda todo anotado
+    rec.duration = (performance.now() - rec.start) / 1000;
+    lastRec = rec;
+    rec = null;
+    $("recMoves").textContent = "● grabar mis movimientos";
+    $("recMoves").classList.remove("rec");
+    $("goMoves").disabled = false;
+    $("goMoves").textContent = `▶ Exportar lo que moví (grabé ${lastRec.duration.toFixed(1)} s)`;
+    $("liveInfo").textContent = `Grabé ${lastRec.duration.toFixed(1)} s con ${lastRec.events.length} movimientos. Ya podés exportarlo abajo (paso 5), o grabar de nuevo.`;
+    return;
+  }
+  if (!liveScene) return rebuildLive();
+  // si hay un audio cargado, suena mientras se graba (así los movimientos y el audio quedan sincronizados)
+  if (active() && !audioEng.isPlaying) {
+    audioEng.play();
+    setPlayLabel();
+  }
+  const [W, H] = logicalSize();
+  rec = {
+    start: performance.now(),
+    events: [],
+    W,
+    H,
+    snap: {
+      clock: liveScene.clock,
+      tl: liveScene.timeline.time,
+      conj: liveScene.conjuntos.map((c) => ({ state: c.engine.exportState(), spin: c.spinAngle })),
+      audioT: audioEng.audioEl?.currentTime ?? 0,
+      audioId: active()?.id ?? null,
+    },
+  };
+  $("recMoves").textContent = "■ parar de grabar";
+  $("recMoves").classList.add("rec");
+});
+
+// la escena de la vista en vivo se vuelve a armar cuando cambian los conjuntos incluidos (se pierden las posiciones movidas)
+function onSelectionChanged() {
+  rebuildLive();
+}
+for (const id of ["kBass", "kMid", "kAll"]) $(id).addEventListener("input", () => liveScene?.conjuntos.forEach(applyReact));
 
 // ---------- 5 · exportar ----------
 
@@ -401,12 +527,14 @@ function save() {
 
 function setBusy(on) {
   busy = on;
-  $("go").disabled = on;
   $("cancel").disabled = !on;
   for (const el of document.querySelectorAll("main select, main input, main button")) {
-    if (el.id !== "go" && el.id !== "cancel") el.disabled = on;
+    if (el.id !== "cancel") el.disabled = on;
   }
-  if (!on) updateDestHint();
+  if (!on) {
+    $("goMoves").disabled = !lastRec; // (solo se puede exportar lo que moví si ya grabé algo)
+    updateDestHint();
+  }
 }
 
 // dónde se guarda: se pide ANTES de empezar (el navegador solo deja abrir el selector justo después de un click)
@@ -452,14 +580,17 @@ window.addEventListener("beforeunload", (e) => {
   if (busy) e.preventDefault(); // (si cerrás la pestaña mientras exporta, se pierde)
 });
 
-async function run() {
+// withMoves = true: se exporta lo que se grabó en la vista en vivo (los movimientos del mouse y por dónde iba el audio)
+async function run(withMoves = false) {
   if (busy) return;
+  if (withMoves && !lastRec) return;
   const target = await pickTarget();
   if (!target) {
     $("status").textContent = "no elegiste dónde guardar, así que no se hizo nada";
     return;
   }
-  cancelAnimationFrame(testRaf);
+  audioEng.pause(); // (mientras exporta no suena ni se dibuja en vivo)
+  setPlayLabel();
   setBusy(true);
   cancelFlag = false;
   $("bar").value = 0;
@@ -469,20 +600,58 @@ async function run() {
     const W = Math.round(+$("w").value / 2) * 2, H = Math.round(+$("h").value / 2) * 2;
     const k = finalScale();
     const fps = +$("fps").value;
-    const secs = +$("secs").value;
+    const r0 = withMoves ? lastRec : null;
+    const secs = r0 ? r0.duration : +$("secs").value;
     if (!(fps > 0) || !(secs > 0) || Math.round(secs * fps) < 1) throw friendly("revisá los cuadros por segundo y la duración: no daría ningún cuadro");
     if (!(W >= 64 && H >= 64)) throw friendly("el ancho y el alto tienen que ser de al menos 64 px");
     const scene = buildScene();
-    const a = active();
+    // el audio de ese momento (si se grabó con uno) o el elegido ahora
+    const a = r0 ? audios.find((x) => x.id === r0.snap.audioId) ?? null : active();
     let note = a ? ` · audio: ${a.name}` : " · sin audio: no hay reacción al sonido";
     if (k !== +$("scale").value) note += ` · resolución bajada a ×${k}`;
+    if (r0) note += " · repitiendo lo que moviste";
+
+    let replay = {};
+    if (r0) {
+      // las piezas arrancan donde estaban cuando empezó la grabación
+      scene.conjuntos.forEach((c, i) => {
+        const sn = r0.snap.conj[i];
+        if (!sn) return;
+        c.engine.importState(sn.state);
+        c.spinAngle = sn.spin;
+      });
+      const ev = r0.events;
+      let ei = 0;
+      const fx = W / r0.W, fy = H / r0.H; // (por si cambió el tamaño entre grabar y exportar)
+      replay = {
+        clockStart: r0.snap.clock,
+        timelineStart: r0.snap.tl,
+        beforeFrame: async (i, t, ctx) => {
+          // una pasada mínima para que cada pieza sepa dónde está antes del primer clic
+          if (i === 0) {
+            const tmp = document.createElement("canvas");
+            tmp.width = tmp.height = 8;
+            ctx.scene.draw(tmp.getContext("2d"), ctx.W, ctx.H, ctx.audio, 1e-4);
+          }
+          // se aplican los movimientos del mouse que ocurrieron hasta este momento
+          while (ei < ev.length && ev[ei].t <= t) {
+            const e = ev[ei++];
+            if (e.k === "d") ctx.scene.pointerDown(e.x * fx, e.y * fy, e.a);
+            else if (e.k === "m") ctx.scene.pointerMove(e.x * fx, e.y * fy);
+            else if (e.k === "u") ctx.scene.pointerUp();
+            else ctx.scene.doubleClick(e.x * fx, e.y * fy);
+          }
+        },
+      };
+    }
 
     const r = await exportPngSequence({
       scene,
       videoLayer: { active: null, draw() {} },
       globalParams: { bgColor: $("bg").value },
+      ...replay,
       audioFile: a?.file ?? null,
-      audioOffset: +$("offset").value || 0,
+      audioOffset: r0 ? r0.snap.audioT : +$("offset").value || 0,
       audioGain: +$("gain").value,
       audioSmooth: +$("smooth").value,
       width: W,
@@ -520,7 +689,8 @@ async function run() {
     setBusy(false);
   }
 }
-$("go").addEventListener("click", run);
+$("go").addEventListener("click", () => run(false));
+$("goMoves").addEventListener("click", () => run(true));
 $("cancel").addEventListener("click", () => {
   cancelFlag = true;
   $("status").textContent = "cancelando… (se guarda lo que ya estaba hecho)";
@@ -544,7 +714,8 @@ $("bg").value = prefs.bg ?? "#05050a";
 $("dest").value = prefs.dest ?? (canPickFile ? "zipfile" : "zip");
 if ($("dest").selectedOptions[0]?.disabled) $("dest").value = "zip";
 $("offset").value = prefs.offset ?? 0;
-$("testAtOut").textContent = fmt(0);
 updateFinalSize();
 updateDestHint();
 drawWave();
+rebuildLive(); // arranca la vista en vivo con lo que está tildado
+requestAnimationFrame(liveLoop);
