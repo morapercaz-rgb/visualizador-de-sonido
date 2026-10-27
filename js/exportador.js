@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027162500";
-import { AudioEngine } from "./audioEngine.js?v=20261027162500";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027162500";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027162500";
+import { Scene } from "./scene.js?v=20261027192544";
+import { AudioEngine } from "./audioEngine.js?v=20261027192544";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261027192544";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027192544";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -639,7 +639,7 @@ function beginRec() {
     snap: {
       clock: liveScene.clock,
       tl: liveScene.timeline.time,
-      conj: liveScene.conjuntos.map((c) => ({ state: c.engine.exportState(), spin: c.spinAngle })),
+      conj: liveScene.conjuntos.map((c) => ({ name: c.name, state: c.engine.exportState(), spin: c.spinAngle })),
       audioT: audioEng.audioEl?.currentTime ?? 0,
       audioId: active()?.id ?? null,
       audioName: active()?.name ?? null,
@@ -822,6 +822,149 @@ window.addEventListener("beforeunload", (e) => {
   if (busy) e.preventDefault(); // (si cerrás la pestaña mientras exporta, se pierde)
 });
 
+// Arma la escena tal cual se exporta: o desde la grabación (cada conjunto con el estado que tenía al grabar, emparejado
+// por NOMBRE y en el mismo orden de capas) o desde lo que se ve ahora en el paso 4. Devuelve también cómo repetir el mouse.
+function prepareScene(r0, W, H) {
+  const scene = buildScene();
+  let note = "";
+  let replay = {};
+  if (!r0) {
+    if (liveScene) {
+      scene.conjuntos.forEach((c) => {
+        const lv = liveScene.conjuntos.find((x) => x.name === c.name);
+        if (!lv) return;
+        c.engine.importState(lv.engine.exportState());
+        c.spinAngle = lv.spinAngle;
+      });
+      note += " · con las auras donde las dejaste en el paso 4";
+    }
+    return { scene, replay, note };
+  }
+  // las piezas arrancan donde estaban cuando empezó la grabación
+  const snaps = r0.snap.conj ?? [];
+  if (snaps.length && snaps.every((s) => s.name)) {
+    const names = snaps.map((s) => s.name);
+    const same = names.length === scene.conjuntos.length && names.every((n) => scene.conjuntos.some((c) => c.name === n));
+    if (same) scene.conjuntos.sort((x, y) => names.indexOf(x.name) - names.indexOf(y.name)); // (mismo orden de capas que al grabar)
+    else note += ` · ⚠ grabaste con otros conjuntos (${names.join(", ")}): los que no estaban salen con su posición guardada`;
+    for (const c of scene.conjuntos) {
+      const sn = snaps.find((s) => s.name === c.name);
+      if (!sn) continue;
+      c.engine.importState(sn.state);
+      c.spinAngle = sn.spin;
+    }
+  } else note += " · ⚠ esa grabación es de una versión anterior: las auras salen con su posición guardada (volvé a grabar y queda perfecta)";
+  note += " · repitiendo lo que moviste";
+  const ev = r0.events;
+  let ei = 0;
+  const fx = W / r0.W, fy = H / r0.H; // (por si cambió el tamaño entre grabar y exportar)
+  const fc0 = r0.snap.fc ?? readFocus();
+  scene.conjuntos.forEach((c) => applyFocus(c, fc0)); // el centro de las barras arranca como estaba al grabar
+  replay = {
+    clockStart: r0.snap.clock,
+    timelineStart: r0.snap.tl,
+    beforeFrame: async (i, t, ctx) => {
+      // una pasada mínima para que cada pieza sepa dónde está antes del primer clic
+      if (i === 0) {
+        const tmp = document.createElement("canvas");
+        tmp.width = tmp.height = 8;
+        ctx.scene.draw(tmp.getContext("2d"), ctx.W, ctx.H, ctx.audio, 1e-4);
+      }
+      // se aplican los movimientos del mouse que ocurrieron hasta este momento
+      while (ei < ev.length && ev[ei].t <= t) {
+        const e = ev[ei++];
+        if (e.k === "d") ctx.scene.pointerDown(e.x * fx, e.y * fy, e.a);
+        else if (e.k === "m") ctx.scene.pointerMove(e.x * fx, e.y * fy);
+        else if (e.k === "u") ctx.scene.pointerUp();
+        else if (e.k === "f") ctx.scene.conjuntos.forEach((c) => applyFocus(c, e.f));
+        else ctx.scene.doubleClick(e.x * fx, e.y * fy);
+      }
+    },
+  };
+  return { scene, replay, note };
+}
+
+// 🔍 Revisa qué va a salir DE VERDAD: dibuja la exportación (con tu audio y, si la hay, tu grabación) en chico, con y sin
+// cada conjunto, y cuenta en cuántos cuadros se nota. Así se ve conjunto por conjunto si aparece, sin esperar al ZIP.
+async function checkExport() {
+  if (busy) return;
+  setBusy(true);
+  cancelFlag = false;
+  const out = [];
+  try {
+    const W = Math.round(+$("w").value / 2) * 2, H = Math.round(+$("h").value / 2) * 2;
+    const SW = 192, SH = Math.max(8, Math.round((H * SW) / W));
+    const small = document.createElement("canvas");
+    small.width = SW;
+    small.height = SH;
+    const sctx = small.getContext("2d", { willReadFrequently: true });
+    const FPS = 8;
+    const paths = [{ label: "«Exportar tal cual lo veo ahora»", r0: null }];
+    if (lastRec) paths.push({ label: "«Exportar lo que moví»", r0: lastRec });
+    for (const { label, r0 } of paths) {
+      const a = r0 ? audios.find((x) => x.id === r0.snap.audioId) ?? audios.find((x) => x.name === r0.snap.audioName) ?? null : active();
+      const secs = Math.min(8, r0 ? r0.duration : +$("secs").value || 8);
+      const offset = r0 ? r0.snap.audioT : +$("offset").value || 0;
+      const loop = r0 ? r0.snap.loop : $("loop").checked;
+      $("status").textContent = `revisando ${label}: analizando el audio…`;
+      const audioFrames = adjustAudio(await analyzeAudioFrames(a?.file ?? null, secs, FPS, 128, offset, loop), +$("gain").value, +$("smooth").value, FPS);
+      let names = [];
+      const render = async (hide, step) => {
+        const { scene, replay } = prepareScene(r0, W, H);
+        names = scene.conjuntos.map((c) => c.name);
+        if (hide >= 0) scene.conjuntos[hide].visible = false;
+        const frames = [];
+        await renderAnimation(
+          { scene, videoLayer: { active: null, draw() {} }, globalParams: { bgColor: $("bg").value }, ...replay, keepSpin: true, audioFrames, audioFile: null, width: W, height: H, transparent: $("transparent").checked, includeVideo: false, seconds: secs, fps: FPS, scale: 1, isCancelled: () => cancelFlag },
+          async (canvas) => {
+            sctx.clearRect(0, 0, SW, SH);
+            sctx.drawImage(canvas, 0, 0, SW, SH);
+            frames.push(sctx.getImageData(0, 0, SW, SH).data);
+          },
+        );
+        $("status").textContent = `revisando ${label}: ${step}`;
+        return { frames, scene };
+      };
+      const all = await render(-1, "imagen completa");
+      const n = names.length;
+      out.push(`${label} · ${a ? "audio: " + a.name : "sin audio"} · ${secs.toFixed(1)} s`);
+      for (let j = 0; j < n; j++) {
+        const without = await render(j, `sin «${names[j]}» (${j + 1}/${n})`);
+        let seen = 0, seenDark = 0, best = 0;
+        without.frames.forEach((px, f) => {
+          let c30 = 0, c3 = 0;
+          for (let k = 0; k < px.length; k += 4) {
+            const a1 = px[k + 3] / 255, a2 = all.frames[f][k + 3] / 255;
+            const d = Math.abs(px[k] * a1 - all.frames[f][k] * a2) + Math.abs(px[k + 1] * a1 - all.frames[f][k + 1] * a2) + Math.abs(px[k + 2] * a1 - all.frames[f][k + 2] * a2);
+            if (d > 30) c30++;
+            if (d > 3) c3++;
+          }
+          const px30 = c30 / (px.length / 4), px3 = c3 / (px.length / 4);
+          if (px30 >= 0.001) seen++;
+          else if (px3 >= 0.001) seenDark++;
+          best = Math.max(best, px30);
+        });
+        const total = without.frames.length;
+        const p = all.scene.conjuntos[j].params;
+        const info = `[${p.visualMode} · opacidad ${(+p.tOpacity).toFixed(2)} · escala ${(+p.scale).toFixed(2)}${p.reactAudio === false ? " · sin reacción" : ""}]`;
+        const verdict = seen === 0 && seenDark > 0 ? `⚠ se ve casi negro/transparente (muy oscuro)` : seen === 0 ? `⚠ NO se ve en ningún cuadro` : seen < total * 0.5 ? `⚠ se ve solo en ${seen} de ${total} cuadros` : `✔ se ve en ${seen} de ${total} cuadros (hasta ${(best * 100).toFixed(0)} % de la imagen)`;
+        out.push(`  ${names[j]}: ${verdict} ${info}`);
+      }
+    }
+    out.push("(Si dice ⚠: probá subirlo o bajarlo con ▲ ▼ en el paso 1, o revisalo en el programa principal.)");
+    $("status").textContent = "Revisión lista, mirá el recuadro de abajo.";
+  } catch (e) {
+    out.push(e.message === "cancelado" ? "revisión cancelada" : `no se pudo revisar: ${e.message}`);
+    $("status").textContent = out.at(-1);
+  } finally {
+    $("report").textContent = out.join("\n");
+    $("report").hidden = false;
+    console.log(out.join("\n"));
+    setBusy(false);
+  }
+}
+$("check").addEventListener("click", checkExport);
+
 // withMoves = true: se exporta lo que se grabó en la vista en vivo (los movimientos del mouse y por dónde iba el audio)
 async function run(withMoves = false) {
   if (busy) return;
@@ -846,59 +989,13 @@ async function run(withMoves = false) {
     const secs = r0 ? r0.duration : +$("secs").value;
     if (!(fps > 0) || !(secs > 0) || Math.round(secs * fps) < 1) throw friendly("revisá los cuadros por segundo y la duración: no daría ningún cuadro");
     if (!(W >= 64 && H >= 64)) throw friendly("el ancho y el alto tienen que ser de al menos 64 px");
-    const scene = buildScene();
     // el audio de ese momento (si se grabó con uno) o el elegido ahora
     const a = r0 ? audios.find((x) => x.id === r0.snap.audioId) ?? audios.find((x) => x.name === r0.snap.audioName) ?? null : active();
     if (r0 && r0.snap.audioName && !a) throw friendly(`esa grabación se hizo con el audio "${r0.snap.audioName}": cargalo de nuevo en el paso 2 y exportá otra vez`);
     let note = a ? ` · audio: ${a.name}` : " · sin audio: no hay reacción al sonido";
     if (k !== +$("scale").value) note += ` · resolución bajada a ×${k}`;
-    if (r0) note += " · repitiendo lo que moviste";
-
-    let replay = {};
-    if (!r0 && liveScene && liveScene.conjuntos.length === scene.conjuntos.length) {
-      // sin grabación: sale tal cual lo ves en el paso 4 (cada aura donde la dejaste)
-      scene.conjuntos.forEach((c, i) => {
-        const lv = liveScene.conjuntos[i];
-        c.engine.importState(lv.engine.exportState());
-        c.spinAngle = lv.spinAngle;
-      });
-      note += " · con las auras donde las dejaste en el paso 4";
-    }
-    if (r0) {
-      // las piezas arrancan donde estaban cuando empezó la grabación
-      scene.conjuntos.forEach((c, i) => {
-        const sn = r0.snap.conj[i];
-        if (!sn) return;
-        c.engine.importState(sn.state);
-        c.spinAngle = sn.spin;
-      });
-      const ev = r0.events;
-      let ei = 0;
-      const fx = W / r0.W, fy = H / r0.H; // (por si cambió el tamaño entre grabar y exportar)
-      const fc0 = r0.snap.fc ?? readFocus();
-      scene.conjuntos.forEach((c) => applyFocus(c, fc0)); // el centro de las barras arranca como estaba al grabar
-      replay = {
-        clockStart: r0.snap.clock,
-        timelineStart: r0.snap.tl,
-        beforeFrame: async (i, t, ctx) => {
-          // una pasada mínima para que cada pieza sepa dónde está antes del primer clic
-          if (i === 0) {
-            const tmp = document.createElement("canvas");
-            tmp.width = tmp.height = 8;
-            ctx.scene.draw(tmp.getContext("2d"), ctx.W, ctx.H, ctx.audio, 1e-4);
-          }
-          // se aplican los movimientos del mouse que ocurrieron hasta este momento
-          while (ei < ev.length && ev[ei].t <= t) {
-            const e = ev[ei++];
-            if (e.k === "d") ctx.scene.pointerDown(e.x * fx, e.y * fy, e.a);
-            else if (e.k === "m") ctx.scene.pointerMove(e.x * fx, e.y * fy);
-            else if (e.k === "u") ctx.scene.pointerUp();
-            else if (e.k === "f") ctx.scene.conjuntos.forEach((c) => applyFocus(c, e.f));
-            else ctx.scene.doubleClick(e.x * fx, e.y * fy);
-          }
-        },
-      };
-    }
+    const { scene, replay, note: sceneNote } = prepareScene(r0, W, H);
+    note += sceneNote;
 
     const r = await exportPngSequence({
       scene,

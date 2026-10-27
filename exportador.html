@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Exportador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261027162500" />
+  <link rel="stylesheet" href="exportador.css?v=20261027192544" />
 </head>
 <body>
   <main>
@@ -122,14 +122,16 @@
       <div class="actions">
         <button id="goMoves" class="primary" disabled>▶ Exportar lo que moví (grabé: ninguno todavía)</button>
         <button id="go">▶ Exportar tal cual lo veo ahora (paso 4)</button>
+        <button id="check">🔍 Revisar qué va a salir</button>
         <button id="cancel" disabled>■ Cancelar (se guarda lo hecho)</button>
       </div>
+      <pre id="report" class="report" hidden></pre>
       <progress id="bar" value="0" max="1"></progress>
       <p id="status" class="status">Listo para exportar.</p>
       <p class="hint">Sale <b>igual a lo que ves en el paso 4</b>: los mismos conjuntos, en el mismo orden, cada aura <b>donde la dejaste</b>, con la reacción al audio que elegiste. Lo único que no sale son las manijas (son solo para moverte). Si grabaste movimientos, usá el otro botón: repite todo lo que hiciste, con el audio sincronizado.</p>
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/exportador.js?v=20261027162500"></script>
+  <script type="module" src="js/exportador.js?v=20261027192544"></script>
 </body>
 </html>

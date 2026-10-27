@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027162500";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027162500";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027192544";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027192544";
 
 export { crc32 };
 
@@ -250,7 +250,8 @@ export async function renderAnimation(o, onFrame) {
 
   o.onProgress?.({ phase: "analizando el audio", i: 0, total: frames });
   // (opciones de audio: audioOffset = desde qué segundo; audioGain = ganancia; audioSmooth = suavizado)
-  const audioFrames = adjustAudio(await analyzeAudioFrames(o.audioFile, seconds, fps, 128, o.audioOffset ?? 0, o.audioLoop ?? true), o.audioGain ?? 1, o.audioSmooth ?? 0, fps);
+  // (o.audioFrames: audio ya analizado, para no volver a decodificar el archivo cuando se dibuja varias veces)
+  const audioFrames = o.audioFrames ?? adjustAudio(await analyzeAudioFrames(o.audioFile, seconds, fps, 128, o.audioOffset ?? 0, o.audioLoop ?? true), o.audioGain ?? 1, o.audioSmooth ?? 0, fps);
   if (o.isCancelled?.()) throw new Error("cancelado");
 
   // se guarda el estado vivo para dejarlo como estaba
