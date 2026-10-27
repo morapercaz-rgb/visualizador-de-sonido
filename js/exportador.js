@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027160730";
-import { AudioEngine } from "./audioEngine.js?v=20261027160730";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027160730";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027160730";
+import { Scene } from "./scene.js?v=20261027161108";
+import { AudioEngine } from "./audioEngine.js?v=20261027161108";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027161108";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027161108";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -303,7 +303,17 @@ function buildScene() {
 const audioEng = new AudioEngine();
 let liveScene = null;
 let rec = null; // grabación de movimientos en curso: { start, events, snap, W, H }
-let lastRec = null; // la última grabación terminada (se exporta con "Exportar lo que moví")
+const REC_KEY = "visualizador-de-sonido.exportador.grabacion.v1";
+let lastRec = read(REC_KEY); // la última grabación terminada (se exporta con "Exportar lo que moví"); queda guardada aunque refresques
+if (!(lastRec?.events && lastRec.snap && lastRec.duration > 0)) lastRec = null;
+function saveRec() {
+  try {
+    localStorage.setItem(REC_KEY, JSON.stringify(lastRec));
+    return true;
+  } catch {
+    return false; // (si es muy larga y no entra, queda solo mientras la página esté abierta)
+  }
+}
 let prevLive = null; // para el suavizado en vivo
 
 const logicalSize = () => [Math.max(64, Math.round((+$("w").value || 1920) / 2) * 2), Math.max(64, Math.round((+$("h").value || 1080) / 2) * 2)];
@@ -570,6 +580,7 @@ function beginRec() {
       conj: liveScene.conjuntos.map((c) => ({ state: c.engine.exportState(), spin: c.spinAngle })),
       audioT: audioEng.audioEl?.currentTime ?? 0,
       audioId: active()?.id ?? null,
+      audioName: active()?.name ?? null,
       loop: $("loop").checked,
       fc: readFocus(),
     },
@@ -585,12 +596,13 @@ $("recMoves").addEventListener("click", () => {
     // parar: queda todo anotado
     rec.duration = (performance.now() - rec.start) / 1000;
     lastRec = rec;
+    const kept = saveRec();
     rec = null;
     $("recMoves").textContent = "● grabar mis movimientos";
     $("recMoves").classList.remove("rec");
     $("goMoves").disabled = false;
     $("goMoves").textContent = `▶ Exportar lo que moví (grabé ${lastRec.duration.toFixed(1)} s)`;
-    $("liveInfo").textContent = `Grabé ${lastRec.duration.toFixed(1)} s con ${lastRec.events.length} movimientos. Ya podés exportarlo abajo (paso 5), o grabar de nuevo.`;
+    $("liveInfo").textContent = `Grabé ${lastRec.duration.toFixed(1)} s con ${lastRec.events.length} movimientos. Ya podés exportarlo abajo (paso 5), o grabar de nuevo.${kept ? " Queda guardada: si refrescás la página no se pierde." : " (Es muy larga para guardarse: exportala antes de cerrar o refrescar la página.)"}`;
     return;
   }
   if (!liveScene) return rebuildLive();
@@ -774,7 +786,8 @@ async function run(withMoves = false) {
     if (!(W >= 64 && H >= 64)) throw friendly("el ancho y el alto tienen que ser de al menos 64 px");
     const scene = buildScene();
     // el audio de ese momento (si se grabó con uno) o el elegido ahora
-    const a = r0 ? audios.find((x) => x.id === r0.snap.audioId) ?? null : active();
+    const a = r0 ? audios.find((x) => x.id === r0.snap.audioId) ?? audios.find((x) => x.name === r0.snap.audioName) ?? null : active();
+    if (r0 && r0.snap.audioName && !a) throw friendly(`esa grabación se hizo con el audio "${r0.snap.audioName}": cargalo de nuevo en el paso 2 y exportá otra vez`);
     let note = a ? ` · audio: ${a.name}` : " · sin audio: no hay reacción al sonido";
     if (k !== +$("scale").value) note += ` · resolución bajada a ×${k}`;
     if (r0) note += " · repitiendo lo que moviste";
@@ -885,6 +898,10 @@ $("fcX").value = prefs.fcX ?? 0.5;
 $("fcW").value = prefs.fcW ?? 0.35;
 $("fcA").value = prefs.fcA ?? 0.85;
 showFocus();
+if (lastRec) {
+  $("goMoves").disabled = false;
+  $("goMoves").textContent = `▶ Exportar lo que moví (grabé ${lastRec.duration.toFixed(1)} s, guardada)`;
+}
 $("loop").checked = prefs.loop ?? false; // (por defecto el audio suena una sola vez)
 $("transparent").checked = prefs.transparent ?? true;
 $("bgRow").hidden = $("transparent").checked;
