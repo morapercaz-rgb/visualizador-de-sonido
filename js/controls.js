@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261027115337";
-import { defaultMixColor } from "./colorUtils.js?v=20261027115337";
+import { listPresets } from "./presets.js?v=20261027115747";
+import { defaultMixColor } from "./colorUtils.js?v=20261027115747";
 
 let mixRebuildTimer = 0;
 
@@ -242,6 +242,7 @@ export function createDefaultParams() {
     // grabación
     recFormat: "png", // png (sin fondo, una imagen por cuadro) | mp4 (lo lee After Effects) | webm9 | webm8
     recFps: 30,
+    recScale: 1, // resolución al grabar en vivo: 1 = completa; menos = más liviano para la compu (las imágenes salen más chicas)
     recBitrate: 12, // megabits por segundo
 
     // dónde se guardan las secuencias de PNG: "zip" (se descarga solo, sin permisos) o "folder" (una carpeta que elegís; solo Chrome)
@@ -852,6 +853,10 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
       "Secuencia de PNG, sin fondo (en vivo)": "png",
     },
     label: "formato",
+  });
+  recF.addInput(gp, "recScale", {
+    options: { "completa (100 %)": 1, "75 %": 0.75, "mitad (50 %)": 0.5, "35 %": 0.35 },
+    label: "resolución al grabar en vivo",
   });
   recF.addInput(gp, "recFps", { options: { "24 cuadros/seg (cine)": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
   recF.addInput(gp, "recBitrate", { min: 2, max: 200, step: 1, label: "calidad (Mbps, solo video)" });

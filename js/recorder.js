@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter, ZipStream } from "./exporter.js?v=20261027115337";
+import { ZipWriter, ZipStream } from "./exporter.js?v=20261027115747";
 
 export class ScreenRecorder {
   constructor() {
@@ -90,7 +90,77 @@ export class ScreenRecorder {
 //   no llega (lienzo grande), no se frena la pantalla: el cuadro que falta se
 //   rellena repitiendo el último, así la duración total queda bien.
 // - Se guardan en una carpeta (Chrome) o se arma un ZIP al detener.
+// Codifica PNG FUERA de la página (en Web Workers): se toma una "foto" rápida del canvas
+// (createImageBitmap) y el trabajo pesado de armar el PNG lo hace otro hilo. Así grabar
+// no frena el dibujo. Si el navegador no puede, se usa canvas.toBlob como siempre.
+const ENCODER_SRC = `
+self.onmessage = async (e) => {
+  const { id, bitmap } = e.data;
+  try {
+    const c = new OffscreenCanvas(bitmap.width, bitmap.height);
+    c.getContext("2d").drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const blob = await c.convertToBlob({ type: "image/png" });
+    self.postMessage({ id, blob });
+  } catch (err) {
+    self.postMessage({ id, blob: null });
+  }
+};`;
+
+class PngEncoder {
+  constructor(workers = 2) {
+    this.workers = [];
+    this.waiting = new Map();
+    this.next = 0;
+    this.seq = 0;
+    this.url = null;
+    const ok = typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined" && typeof createImageBitmap === "function" && PngSequenceRecorder.useWorker;
+    if (!ok) return;
+    try {
+      this.url = URL.createObjectURL(new Blob([ENCODER_SRC], { type: "text/javascript" }));
+      for (let i = 0; i < workers; i++) {
+        const w = new Worker(this.url);
+        w.onmessage = (e) => {
+          const cb = this.waiting.get(e.data.id);
+          this.waiting.delete(e.data.id);
+          cb?.(e.data.blob ?? null);
+        };
+        w.onerror = () => {
+          this.broken = true;
+        };
+        this.workers.push(w);
+      }
+    } catch {
+      this.workers = [];
+    }
+  }
+
+  // devuelve una promesa con el Blob PNG del canvas tal como está AHORA
+  encode(canvas) {
+    if (!this.workers.length || this.broken) {
+      return new Promise((res) => canvas.toBlob(res, "image/png"));
+    }
+    return createImageBitmap(canvas).then(
+      (bitmap) =>
+        new Promise((res) => {
+          const id = ++this.seq;
+          this.waiting.set(id, res);
+          this.workers[this.next++ % this.workers.length].postMessage({ id, bitmap }, [bitmap]);
+        }),
+      () => new Promise((res) => canvas.toBlob(res, "image/png"))
+    );
+  }
+
+  dispose() {
+    for (const w of this.workers) w.terminate();
+    this.workers = [];
+    if (this.url) URL.revokeObjectURL(this.url);
+  }
+}
+
 export class PngSequenceRecorder {
+  static useWorker = true; // (false = codificar en la página, como antes)
+
   // tope de memoria para el modo ZIP (en bytes). Al llegar, deja de tomar cuadros
   // y avisa (full = true) para que se guarde lo grabado hasta ahí.
   static maxBytes = 1.5e9;
@@ -123,6 +193,7 @@ export class PngSequenceRecorder {
     this.chain = Promise.resolve();
     this.error = null;
     this.full = false;
+    this.encoder = new PngEncoder();
     this.t0 = performance.now();
     this.active = true;
   }
@@ -138,7 +209,7 @@ export class PngSequenceRecorder {
     if (count > 1) this.repeated += count - 1;
     this.inflight++;
     // toBlob toma la foto del canvas JUSTO ahora y codifica después
-    this.canvas.toBlob((blob) => {
+    this.encoder.encode(this.canvas).then((blob) => {
       if (!blob) {
         // el navegador no pudo codificar este PNG (suele pasar con lienzos enormes o poca memoria)
         this.nullBlobs++;
@@ -152,7 +223,7 @@ export class PngSequenceRecorder {
         .then(() => this._save(blob, first, count))
         .catch((e) => (this.error = e))
         .finally(() => this.inflight--);
-    }, "image/png");
+    });
   }
 
   async _save(blob, first, count) {
@@ -178,6 +249,7 @@ export class PngSequenceRecorder {
     this.active = false;
     while (this.inflight > 0) await new Promise((r) => setTimeout(r, 25));
     await this.chain;
+    this.encoder?.dispose();
     if (this.error) throw this.error;
     // si no se guardó ni un cuadro, no se entrega un ZIP vacío: se explica por qué
     if (this.saved === 0) {

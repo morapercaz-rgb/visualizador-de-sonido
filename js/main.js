@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261027115337";
-import { VideoLayer } from "./videoLayer.js?v=20261027115337";
-import { Scene } from "./scene.js?v=20261027115337";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027115337";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027115337";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027115337";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027115337";
+import { AudioEngine } from "./audioEngine.js?v=20261027115747";
+import { VideoLayer } from "./videoLayer.js?v=20261027115747";
+import { Scene } from "./scene.js?v=20261027115747";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027115747";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027115747";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027115747";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027115747";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -32,7 +32,7 @@ const globalParams = createDefaultParams();
 const PREFS_KEY = "visualizador-de-sonido.preferencias.v1";
 const PREF_KEYS = [
   "canvasPreset", "canvasW", "canvasH", "previewScale", "showFps",
-  "recFormat", "recFps", "recBitrate", "pngSaveTo", "pngSeconds", "pngScale", "pngFps", "pngTransparent", "pngIncludeVideo",
+  "recFormat", "recFps", "recScale", "recBitrate", "pngSaveTo", "pngSeconds", "pngScale", "pngFps", "pngTransparent", "pngIncludeVideo",
   "animSeconds", "animFps", "animWidth", "gifTransparent",
 ];
 try {
@@ -346,7 +346,7 @@ function applyCanvasSize() {
   H -= H % 2;
   logicalW = W;
   logicalH = H;
-  viewScale = fullRes ? 1 : g.previewScale === "auto" ? autoScale : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
+  viewScale = fullRes ? Math.min(1, Math.max(0.1, Number(g.recScale) || 1)) : g.previewScale === "auto" ? autoScale : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
   const PW = Math.max(2, Math.round((W * viewScale) / 2) * 2); // píxeles que realmente se dibujan
   const PH = Math.max(2, Math.round((H * viewScale) / 2) * 2);
   if (canvas.width !== PW || canvas.height !== PH) {
@@ -357,9 +357,12 @@ function applyCanvasSize() {
   canvas.style.width = `${W * fit}px`;
   canvas.style.height = `${H * fit}px`;
   if (overlay) {
-    if (overlay.width !== PW || overlay.height !== PH) {
-      overlay.width = PW;
-      overlay.height = PH;
+    // la capa de manijas solo se ve en pantalla (nunca se graba): no hace falta que tenga todos los píxeles
+    const ok = Math.min(1, 1600 / Math.max(PW, PH));
+    const OW = Math.max(2, Math.round(PW * ok)), OH = Math.max(2, Math.round(PH * ok));
+    if (overlay.width !== OW || overlay.height !== OH) {
+      overlay.width = OW;
+      overlay.height = OH;
     }
     overlay.style.width = canvas.style.width;
     overlay.style.height = canvas.style.height;
@@ -561,7 +564,7 @@ async function startPngRecording() {
   recTimer = setInterval(() => {
     const s = Math.floor((performance.now() - pngRec.t0) / 1000);
     const bad = pngRec.nullBlobs > 0 ? " · ⚠ al navegador le cuesta guardar imágenes de este tamaño" : "";
-    recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.saved}/${pngRec.frames} cuadros guardados · ${canvas.width}×${canvas.height}${note}${bad}`;
+    recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.saved}/${pngRec.frames} cuadros guardados · ${canvas.width}×${canvas.height}${note}${bad}${slowNote()}`;
   }, 250);
 }
 
@@ -641,7 +644,7 @@ recBtn.addEventListener("click", async () => {
   }
   recTimer = setInterval(() => {
     const s = Math.floor(recorder.elapsed);
-    recInfo.textContent = `grabando ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${canvas.width}×${canvas.height}${note}`;
+    recInfo.textContent = `grabando ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${canvas.width}×${canvas.height}${note}${slowNote()}`;
   }, 250);
 });
 
@@ -1132,6 +1135,13 @@ function perfTick(now, rawMs) {
   }
 }
 
+// mientras se graba: si la compu no llega a los cuadros por segundo pedidos, se avisa y se dice qué hacer
+function slowNote() {
+  const fpsNow = Math.round(1000 / Math.max(1, emaMs));
+  if (fpsNow >= globalParams.recFps * 0.8 || document.hidden) return "";
+  return ` · ⚠ la compu va a ~${fpsNow} cuadros/seg (pediste ${globalParams.recFps}): para que no se trabe, bajá "resolución al grabar en vivo" en Grabación, o grabá con Exportar → Secuencia de PNG, que arma los cuadros uno por uno`;
+}
+
 // mide cuánto tarda en dibujar cada parte y avisa cuál es la que más pesa
 const MODE_NAMES = { ring: "anillo", grid: "grilla", spikes: "picos", bars: "barras", spiral: "espiral", auras: "auras/gotas", vortex: "remolino", echoes: "ecos", ambient: "aura envolvente", mix: "aura de colores" };
 function diagnose() {
@@ -1205,7 +1215,8 @@ function loop(now = performance.now()) {
   }
 
   frameCount++;
-  if (frameCount % 6 === 0 && (paramsDirty || scene.timeline.playing)) {
+  // (grabando se refresca el panel más de vez en cuando: es trabajo que no hace falta mientras se graba)
+  if (frameCount % (recorder.isRecording || pngRec.active ? 20 : 6) === 0 && (paramsDirty || scene.timeline.playing)) {
     pane.refresh();
     paramsDirty = false;
   }
@@ -1227,7 +1238,8 @@ function loop(now = performance.now()) {
   if (octx) {
     octx.setTransform(1, 0, 0, 1, 0, 0);
     octx.clearRect(0, 0, overlay.width, overlay.height);
-    octx.setTransform(s, 0, 0, s, 0, 0); // lo de encima (manijas, gizmo) se dibuja en medidas del lienzo "de verdad"
+    const os = overlay.width / w;
+    octx.setTransform(os, 0, 0, os, 0, 0); // lo de encima (manijas, gizmo) se dibuja en medidas del lienzo "de verdad"
   }
 
   // el audio se analiza una sola vez (con la máxima cantidad de franjas); cada
