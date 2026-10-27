@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261027104309";
-import { defaultMixColor } from "./colorUtils.js?v=20261027104309";
+import { listPresets } from "./presets.js?v=20261027111713";
+import { defaultMixColor } from "./colorUtils.js?v=20261027111713";
 
 let mixRebuildTimer = 0;
 
@@ -245,7 +245,7 @@ export function createDefaultParams() {
     recBitrate: 12, // megabits por segundo
 
     // dónde se guardan las secuencias de PNG: "zip" (se descarga solo, sin permisos) o "folder" (una carpeta que elegís; solo Chrome)
-    pngSaveTo: "zip",
+    pngSaveTo: typeof window !== "undefined" && window.showSaveFilePicker ? "zipfile" : "zip",
 
     // exportar animación de un solo archivo (PNG animado o GIF)
     animSeconds: 10,
@@ -856,7 +856,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   recF.addInput(gp, "recFps", { options: { "24 cuadros/seg (cine)": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
   recF.addInput(gp, "recBitrate", { min: 2, max: 200, step: 1, label: "calidad (Mbps, solo video)" });
   recF.addInput(gp, "pngSaveTo", {
-    options: { "un ZIP (se descarga solo)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
+    options: { "un archivo ZIP que elijo (se escribe de a poco, lo mejor; solo Chrome)": "zipfile", "un ZIP que se descarga solo (se arma en memoria)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
     label: "PNG: guardar en",
   });
 
@@ -879,7 +879,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
 
   const pngF = exportF.addFolder({ title: "Secuencia de PNG (carpeta de imágenes, para After)" });
   pngF.addInput(gp, "pngSaveTo", {
-    options: { "un ZIP (se descarga solo)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
+    options: { "un archivo ZIP que elijo (se escribe de a poco, lo mejor; solo Chrome)": "zipfile", "un ZIP que se descarga solo (se arma en memoria)": "zip", "una carpeta que elijo (solo Chrome)": "folder" },
     label: "guardar en",
   });
   pngF.addInput(gp, "pngScale", {

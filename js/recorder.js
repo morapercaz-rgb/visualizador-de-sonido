@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter } from "./exporter.js?v=20261027104309";
+import { ZipWriter, ZipStream } from "./exporter.js?v=20261027111713";
 
 export class ScreenRecorder {
   constructor() {
@@ -105,14 +105,15 @@ export class PngSequenceRecorder {
   }
 
   // opciones: canvas, fps, dirHandle (o null para ZIP), transparent, includeVideo
-  async start({ canvas, fps, dirHandle = null, transparent = true, includeVideo = false }) {
+  async start({ canvas, fps, dirHandle = null, fileHandle = null, transparent = true, includeVideo = false }) {
     this.canvas = canvas;
     this.fps = fps;
     this.transparent = transparent;
     this.includeVideo = includeVideo;
     this.name = `grabacion-png-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}`;
     this.sub = dirHandle ? await dirHandle.getDirectoryHandle(this.name, { create: true }) : null;
-    this.zip = this.sub ? null : new ZipWriter();
+    // carpeta, archivo ZIP que se escribe de a poco, o ZIP en memoria
+    this.zip = this.sub ? null : fileHandle ? new ZipStream(await fileHandle.createWritable()) : new ZipWriter();
     this.slots = 0; // cuántos cuadros ya tienen número (incluye los repetidos)
     this.saved = 0; // cuántos cuadros se guardaron de verdad
     this.nullBlobs = 0; // cuántas veces el navegador no pudo armar la imagen
@@ -166,8 +167,8 @@ export class PngSequenceRecorder {
         await w.write(blob);
         await w.close();
       } else {
-        this.zip.add(`${this.name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
-        if (this.zip.bytes > PngSequenceRecorder.maxBytes) this.full = true; // se corta acá, sin perder lo grabado
+        await this.zip.add(`${this.name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
+        if (this.zip instanceof ZipWriter && this.zip.bytes > PngSequenceRecorder.maxBytes) this.full = true; // (solo el ZIP en memoria tiene tope) se corta acá, sin perder lo grabado
       }
     }
   }
@@ -204,6 +205,9 @@ export class PngSequenceRecorder {
       const w = await fh.createWritable();
       await w.write(readme);
       await w.close();
+    } else if (this.zip instanceof ZipStream) {
+      await this.zip.add(`${this.name}/LEEME.txt`, new TextEncoder().encode(readme));
+      await this.zip.finish();
     } else {
       this.zip.add(`${this.name}/LEEME.txt`, new TextEncoder().encode(readme));
       const a = document.createElement("a");
@@ -212,6 +216,6 @@ export class PngSequenceRecorder {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
     }
-    return { frames: this.slots, repeated: this.repeated, mode: this.sub ? "carpeta" : "zip", name: this.name };
+    return { frames: this.slots, repeated: this.repeated, mode: this.sub ? "carpeta" : this.zip instanceof ZipStream ? "archivo" : "zip", name: this.name };
   }
 }

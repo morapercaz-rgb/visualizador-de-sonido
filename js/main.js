@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261027104309";
-import { VideoLayer } from "./videoLayer.js?v=20261027104309";
-import { Scene } from "./scene.js?v=20261027104309";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027104309";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027104309";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027104309";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027104309";
+import { AudioEngine } from "./audioEngine.js?v=20261027111713";
+import { VideoLayer } from "./videoLayer.js?v=20261027111713";
+import { Scene } from "./scene.js?v=20261027111713";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027111713";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027111713";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027111713";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027111713";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -470,6 +470,23 @@ const FOLDER_TIP =
 // Tiene que llamarse JUSTO después de un click: el navegador solo deja abrir
 // el selector de carpetas en ese momento.
 async function askSaveTarget() {
+  // un ZIP que se escribe de a poco en un archivo que elegís (lo mejor para muchos cuadros o lienzos grandes)
+  if (globalParams.pngSaveTo === "zipfile") {
+    if (!window.showSaveFilePicker) return { dirHandle: null, note: " · este navegador no puede guardar de a poco: va a un ZIP en memoria" };
+    try {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: `secuencia-png-${new Date().toISOString().slice(0, 10)}.zip`,
+        types: [{ description: "Archivo ZIP", accept: { "application/zip": [".zip"] } }],
+      });
+      return { dirHandle: null, fileHandle, note: "" };
+    } catch (e) {
+      if (e.name === "AbortError") {
+        recInfo.textContent = "no elegiste dónde guardar, así que no se hizo nada";
+        return null;
+      }
+      return { dirHandle: null, note: ` · no se pudo usar ese archivo (${e.message}): va a un ZIP en memoria` };
+    }
+  }
   if (globalParams.pngSaveTo !== "folder") return { dirHandle: null, note: "" };
   if (!window.showDirectoryPicker) {
     return { dirHandle: null, note: " · este navegador no puede guardar en carpetas: va a un ZIP" };
@@ -500,7 +517,7 @@ async function startPngRecording() {
   };
   let note = target.note;
   try {
-    await pngRec.start({ ...opts, dirHandle: target.dirHandle });
+    await pngRec.start({ ...opts, dirHandle: target.dirHandle, fileHandle: target.fileHandle ?? null });
   } catch (e) {
     // la carpeta no se pudo usar (permiso, nombre…): se prueba con ZIP
     try {
@@ -536,7 +553,7 @@ async function stopPngRecording() {
   try {
     const r = await pngRec.stop();
     recInfo.textContent =
-      `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado (descomprimilo antes de abrirlo en After)"}` +
+      `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : r.mode === "archivo" ? "en el ZIP que elegiste (descomprimilo antes de abrirlo en After)" : "en un ZIP descargado (descomprimilo antes de abrirlo en After)"}` +
       (r.repeated ? ` · ${r.repeated} cuadros repetidos porque la compu no llegó (probá un lienzo más chico)` : "");
   } catch (e) {
     recInfo.textContent = e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
@@ -722,6 +739,7 @@ convInput?.addEventListener("change", async () => {
   }
 });
 
+let exportT0 = 0;
 async function startExport(kind, { forceTransparent = false, morph = false, seq = false } = {}) {
   if (exporting || recorder.isRecording) return;
 
@@ -729,10 +747,14 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
   // de cualquier otra cosa: el navegador solo deja abrir el selector justo
   // después de un click.
   let dirHandle = null;
+  let fileHandle = null;
+  let targetNote = "";
   if (kind === "seq") {
     const target = await askSaveTarget();
     if (!target) return;
     dirHandle = target.dirHandle;
+    fileHandle = target.fileHandle ?? null;
+    targetNote = target.note;
   }
 
   // El PNG animado "sin fondo" siempre es transparente. Con fondo transparente
@@ -760,7 +782,14 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
       height: logicalH,
       transparent,
       includeVideo,
-      onProgress: ({ phase, i, total }) => (recInfo.textContent = `${phase} ${i}/${total}${note}`),
+      onProgress: ({ phase, i, total }) => {
+        // tiempo restante: se estima con lo que tardaron los cuadros hechos hasta ahora
+        const nowMs = performance.now();
+        if (i === 0) exportT0 = nowMs;
+        const eta = phase === "dibujando cuadros" && i > 2 ? ((nowMs - exportT0) / i) * (total - i) : 0;
+        const etaTxt = eta > 1500 ? ` · faltan ~${eta > 90000 ? Math.round(eta / 60000) + " min" : Math.round(eta / 1000) + " s"}` : "";
+        recInfo.textContent = `${phase} ${i}/${total}${etaTxt}${note}`;
+      },
       isCancelled: () => exportCancel,
     };
 
@@ -771,8 +800,14 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
       while (scale > 1 && !fits(scale)) scale--;
       if (scale !== Math.round(globalParams.pngScale)) note += ` · la resolución se bajó a ×${scale}: más grande no aguanta el navegador`;
       if (scale > 1) note += ` · ${common.width * scale}×${common.height * scale} px`;
-      const r = await exportPngSequence({ ...common, scale, seconds: seq ? scene.seqTotal() : morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, morph, seq });
-      recInfo.textContent = `listo: ${r.frames} PNG ${r.mode === "carpeta" ? "en la carpeta que elegiste" : "en un ZIP descargado"}${note}`;
+      note += targetNote;
+      const r = await exportPngSequence({ ...common, scale, seconds: seq ? scene.seqTotal() : morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, fileHandle, morph, seq });
+      const where = r.mode === "carpeta" ? "en la carpeta que elegiste" : r.mode === "archivo" ? "en el ZIP que elegiste" : "en un ZIP descargado";
+      recInfo.textContent = r.cancelled
+        ? `cancelado: se guardaron los ${r.frames} cuadros que ya estaban hechos ${where}${note}`
+        : r.full
+          ? `listo hasta donde alcanzó la memoria: ${r.frames} PNG ${where} · para más cuadros guardá en un archivo o carpeta (en "Exportar animación")${note}`
+          : `listo: ${r.frames} PNG ${where}${note}`;
     } else {
       const run = kind === "gif" ? exportGif : exportApng;
       const r = await run({ ...common, seconds: globalParams.animSeconds, fps: globalParams.animFps, outWidth: globalParams.animWidth });
@@ -780,7 +815,7 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
       showPreview(r, note);
     }
   } catch (e) {
-    recInfo.textContent = e.message === "cancelado" ? "exportación cancelada" : `error: ${e.message}`;
+    recInfo.textContent = e.message === "cancelado" ? "exportación cancelada" : e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
   } finally {
     exporting = false;
     recBtn.classList.remove("recording");

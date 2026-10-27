@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027104309";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027104309";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027111713";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027111713";
 
 export { crc32 };
 
@@ -79,6 +79,73 @@ export class ZipWriter {
     end.setUint32(16, cdStart, true);
     this.parts.push(end.buffer);
     return new Blob(this.parts, { type: "application/zip" });
+  }
+}
+
+// ZIP que se escribe DE A POCO en un archivo del disco (File System Access): cada imagen se
+// graba apenas está lista y no se acumula en memoria, así aguanta miles de cuadros y
+// lienzos enormes. Mismo formato que ZipWriter (sin compresión).
+export class ZipStream {
+  constructor(writable) {
+    this.w = writable;
+    this.entries = [];
+    this.offset = 0;
+    this.bytes = 0;
+  }
+
+  async add(name, data) {
+    const nameBytes = new TextEncoder().encode(name);
+    const crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true);
+    h.setUint16(4, 20, true);
+    h.setUint16(6, 0x0800, true);
+    h.setUint16(8, 0, true);
+    h.setUint16(10, 0, true);
+    h.setUint16(12, 0x21, true);
+    h.setUint32(14, crc, true);
+    h.setUint32(18, data.length, true);
+    h.setUint32(22, data.length, true);
+    h.setUint16(26, nameBytes.length, true);
+    h.setUint16(28, 0, true);
+    await this.w.write(new Uint8Array(h.buffer));
+    await this.w.write(nameBytes);
+    await this.w.write(data);
+    this.entries.push({ nameBytes, crc, size: data.length, offset: this.offset });
+    this.offset += 30 + nameBytes.length + data.length;
+    this.bytes += data.length;
+  }
+
+  // escribe el índice del ZIP y cierra el archivo
+  async finish() {
+    const cdStart = this.offset;
+    let cdSize = 0;
+    for (const e of this.entries) {
+      const h = new DataView(new ArrayBuffer(46));
+      h.setUint32(0, 0x02014b50, true);
+      h.setUint16(4, 20, true);
+      h.setUint16(6, 20, true);
+      h.setUint16(8, 0x0800, true);
+      h.setUint16(10, 0, true);
+      h.setUint16(12, 0, true);
+      h.setUint16(14, 0x21, true);
+      h.setUint32(16, e.crc, true);
+      h.setUint32(20, e.size, true);
+      h.setUint32(24, e.size, true);
+      h.setUint16(28, e.nameBytes.length, true);
+      h.setUint32(42, e.offset, true);
+      await this.w.write(new Uint8Array(h.buffer));
+      await this.w.write(e.nameBytes);
+      cdSize += 46 + e.nameBytes.length;
+    }
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true);
+    end.setUint16(8, this.entries.length, true);
+    end.setUint16(10, this.entries.length, true);
+    end.setUint32(12, cdSize, true);
+    end.setUint32(16, cdStart, true);
+    await this.w.write(new Uint8Array(end.buffer));
+    await this.w.close();
   }
 }
 
@@ -229,7 +296,7 @@ async function renderAnimation(o, onFrame) {
       scene.draw(ctx, W, H, audioFrames[i], dt);
 
       await onFrame(canvas, i);
-      if (i % 4 === 3) await new Promise((r) => setTimeout(r)); // deja respirar al navegador
+      await new Promise((r) => setTimeout(r)); // deja respirar al navegador en cada cuadro (si no, la página se siente trabada)
     }
   } finally {
     // se deja todo como estaba
@@ -256,14 +323,25 @@ async function renderAnimation(o, onFrame) {
 export async function exportPngSequence(o) {
   const name = `${o.seq ? "linea-de-tiempo" : o.morph ? "transformacion" : "secuencia-png"}-${stampNow()}`;
   const { width: W, height: H, seconds, fps, transparent } = o;
+  const K = Math.max(1, Math.round(o.scale ?? 1));
 
+  // adónde va: una carpeta, un archivo ZIP que se escribe de a poco, o un ZIP en memoria que se descarga al final
   let sub = null;
-  const zip = o.dirHandle ? null : new ZipWriter();
-  if (o.dirHandle) sub = await o.dirHandle.getDirectoryHandle(name, { create: true });
+  let zip = null;
+  let mode = "zip";
+  if (o.dirHandle) {
+    sub = await o.dirHandle.getDirectoryHandle(name, { create: true });
+    mode = "carpeta";
+  } else if (o.fileHandle) {
+    zip = new ZipStream(await o.fileHandle.createWritable());
+    mode = "archivo";
+  } else {
+    zip = new ZipWriter();
+  }
 
   const readme =
     `Secuencia de PNG exportada del Visualizador de sonido${o.seq ? " (línea de tiempo de etapas: conjuntos que se transforman uno en otro, de la primera etapa a la última)" : o.morph ? " (un conjunto que se transforma en otro: el primer cuadro es el conjunto de origen y el último el de destino)" : ""}.\n\n` +
-    `Tamaño: ${W * Math.max(1, Math.round(o.scale ?? 1))} x ${H * Math.max(1, Math.round(o.scale ?? 1))} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
+    `Tamaño: ${W * K} x ${H * K} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
     `Fondo: ${transparent ? "transparente (solo los colores)" : "con color de fondo"}\n` +
     `Video de fondo: ${o.includeVideo === false ? "no incluido" : "incluido"}\n\n` +
     `Esto es una carpeta con UNA IMAGEN POR CUADRO: al reproducirlas en orden se ven en movimiento.\n\n` +
@@ -272,9 +350,15 @@ export async function exportPngSequence(o) {
     `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${fps} cuadros/seg.\n` +
     `El audio no va en las imágenes: importá el archivo de audio original aparte.\n`;
 
-  let frames = 0;
-  await renderAnimation(o, async (canvas, i) => {
-    const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+  // Los cuadros se codifican y se escriben EN PARALELO con el dibujo del siguiente:
+  // toBlob toma la foto del canvas en el momento, así que se puede seguir dibujando
+  // mientras se codifica. Se limita a pocos cuadros pendientes para no llenar la memoria.
+  const MAX_PENDING = 3;
+  let saved = 0;
+  let failure = null;
+  let writeChain = Promise.resolve();
+  const pending = [];
+  const writeOne = async (blob, i) => {
     const file = `${name}_${pad(i + 1)}.png`;
     if (sub) {
       const fh = await sub.getFileHandle(file, { create: true });
@@ -282,21 +366,64 @@ export async function exportPngSequence(o) {
       await w.write(blob);
       await w.close();
     } else {
-      zip.add(`${name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
-      if (zip.bytes > 1.5e9) throw new Error("__lleno__"); // se corta y se guarda lo hecho hasta acá
+      await zip.add(`${name}/${file}`, new Uint8Array(await blob.arrayBuffer()));
+      if (zip instanceof ZipWriter && zip.bytes > 1.5e9) memoryFull = true; // el ZIP en memoria no aguanta más: se corta y se guarda lo hecho
     }
-    frames = i + 1;
-  }).catch((e) => {
-    if (e.message !== "__lleno__") throw e;
-  });
+    saved++;
+  };
+
+  let cancelled = false;
+  let memoryFull = false;
+  try {
+    await renderAnimation(o, async (canvas, i) => {
+      if (failure) throw failure;
+      if (memoryFull) throw new Error("__lleno__");
+      const blobPromise = new Promise((res) => canvas.toBlob(res, "image/png")); // (la foto se toma ya)
+      const task = (async () => {
+        const blob = await blobPromise;
+        if (!blob) {
+          failure = new Error(
+            "el navegador no pudo armar la imagen de este tamaño (o se quedó sin memoria): bajá el tamaño del lienzo o la resolución (×) y probá de nuevo"
+          );
+          failure.friendly = true;
+          throw failure;
+        }
+        // las escrituras van de a una, en orden
+        writeChain = writeChain.then(() => writeOne(blob, i));
+        await writeChain;
+      })();
+      task.catch(() => {}); // (el error se atiende abajo)
+      pending.push(task);
+      // si ya hay muchos cuadros esperando, se espera al más viejo antes de seguir
+      while (pending.length >= MAX_PENDING) await pending.shift();
+      if (failure) throw failure;
+    });
+  } catch (e) {
+    if (e.message === "cancelado") cancelled = true;
+    else if (e.message === "__lleno__") memoryFull = true;
+    else {
+      // un error de verdad: se cierra lo que haya y se avisa
+      try {
+        await Promise.allSettled(pending);
+        if (zip instanceof ZipStream) await zip.finish();
+      } catch {}
+      throw e;
+    }
+  }
+  await Promise.allSettled(pending);
+  await writeChain.catch(() => {});
 
   if (sub) {
     const fh = await sub.getFileHandle("LEEME.txt", { create: true });
     const w = await fh.createWritable();
     await w.write(readme);
     await w.close();
+  } else if (zip instanceof ZipStream) {
+    o.onProgress?.({ phase: "cerrando el archivo ZIP", i: saved, total: saved });
+    await zip.add(`${name}/LEEME.txt`, new TextEncoder().encode(readme));
+    await zip.finish();
   } else {
-    o.onProgress?.({ phase: "armando el ZIP", i: frames, total: frames });
+    o.onProgress?.({ phase: "armando el ZIP", i: saved, total: saved });
     zip.add(`${name}/LEEME.txt`, new TextEncoder().encode(readme));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(zip.finish());
@@ -304,7 +431,7 @@ export async function exportPngSequence(o) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
   }
-  return { frames, mode: sub ? "carpeta" : "zip", name };
+  return { frames: saved, mode, name, cancelled, full: memoryFull };
 }
 
 // ---------- animaciones de UN SOLO ARCHIVO (PNG animado y GIF) ----------
