@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027115747";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027115747";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027123410";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027123410";
 
 export { crc32 };
 
@@ -155,7 +155,7 @@ export class ZipStream {
 // devuelve analyze() en vivo (graves, medios, agudos, espectro…). Se usa un
 // OfflineAudioContext: se "pausa" el audio justo en el instante de cada cuadro
 // y se lee el analizador, sin necesidad de reproducirlo en tiempo real.
-export async function analyzeAudioFrames(file, seconds, fps, bins = 128) {
+export async function analyzeAudioFrames(file, seconds, fps, bins = 128, offset = 0) {
   const frames = Math.round(seconds * fps);
   if (!file) return Array.from({ length: frames }, () => silentAudio(bins));
 
@@ -189,10 +189,35 @@ export async function analyzeAudioFrames(file, seconds, fps, bins = 128) {
       })
       .catch(() => {});
   }
-  src.start(0);
+  src.start(0, buffer.duration > 0 ? Math.max(0, offset) % buffer.duration : 0); // (offset = desde qué segundo del audio se empieza)
   await off.startRendering();
   for (let i = 0; i < frames; i++) out[i] ??= silentAudio(bins);
   return out;
+}
+
+// Ajusta cómo "se siente" el audio antes de dibujar: ganancia (sube o baja todo lo que
+// reacciona) y suavizado (menos temblor entre un cuadro y otro; 0 = sin suavizar).
+// El suavizado dura lo mismo a cualquier cuadros/seg (se mide como si fueran 30).
+export function adjustAudio(frames, gain = 1, smooth = 0, fps = 30) {
+  const keep = smooth > 0 ? Math.pow(Math.min(0.97, smooth), 30 / fps) : 0;
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  let prev = null;
+  return frames.map((f) => {
+    const cur = {
+      ...f,
+      bass: clamp(f.bass * gain),
+      mid: clamp(f.mid * gain),
+      treble: clamp(f.treble * gain),
+      overall: clamp(f.overall * gain),
+      spectrum: f.spectrum.map((v) => clamp(v * gain)),
+    };
+    if (prev && keep > 0) {
+      for (const k of ["bass", "mid", "treble", "overall"]) cur[k] = prev[k] * keep + cur[k] * (1 - keep);
+      cur.spectrum = cur.spectrum.map((v, i) => (prev.spectrum[i] ?? 0) * keep + v * (1 - keep));
+    }
+    prev = cur;
+    return cur;
+  });
 }
 
 // ---------- render cuadro a cuadro (lo comparten todos los formatos) ----------
@@ -218,13 +243,14 @@ const stampNow = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-
 // buscar el cuadro del video, y dejar todo como estaba al terminar.
 // opciones: scene, videoLayer, globalParams, audioFile, width, height,
 //           seconds, fps, transparent, includeVideo, onProgress, isCancelled
-async function renderAnimation(o, onFrame) {
+export async function renderAnimation(o, onFrame) {
   const { scene, videoLayer, globalParams, width: W, height: H, seconds, fps, transparent } = o;
   const frames = Math.round(seconds * fps);
   const dt = 1 / fps;
 
   o.onProgress?.({ phase: "analizando el audio", i: 0, total: frames });
-  const audioFrames = await analyzeAudioFrames(o.audioFile, seconds, fps);
+  // (opciones de audio: audioOffset = desde qué segundo; audioGain = ganancia; audioSmooth = suavizado)
+  const audioFrames = adjustAudio(await analyzeAudioFrames(o.audioFile, seconds, fps, 128, o.audioOffset ?? 0), o.audioGain ?? 1, o.audioSmooth ?? 0, fps);
   if (o.isCancelled?.()) throw new Error("cancelado");
 
   // se guarda el estado vivo para dejarlo como estaba
@@ -294,6 +320,7 @@ async function renderAnimation(o, onFrame) {
         } else videoLayer.draw(ctx, W, H, globalParams, audioFrames[i], dt);
       }
       scene.draw(ctx, W, H, audioFrames[i], dt);
+      o.onPreview?.(canvas, i, frames); // (opcional) para mostrar una miniatura del cuadro que se acaba de dibujar
 
       await onFrame(canvas, i);
       await new Promise((r) => setTimeout(r)); // deja respirar al navegador en cada cuadro (si no, la página se siente trabada)

@@ -40,6 +40,15 @@ El mouse recorre los conjuntos de arriba hacia abajo: si agarrás algo, se mueve
 
 Al cambiar de conjunto el panel se rearma pero **conserva qué carpetas tenías abiertas** y la posición del scroll.
 
+## Exportador (programa aparte, liviano)
+
+Una página separada, **`exportador.html`**, hecha solo para exportar (se abre desde "Exportar animación" → **🚀 abrir el Exportador**, o directo en `.../exportador.html`). No tiene el panel ni el dibujo en vivo del programa principal, así que **no se traba**: arma cada cuadro uno por uno. Usa los mismos archivos de dibujo que el programa principal, por lo que el resultado es idéntico. Tiene cuatro cosas:
+1. **Tus conjuntos guardados:** los 💾 del programa principal (viven en el mismo navegador; también aparecen los de la lista de todos 🌐 y se pueden importar desde un archivo). Tildás cuáles **incluir** (si son varios salen todos juntos, cada uno como lo guardaste) y cuáles **reaccionan al audio**.
+2. **Audios:** cargás uno o varios (se ve su duración), elegís cuál usar y **desde qué segundo** empezar. Un gráfico muestra cómo suena (graves, medios y agudos) y qué zona se va a exportar.
+3. **Cómo reacciona:** **fuerza del audio** (sube o baja todo lo que reacciona; en 0 no reacciona), **suavizado** (menos temblor entre cuadros) y tres multiplicadores que se aplican sobre lo que cada conjunto ya tenía guardado: **graves**, **medios** y **general** (×1 = como lo guardaste). Con **▶ probar 4 segundos** se arma una miniatura (desde el segundo que elijas) para ver cómo reacciona sin exportar todo.
+4. **Exportar en secuencia de PNG:** tamaño (con presets y personalizado), **resolución ×1 a ×4**, cuadros/seg, duración (por defecto lo que queda del audio), **sin fondo** o con color, y **dónde se guarda** (un archivo ZIP que se escribe de a poco, un ZIP que se descarga solo o una carpeta). Muestra una miniatura del cuadro que se está haciendo, la barra de avance con **cuánto falta**, y si cancelás **se guarda lo que ya estaba hecho**. Tus elecciones quedan guardadas.
+- Por ahora no incluye video de fondo, transformaciones ni línea de tiempo: eso queda en el programa principal.
+
 ## Rendimiento: si la compu se traba
 
 Carpeta **"Rendimiento (si la compu se traba)"** (arriba, debajo de "Conjuntos"). Tiene tres cosas:

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exportador</title>
+  <link rel="stylesheet" href="exportador.css?v=20261027123410" />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Exportador</h1>
+      <p class="sub">Un programa aparte, liviano, solo para exportar: tus conjuntos guardados, reaccionando a un audio, en secuencia de PNG. No dibuja en vivo, así que no se traba.</p>
+      <p class="sub"><a href="index.html">← volver al programa principal</a></p>
+    </header>
+
+    <!-- 1 · conjuntos guardados -->
+    <section class="card">
+      <h2>1 · Tus conjuntos guardados</h2>
+      <p id="noPresets" class="aviso" hidden>
+        Todavía no hay conjuntos guardados en este navegador. Guardalos en el programa principal con <b>💾 guardar este conjunto</b>, o importá un archivo de conjuntos:
+        <input type="file" id="importFile" accept=".json,application/json" />
+      </p>
+      <div class="rowhead"><span></span><span>incluir</span><span>reacciona al audio</span></div>
+      <div id="conjList"></div>
+      <div class="actions small">
+        <button id="allOn">marcar todos</button>
+        <button id="allOff">ninguno</button>
+      </div>
+      <p class="hint">Cada conjunto se dibuja como lo guardaste (colores, tamaño, posición, movimiento). Si tildás varios, salen todos juntos en la misma imagen.</p>
+    </section>
+
+    <!-- 2 · audio -->
+    <section class="card">
+      <h2>2 · Audio</h2>
+      <label class="row"><span>cargar audios</span><input type="file" id="audioIn" accept="audio/*" multiple /></label>
+      <div id="audioList"></div>
+      <label class="row"><span>desde el segundo</span><input type="number" id="offset" min="0" step="0.5" value="0" /></label>
+      <canvas id="wave" width="640" height="130"></canvas>
+      <p class="hint" id="waveHint">Cargá un audio para ver cómo suena: <span class="k kb">graves</span> <span class="k km">medios</span> <span class="k kt">agudos</span>. La zona clara es lo que se va a exportar.</p>
+    </section>
+
+    <!-- 3 · reacción -->
+    <section class="card">
+      <h2>3 · Cómo reacciona al audio</h2>
+      <label class="row"><span>fuerza del audio</span><input type="range" id="gain" min="0" max="4" step="0.05" /><output id="gainOut"></output></label>
+      <label class="row"><span>suavizado</span><input type="range" id="smooth" min="0" max="0.95" step="0.01" /><output id="smoothOut"></output></label>
+      <label class="row"><span>reacción a graves</span><input type="range" id="kBass" min="0" max="4" step="0.05" /><output id="kBassOut"></output></label>
+      <label class="row"><span>reacción a medios</span><input type="range" id="kMid" min="0" max="4" step="0.05" /><output id="kMidOut"></output></label>
+      <label class="row"><span>reacción general</span><input type="range" id="kAll" min="0" max="4" step="0.05" /><output id="kAllOut"></output></label>
+      <div class="actions small"><button id="resetReact">volver a lo normal (×1)</button></div>
+      <p class="hint">
+        <b>fuerza del audio</b>: sube o baja todo lo que reacciona (en 0 no reacciona nada). <b>suavizado</b>: menos temblor entre un cuadro y otro.
+        Los otros tres multiplican la reacción que cada conjunto ya tenía guardada: <b>graves</b>, <b>medios</b> y <b>general</b> (×1 = como lo guardaste).
+      </p>
+    </section>
+
+    <!-- 4 · probar -->
+    <section class="card">
+      <h2>4 · Probar antes de exportar</h2>
+      <label class="row"><span>probar desde el segundo</span><input type="range" id="testAt" min="0" max="60" step="0.5" value="0" /><output id="testAtOut"></output></label>
+      <div class="actions small"><button id="test">▶ probar 4 segundos (miniatura)</button></div>
+      <canvas id="testCanvas" width="480" height="270"></canvas>
+      <p class="hint" id="testHint">Arma una vista previa chica con los ajustes de arriba, para ver cómo reacciona sin exportar todo.</p>
+    </section>
+
+    <!-- 5 · exportar -->
+    <section class="card">
+      <h2>5 · Exportar secuencia de PNG</h2>
+      <label class="row"><span>tamaño</span>
+        <select id="preset">
+          <option value="1920x1080">Full HD 1920 × 1080</option>
+          <option value="1280x720">HD 1280 × 720</option>
+          <option value="3840x2160">4K 3840 × 2160</option>
+          <option value="1080x1920">vertical 1080 × 1920</option>
+          <option value="1080x1080">cuadrado 1080 × 1080</option>
+          <option value="custom">personalizado</option>
+        </select>
+      </label>
+      <label class="row"><span>ancho (px)</span><input type="number" id="w" min="64" max="32000" step="2" /></label>
+      <label class="row"><span>alto (px)</span><input type="number" id="h" min="64" max="16000" step="2" /></label>
+      <label class="row"><span>resolución</span>
+        <select id="scale"><option value="1">×1 (ese tamaño)</option><option value="2">×2 (el doble)</option><option value="3">×3</option><option value="4">×4 (muy pesado)</option></select>
+      </label>
+      <p class="hint" id="finalSize"></p>
+      <label class="row"><span>cuadros/seg</span>
+        <select id="fps"><option value="24">24</option><option value="30">30</option><option value="60">60</option></select>
+      </label>
+      <label class="row"><span>duración (s)</span><input type="number" id="secs" min="0.5" max="1800" step="0.5" /></label>
+      <label class="row"><span>usar lo que queda del audio</span><input type="checkbox" id="useAudioLen" /></label>
+      <label class="row"><span>sin fondo (transparente)</span><input type="checkbox" id="transparent" /></label>
+      <label class="row" id="bgRow"><span>color de fondo</span><input type="color" id="bg" /></label>
+      <label class="row"><span>guardar en</span>
+        <select id="dest">
+          <option value="zipfile">un archivo ZIP que elijo (se escribe de a poco; lo mejor)</option>
+          <option value="zip">un ZIP que se descarga solo (se arma en memoria)</option>
+          <option value="folder">una carpeta que elijo</option>
+        </select>
+      </label>
+      <p class="hint" id="destHint"></p>
+      <div class="actions">
+        <button id="go" class="primary">▶ Exportar secuencia de PNG</button>
+        <button id="cancel" disabled>■ Cancelar (se guarda lo hecho)</button>
+      </div>
+      <progress id="bar" value="0" max="1"></progress>
+      <p id="status" class="status">Listo para exportar.</p>
+      <canvas id="preview" width="320" height="180"></canvas>
+    </section>
+  </main>
+  <script type="module" src="js/exportador.js?v=20261027123410"></script>
+</body>
+</html>
