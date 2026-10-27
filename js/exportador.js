@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027160304";
-import { AudioEngine } from "./audioEngine.js?v=20261027160304";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027160304";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027160304";
+import { Scene } from "./scene.js?v=20261027160730";
+import { AudioEngine } from "./audioEngine.js?v=20261027160730";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027160730";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027160730";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -57,7 +57,7 @@ function renderConjuntos() {
     const inc = document.createElement("input");
     inc.type = "checkbox";
     inc.className = "inc";
-    inc.checked = st ? !!st.inc : false;
+    inc.checked = prefs.incAll ? (st ? !!st.inc : true) : true; // (por defecto entran todos; después queda lo que tildaste)
     const re = document.createElement("input");
     re.type = "checkbox";
     re.className = "re";
@@ -664,6 +664,7 @@ function save() {
     localStorage.setItem(
       PREFS_KEY,
       JSON.stringify({
+        incAll: true,
         order: [...document.querySelectorAll(".crow")].map((r) => r.dataset.name),
         conj: Object.fromEntries([...document.querySelectorAll(".crow")].map((r) => [r.dataset.name, { inc: r.querySelector(".inc").checked, re: r.querySelector(".re").checked }])),
         gain: +$("gain").value,
