@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027124532";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027124532";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027125142";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027125142";
 
 export { crc32 };
 
@@ -155,7 +155,7 @@ export class ZipStream {
 // devuelve analyze() en vivo (graves, medios, agudos, espectro…). Se usa un
 // OfflineAudioContext: se "pausa" el audio justo en el instante de cada cuadro
 // y se lee el analizador, sin necesidad de reproducirlo en tiempo real.
-export async function analyzeAudioFrames(file, seconds, fps, bins = 128, offset = 0) {
+export async function analyzeAudioFrames(file, seconds, fps, bins = 128, offset = 0, loop = true) {
   const frames = Math.round(seconds * fps);
   if (!file) return Array.from({ length: frames }, () => silentAudio(bins));
 
@@ -167,7 +167,7 @@ export async function analyzeAudioFrames(file, seconds, fps, bins = 128, offset 
   const off = new OfflineAudioContext(1, Math.max(Math.ceil(seconds * sr), 256), sr);
   const src = off.createBufferSource();
   src.buffer = buffer;
-  src.loop = true; // igual que en vivo: si el audio es más corto, se repite
+  src.loop = loop; // (con loop, si el audio es más corto se repite; sin loop, después de que termina hay silencio)
   const analyser = off.createAnalyser();
   analyser.fftSize = 512;
   // el analizador suaviza una vez por lectura; en vivo se lee ~60 veces por
@@ -189,7 +189,7 @@ export async function analyzeAudioFrames(file, seconds, fps, bins = 128, offset 
       })
       .catch(() => {});
   }
-  src.start(0, buffer.duration > 0 ? Math.max(0, offset) % buffer.duration : 0); // (offset = desde qué segundo del audio se empieza)
+  src.start(0, buffer.duration > 0 ? (loop ? Math.max(0, offset) % buffer.duration : Math.min(Math.max(0, offset), buffer.duration)) : 0); // (offset = desde qué segundo del audio se empieza)
   await off.startRendering();
   for (let i = 0; i < frames; i++) out[i] ??= silentAudio(bins);
   return out;
@@ -250,7 +250,7 @@ export async function renderAnimation(o, onFrame) {
 
   o.onProgress?.({ phase: "analizando el audio", i: 0, total: frames });
   // (opciones de audio: audioOffset = desde qué segundo; audioGain = ganancia; audioSmooth = suavizado)
-  const audioFrames = adjustAudio(await analyzeAudioFrames(o.audioFile, seconds, fps, 128, o.audioOffset ?? 0), o.audioGain ?? 1, o.audioSmooth ?? 0, fps);
+  const audioFrames = adjustAudio(await analyzeAudioFrames(o.audioFile, seconds, fps, 128, o.audioOffset ?? 0, o.audioLoop ?? true), o.audioGain ?? 1, o.audioSmooth ?? 0, fps);
   if (o.isCancelled?.()) throw new Error("cancelado");
 
   // se guarda el estado vivo para dejarlo como estaba

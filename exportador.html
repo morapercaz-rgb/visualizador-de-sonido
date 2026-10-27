@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Exportador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261027124532" />
+  <link rel="stylesheet" href="exportador.css?v=20261027125142" />
 </head>
 <body>
   <main>
@@ -35,6 +35,8 @@
       <h2>2 · Audio</h2>
       <label class="row"><span>cargar audios</span><input type="file" id="audioIn" accept="audio/*" multiple /></label>
       <div id="audioList"></div>
+      <label class="row"><span>repetir el audio (loop)</span><input type="checkbox" id="loop" /></label>
+      <p class="hint" id="loopHint">Sin loop, el audio suena una sola vez y después hay silencio (los conjuntos dejan de reaccionar).</p>
       <label class="row"><span>desde el segundo</span><input type="number" id="offset" min="0" step="0.5" value="0" /></label>
       <canvas id="wave" width="640" height="130"></canvas>
       <p class="hint" id="waveHint">Cargá un audio para ver cómo suena: <span class="k kb">graves</span> <span class="k km">medios</span> <span class="k kt">agudos</span>. La zona clara es lo que se va a exportar.</p>
@@ -121,6 +123,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/exportador.js?v=20261027124532"></script>
+  <script type="module" src="js/exportador.js?v=20261027125142"></script>
 </body>
 </html>

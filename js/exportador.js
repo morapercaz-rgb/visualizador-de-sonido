@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027124532";
-import { AudioEngine } from "./audioEngine.js?v=20261027124532";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027124532";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027124532";
+import { Scene } from "./scene.js?v=20261027125142";
+import { AudioEngine } from "./audioEngine.js?v=20261027125142";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027125142";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027125142";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -164,6 +164,8 @@ async function selectAudio(id) {
   $("offset").max = Math.max(0, a.duration - 0.5);
   if (+$("offset").value > a.duration) $("offset").value = 0;
   await audioEng.loadFile(a.file); // se deja listo para sonar en la vista en vivo (no suena hasta tocar ▶)
+  audioEng.audioEl.loop = $("loop").checked;
+  audioEng.audioEl.onended = setPlayLabel; // (sin loop, al terminar el botón vuelve a "reproducir")
   audioEng.audioEl.currentTime = +$("offset").value || 0;
   setPlayLabel();
   if (!a.raw) {
@@ -347,7 +349,7 @@ function liveLoop(now) {
   if (now - infoT > 250) {
     infoT = now;
     if (rec) $("liveInfo").textContent = `● grabando ${fmt((now - rec.start) / 1000)} · ${rec.events.length} movimientos anotados`;
-    else if (audioEng.audioEl) $("liveInfo").textContent = `audio ${fmt(audioEng.audioEl.currentTime)} / ${fmt(audioEng.audioEl.duration || 0)}${audioEng.isPlaying ? "" : " (en pausa)"}`;
+    else if (audioEng.audioEl) $("liveInfo").textContent = `audio ${fmt(audioEng.audioEl.currentTime)} / ${fmt(audioEng.audioEl.duration || 0)}${audioEng.isPlaying ? "" : audioEng.audioEl.ended ? " (terminó)" : " (en pausa)"}`;
   }
 }
 
@@ -399,11 +401,16 @@ $("playBtn").addEventListener("click", () => {
     $("liveInfo").textContent = "Primero cargá un audio (paso 2).";
     return;
   }
+  if (!audioEng.isPlaying && audioEng.audioEl.ended) audioEng.audioEl.currentTime = +$("offset").value || 0; // (si había terminado, vuelve a empezar)
   audioEng.isPlaying ? audioEng.pause() : audioEng.play();
   setPlayLabel();
 });
 $("recenter").addEventListener("click", () => liveScene?.conjuntos.forEach((c) => c.engine.resetPiece()));
 $("restart").addEventListener("click", () => rebuildLive("Empezó de nuevo, con los conjuntos como los guardaste."));
+$("loop").addEventListener("change", () => {
+  if (audioEng.audioEl) audioEng.audioEl.loop = $("loop").checked;
+  save();
+});
 $("handles").addEventListener("change", () => liveScene?.conjuntos.forEach((c) => (c.params.mixHandles = $("handles").checked)));
 
 $("recMoves").addEventListener("click", () => {
@@ -438,6 +445,7 @@ $("recMoves").addEventListener("click", () => {
       conj: liveScene.conjuntos.map((c) => ({ state: c.engine.exportState(), spin: c.spinAngle })),
       audioT: audioEng.audioEl?.currentTime ?? 0,
       audioId: active()?.id ?? null,
+      loop: $("loop").checked,
     },
   };
   $("recMoves").textContent = "■ parar de grabar";
@@ -516,6 +524,7 @@ function save() {
         fps: +$("fps").value,
         secs: +$("secs").value,
         useAudioLen: $("useAudioLen").checked,
+        loop: $("loop").checked,
         transparent: $("transparent").checked,
         bg: $("bg").value,
         dest: $("dest").value,
@@ -652,6 +661,7 @@ async function run(withMoves = false) {
       ...replay,
       audioFile: a?.file ?? null,
       audioOffset: r0 ? r0.snap.audioT : +$("offset").value || 0,
+      audioLoop: r0 ? r0.snap.loop : $("loop").checked,
       audioGain: +$("gain").value,
       audioSmooth: +$("smooth").value,
       width: W,
@@ -708,6 +718,7 @@ $("scale").value = String(prefs.scale ?? 1);
 $("fps").value = String(prefs.fps ?? 30);
 $("secs").value = prefs.secs ?? 10;
 $("useAudioLen").checked = prefs.useAudioLen ?? true;
+$("loop").checked = prefs.loop ?? false; // (por defecto el audio suena una sola vez)
 $("transparent").checked = prefs.transparent ?? true;
 $("bgRow").hidden = $("transparent").checked;
 $("bg").value = prefs.bg ?? "#05050a";
