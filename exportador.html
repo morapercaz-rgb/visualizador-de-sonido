@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Exportador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261027143919" />
+  <link rel="stylesheet" href="exportador.css?v=20261027145640" />
 </head>
 <body>
   <main>
@@ -51,6 +51,12 @@
       <label class="row"><span>reacción a medios</span><input type="range" id="kMid" min="0" max="4" step="0.05" /><output id="kMidOut"></output></label>
       <label class="row"><span>reacción general</span><input type="range" id="kAll" min="0" max="4" step="0.05" /><output id="kAllOut"></output></label>
       <div class="actions small"><button id="resetReact">volver a lo normal (×1)</button></div>
+      <h3>Centro de reacción de las barras</h3>
+      <label class="row"><span>usar mi centro en los conjuntos de barras</span><input type="checkbox" id="fcOn" /></label>
+      <label class="row"><span>dónde (izq ↔ der)</span><input type="range" id="fcX" min="0" max="1" step="0.01" /><output id="fcXOut"></output></label>
+      <label class="row"><span>qué tan ancho</span><input type="range" id="fcW" min="0.03" max="1" step="0.01" /><output id="fcWOut"></output></label>
+      <label class="row"><span>cuánto (0 = parejo)</span><input type="range" id="fcA" min="0" max="1" step="0.01" /><output id="fcAOut"></output></label>
+      <p class="hint">Para los conjuntos en modo <b>barras</b>: dónde reaccionan más al sonido. Sin tildar, cada conjunto usa el centro con el que lo guardaste. También podés hacer <b>click o arrastrar sobre la vista en vivo</b> (paso 4) y el centro va ahí; si grabás tus movimientos, el centro también queda grabado.</p>
       <p class="hint">
         <b>fuerza del audio</b>: sube o baja todo lo que reacciona (en 0 no reacciona nada). <b>suavizado</b>: menos temblor entre un cuadro y otro.
         Los otros tres multiplican la reacción que cada conjunto ya tenía guardada: <b>graves</b>, <b>medios</b> y <b>general</b> (×1 = como lo guardaste).
@@ -123,6 +129,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/exportador.js?v=20261027143919"></script>
+  <script type="module" src="js/exportador.js?v=20261027145640"></script>
 </body>
 </html>

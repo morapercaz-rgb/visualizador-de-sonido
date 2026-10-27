@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027143919";
-import { AudioEngine } from "./audioEngine.js?v=20261027143919";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027143919";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027143919";
+import { Scene } from "./scene.js?v=20261027145640";
+import { AudioEngine } from "./audioEngine.js?v=20261027145640";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027145640";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027145640";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -269,6 +269,7 @@ function buildScene() {
     c.params.reactAudio = r.querySelector(".re").checked;
     // los tres multiplicadores se aplican sobre lo que cada conjunto ya tenía guardado
     c._base = { b: c.params.bassReactivity, m: c.params.midReactivity, o: c.params.overallReactivity };
+    c._focus = { x: c.params.barFocusX, w: c.params.barFocusWidth, a: c.params.barFocusAmount };
     applyReact(c);
   });
   return sc;
@@ -289,7 +290,32 @@ function applyReact(c) {
   c.params.bassReactivity = c._base.b * +$("kBass").value;
   c.params.midReactivity = c._base.m * +$("kMid").value;
   c.params.overallReactivity = c._base.o * +$("kAll").value;
+  applyFocus(c);
 }
+
+// el centro de reacción de las barras: el que elegiste acá (si está tildado) o el que traía el conjunto guardado
+const readFocus = () => ({ on: $("fcOn").checked, x: +$("fcX").value, w: +$("fcW").value, a: +$("fcA").value });
+function applyFocus(c, f = readFocus()) {
+  if (c.params.visualMode !== "bars" || !c._focus) return;
+  const v = f.on ? f : c._focus;
+  c.params.barFocusX = v.x;
+  c.params.barFocusWidth = v.w;
+  c.params.barFocusAmount = v.a;
+}
+const showFocus = () => {
+  $("fcXOut").textContent = (+$("fcX").value).toFixed(2);
+  $("fcWOut").textContent = (+$("fcW").value).toFixed(2);
+  $("fcAOut").textContent = (+$("fcA").value).toFixed(2);
+};
+// lo cambiado a mano queda anotado en la grabación (para repetirlo al exportar)
+function focusChanged() {
+  showFocus();
+  liveScene?.conjuntos.forEach((c) => applyFocus(c));
+  if (rec) rec.events.push({ t: (performance.now() - rec.start) / 1000, k: "f", f: readFocus() });
+  save();
+}
+for (const id of ["fcOn", "fcX", "fcW", "fcA"]) $(id).addEventListener("input", focusChanged);
+$("fcOn").addEventListener("change", focusChanged);
 
 function rebuildLive(message) {
   try {
@@ -346,6 +372,7 @@ function liveLoop(now) {
   liveScene.renderScale = s;
   liveScene.timeline.playing = true; // (los keyframes de los conjuntos también se ven, como saldrán)
   liveScene.draw(liveCtx, W, H, liveAdjust(audioEng.analyze(128), dt), dt, ovCtx);
+  if ($("handles").checked) for (const c of liveScene.conjuntos) drawFocusMarker(ovCtx, c, W, H);
   if (countdown) drawCountdown(ovCtx, W, H, now);
   if (now - infoT > 250) {
     infoT = now;
@@ -353,6 +380,46 @@ function liveLoop(now) {
     else if (rec) $("liveInfo").textContent = `● grabando ${fmt(Math.max(0, now - rec.start) / 1000)} · ${rec.events.length} movimientos anotados`;
     else if (audioEng.audioEl) $("liveInfo").textContent = `audio ${fmt(audioEng.audioEl.currentTime)} / ${fmt(audioEng.audioEl.duration || 0)}${audioEng.isPlaying ? "" : audioEng.audioEl.ended ? " (terminó)" : " (en pausa)"}`;
   }
+}
+
+// una marca abajo que muestra dónde está el centro de reacción de las barras (solo en pantalla, nunca en lo exportado)
+function drawFocusMarker(ctx, c, w, h) {
+  if (!c.visible || c.params.visualMode !== "bars" || !(c.params.barFocusAmount > 0) || !c.xf) return;
+  const fx = c.params.barFocusX * w, half = c.params.barFocusWidth * w;
+  const a = liveScene._map(c.xf, { x: Math.max(0, fx - half), y: h });
+  const b = liveScene._map(c.xf, { x: Math.min(w, fx + half), y: h });
+  const m = liveScene._map(c.xf, { x: fx, y: h });
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y - 4);
+  ctx.lineTo(b.x, b.y - 4);
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(m.x, m.y - 6);
+  ctx.lineTo(m.x - 8, m.y - 22);
+  ctx.lineTo(m.x + 8, m.y - 22);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// click / arrastre sobre el lienzo cuando no se agarra nada: pone el centro de reacción de las barras
+let focusDrag = false;
+function dragFocus(p) {
+  const c = liveScene?.conjuntos.find((x) => x.visible && x.params.visualMode === "bars");
+  if (!c) return false;
+  const q = liveScene._toLocal(c, p.x, p.y);
+  const W = logicalSize()[0];
+  $("fcX").value = Math.min(1, Math.max(0, q.x / W));
+  if (!$("fcOn").checked) {
+    $("fcOn").checked = true; // al mover el centro por primera vez se activa solo (si no, no se notaría)
+    if (!(+$("fcA").value > 0)) $("fcA").value = 0.85;
+  }
+  focusChanged();
+  return true;
 }
 
 // el mouse sobre la vista en vivo (mismo manejo que en el programa principal)
@@ -370,6 +437,11 @@ liveCv.addEventListener("pointerdown", (e) => {
       liveCv.setPointerCapture(e.pointerId);
     } catch {} // (si el puntero ya no está activo, no pasa nada)
     liveCv.style.cursor = "grabbing";
+  } else if (dragFocus(p)) {
+    focusDrag = true;
+    try {
+      liveCv.setPointerCapture(e.pointerId);
+    } catch {}
   }
   note("d", p, e.altKey);
 });
@@ -377,12 +449,14 @@ liveCv.addEventListener("pointermove", (e) => {
   if (!liveScene) return;
   const p = toLogical(e);
   liveScene.pointerMove(p.x, p.y);
+  if (focusDrag) dragFocus(p);
   if (!liveScene.isDragging) liveCv.style.cursor = liveScene.hover(p.x, p.y) ? "grab" : "default";
   if (rec) note("m", p);
 });
 const up = (e) => {
   if (!liveScene) return;
   liveScene.pointerUp();
+  focusDrag = false;
   liveCv.style.cursor = "default";
   note("u", toLogical(e));
 };
@@ -408,7 +482,10 @@ $("playBtn").addEventListener("click", () => {
   setPlayLabel();
 });
 $("recenter").addEventListener("click", () => liveScene?.conjuntos.forEach((c) => c.engine.resetPiece()));
-$("restart").addEventListener("click", () => rebuildLive("Empezó de nuevo, con los conjuntos como los guardaste."));
+$("restart").addEventListener("click", () => {
+  if (audioEng.audioEl) audioEng.audioEl.currentTime = +$("offset").value || 0; // el audio vuelve al segundo que elegiste
+  rebuildLive("Empezó de nuevo, con los conjuntos como los guardaste y el audio desde el segundo elegido.");
+});
 $("loop").addEventListener("change", () => {
   if (audioEng.audioEl) audioEng.audioEl.loop = $("loop").checked;
   save();
@@ -452,7 +529,7 @@ function beginRec() {
   if (!liveScene) return cancelCountdown();
   // si hay un audio cargado, suena mientras se graba (así los movimientos y el audio quedan sincronizados)
   if (active()) {
-    if (audioEng.audioEl.ended) audioEng.audioEl.currentTime = +$("offset").value || 0;
+    audioEng.audioEl.currentTime = +$("offset").value || 0; // siempre arranca desde el segundo que elegiste en el paso 2
     if (!audioEng.isPlaying) audioEng.play();
     setPlayLabel();
   }
@@ -469,6 +546,7 @@ function beginRec() {
       audioT: audioEng.audioEl?.currentTime ?? 0,
       audioId: active()?.id ?? null,
       loop: $("loop").checked,
+      fc: readFocus(),
     },
   };
   $("recMoves").textContent = "■ parar de grabar";
@@ -579,6 +657,10 @@ function save() {
         bg: $("bg").value,
         dest: $("dest").value,
         offset: +$("offset").value,
+        fcOn: $("fcOn").checked,
+        fcX: +$("fcX").value,
+        fcW: +$("fcW").value,
+        fcA: +$("fcA").value,
       })
     );
   } catch {}
@@ -682,6 +764,8 @@ async function run(withMoves = false) {
       const ev = r0.events;
       let ei = 0;
       const fx = W / r0.W, fy = H / r0.H; // (por si cambió el tamaño entre grabar y exportar)
+      const fc0 = r0.snap.fc ?? readFocus();
+      scene.conjuntos.forEach((c) => applyFocus(c, fc0)); // el centro de las barras arranca como estaba al grabar
       replay = {
         clockStart: r0.snap.clock,
         timelineStart: r0.snap.tl,
@@ -698,6 +782,7 @@ async function run(withMoves = false) {
             if (e.k === "d") ctx.scene.pointerDown(e.x * fx, e.y * fy, e.a);
             else if (e.k === "m") ctx.scene.pointerMove(e.x * fx, e.y * fy);
             else if (e.k === "u") ctx.scene.pointerUp();
+            else if (e.k === "f") ctx.scene.conjuntos.forEach((c) => applyFocus(c, e.f));
             else ctx.scene.doubleClick(e.x * fx, e.y * fy);
           }
         },
@@ -768,6 +853,11 @@ $("scale").value = String(prefs.scale ?? 1);
 $("fps").value = String(prefs.fps ?? 30);
 $("secs").value = prefs.secs ?? 10;
 $("useAudioLen").checked = prefs.useAudioLen ?? true;
+$("fcOn").checked = prefs.fcOn ?? false;
+$("fcX").value = prefs.fcX ?? 0.5;
+$("fcW").value = prefs.fcW ?? 0.35;
+$("fcA").value = prefs.fcA ?? 0.85;
+showFocus();
 $("loop").checked = prefs.loop ?? false; // (por defecto el audio suena una sola vez)
 $("transparent").checked = prefs.transparent ?? true;
 $("bgRow").hidden = $("transparent").checked;
