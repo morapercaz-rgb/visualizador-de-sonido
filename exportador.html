@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Exportador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261027145640" />
+  <link rel="stylesheet" href="exportador.css?v=20261027160304" />
 </head>
 <body>
   <main>
@@ -21,13 +21,13 @@
         Todavía no hay conjuntos guardados en este navegador. Guardalos en el programa principal con <b>💾 guardar este conjunto</b>, o importá un archivo de conjuntos:
         <input type="file" id="importFile" accept=".json,application/json" />
       </p>
-      <div class="rowhead"><span></span><span>incluir</span><span>reacciona al audio</span></div>
+      <div class="rowhead"><span></span><span>incluir</span><span>reacciona al audio</span><span>capa</span></div>
       <div id="conjList"></div>
       <div class="actions small">
         <button id="allOn">marcar todos</button>
         <button id="allOff">ninguno</button>
       </div>
-      <p class="hint">Cada conjunto se dibuja como lo guardaste (colores, tamaño, posición, movimiento). Si tildás varios, salen todos juntos en la misma imagen.</p>
+      <p class="hint">Cada conjunto se dibuja como lo guardaste (colores, tamaño, posición, movimiento). Si tildás varios, salen todos juntos en la misma imagen. Con <b>▲ ▼</b> elegís cuál va al fondo y cuál arriba: el de más abajo en la lista se dibuja encima. Un <b>aura de colores (mezcla)</b> ocupa toda la imagen, así que si queda abajo de todo en la lista <b>tapa a los demás</b>: por eso va primero (al fondo) por defecto.</p>
     </section>
 
     <!-- 2 · audio -->
@@ -129,6 +129,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/exportador.js?v=20261027145640"></script>
+  <script type="module" src="js/exportador.js?v=20261027160304"></script>
 </body>
 </html>

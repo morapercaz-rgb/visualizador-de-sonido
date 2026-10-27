@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027145640";
-import { AudioEngine } from "./audioEngine.js?v=20261027145640";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027145640";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027145640";
+import { Scene } from "./scene.js?v=20261027160304";
+import { AudioEngine } from "./audioEngine.js?v=20261027160304";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027160304";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027160304";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -35,7 +35,14 @@ let cancelFlag = false;
 // ---------- 1 · conjuntos guardados ----------
 
 function renderConjuntos() {
-  const list = listPresets();
+  // el orden de las capas: el que dejaste; sin orden guardado, las auras de colores (mezcla) van al fondo,
+  // porque ocupan toda la imagen y taparían lo que se dibuje antes
+  const order = prefs.order ?? [];
+  const rank = (p) => (order.includes(p.name) ? order.indexOf(p.name) : order.length);
+  const list = listPresets()
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => rank(a.p) - rank(b.p) || (b.p.params.visualMode === "mix") - (a.p.params.visualMode === "mix") || a.i - b.i)
+    .map((x) => x.p);
   $("noPresets").hidden = list.length > 0;
   const box = $("conjList");
   box.replaceChildren();
@@ -66,7 +73,23 @@ function renderConjuntos() {
       onSelectionChanged();
     });
     row.classList.toggle("off", !inc.checked);
-    row.append(name, inc, re);
+    const mv = document.createElement("span");
+    mv.className = "mv";
+    for (const [txt, dir, tip] of [["▲", -1, "subir (queda más al fondo)"], ["▼", 1, "bajar (queda más arriba)"]]) {
+      const b = document.createElement("button");
+      b.textContent = txt;
+      b.title = tip;
+      b.addEventListener("click", () => {
+        const other = dir < 0 ? row.previousElementSibling : row.nextElementSibling;
+        if (!other) return;
+        if (dir < 0) box.insertBefore(row, other);
+        else box.insertBefore(other, row);
+        save();
+        onSelectionChanged();
+      });
+      mv.appendChild(b);
+    }
+    row.append(name, inc, re, mv);
     box.appendChild(row);
   }
   // si no había nada elegido, se marca el primero para que no haya que hacer nada
@@ -321,7 +344,9 @@ function rebuildLive(message) {
   try {
     liveScene = buildScene();
     for (const c of liveScene.conjuntos) c.params.mixHandles = $("handles").checked;
-    $("liveInfo").textContent = message ?? "Listo: movés las auras con el mouse.";
+    const names = liveScene.conjuntos.map((c) => c.name);
+    $("liveInfo").textContent = (message ?? "Listo: movés las auras con el mouse.") +
+      (names.length > 1 ? ` Se dibujan ${names.length}, de atrás para adelante: ${names.join(" → ")}.` : ` Se dibuja: ${names[0]}.`);
   } catch (e) {
     liveScene = null;
     $("liveInfo").textContent = e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
@@ -639,6 +664,7 @@ function save() {
     localStorage.setItem(
       PREFS_KEY,
       JSON.stringify({
+        order: [...document.querySelectorAll(".crow")].map((r) => r.dataset.name),
         conj: Object.fromEntries([...document.querySelectorAll(".crow")].map((r) => [r.dataset.name, { inc: r.querySelector(".inc").checked, re: r.querySelector(".re").checked }])),
         gain: +$("gain").value,
         smooth: +$("smooth").value,
