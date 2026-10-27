@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261027115244";
-import { VideoLayer } from "./videoLayer.js?v=20261027115244";
-import { Scene } from "./scene.js?v=20261027115244";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027115244";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027115244";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027115244";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027115244";
+import { AudioEngine } from "./audioEngine.js?v=20261027115337";
+import { VideoLayer } from "./videoLayer.js?v=20261027115337";
+import { Scene } from "./scene.js?v=20261027115337";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027115337";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027115337";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027115337";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027115337";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -26,6 +26,24 @@ const videoLayer = new VideoLayer();
 // globales (capa de video, efectos de video, fondo)
 const scene = new Scene();
 const globalParams = createDefaultParams();
+
+// Preferencias que quedan guardadas aunque refresques la página: formato de grabación,
+// PNG sin fondo, tamaño del lienzo, calidad, dónde se guarda, etc.
+const PREFS_KEY = "visualizador-de-sonido.preferencias.v1";
+const PREF_KEYS = [
+  "canvasPreset", "canvasW", "canvasH", "previewScale", "showFps",
+  "recFormat", "recFps", "recBitrate", "pngSaveTo", "pngSeconds", "pngScale", "pngFps", "pngTransparent", "pngIncludeVideo",
+  "animSeconds", "animFps", "animWidth", "gifTransparent",
+];
+try {
+  const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
+  for (const k of PREF_KEYS) if (k in saved && typeof saved[k] === typeof globalParams[k]) globalParams[k] = saved[k];
+} catch {}
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(Object.fromEntries(PREF_KEYS.map((k) => [k, globalParams[k]]))));
+  } catch {}
+}
 
 // El panel edita el conjunto seleccionado. Cuando cambia la selección, se suma
 // o se borra un conjunto, se rearma entero — conservando qué carpetas estaban
@@ -53,6 +71,7 @@ function saveSeqSettings() {
   } catch {}
 }
 function saveMorphSettings() {
+  savePrefs();
   saveSeqSettings();
   try {
     const { a, b, seconds, ease, repeat, only, stagger, swirl, scatter } = scene.morph;

@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261027115244";
-import { defaultMixColor } from "./colorUtils.js?v=20261027115244";
+import { listPresets } from "./presets.js?v=20261027115337";
+import { defaultMixColor } from "./colorUtils.js?v=20261027115337";
 
 let mixRebuildTimer = 0;
 
@@ -240,7 +240,7 @@ export function createDefaultParams() {
     showFps: false, // mostrar el contador de cuadros por segundo
 
     // grabación
-    recFormat: "mp4", // mp4 (lo lee After Effects) | webm9 | webm8
+    recFormat: "png", // png (sin fondo, una imagen por cuadro) | mp4 (lo lee After Effects) | webm9 | webm8
     recFps: 30,
     recBitrate: 12, // megabits por segundo
 
