@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261026015525";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261027104309";
 
 const TAU = Math.PI * 2;
 
@@ -492,7 +492,8 @@ export class VisualEngine {
     const hueA = hexToHsl(params.colorA).h;
     const hueB = hexToHsl(params.colorB).h;
 
-    for (const c of this.freeCircles) {
+    for (const [ci, c] of this.freeCircles.entries()) {
+      const col = freeColors(params, c, ci, this.time, hueA, hueB);
       const size = params.freeCircleSize * (1 + audioData.bass * params.bassReactivity * 0.5);
       c.size = size;
 
@@ -521,21 +522,21 @@ export class VisualEngine {
 
       for (const p of c.trail) {
         const a = (this.time - p.born) / life;
-        const hue = lerpHue(hueA, hueB, Math.min(1, a)) + c.hueShift;
         const alpha = Math.pow(1 - a, 1.4) * op;
+        const tt = Math.min(1, a);
         const r = size * (1 - a * 0.55) * 1.6;
         ctx.beginPath();
         if (style === "outline") {
           // estela de aros: cada punto de la estela es un aro que se achica y se apaga
           ctx.arc(p.x, p.y, r * 0.6, 0, TAU);
           ctx.lineWidth = params.outlineWidth;
-          ctx.strokeStyle = colorStr(hue, params, alpha * 0.8);
+          ctx.strokeStyle = col.trail(tt, alpha * 0.8);
           ctx.stroke();
           continue;
         }
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-        g.addColorStop(0, colorStr(hue, params, alpha * 0.4));
-        g.addColorStop(1, colorStr(hue, params, 0));
+        g.addColorStop(0, col.trail(tt, alpha * 0.4));
+        g.addColorStop(1, col.trail(tt, 0));
         ctx.arc(p.x, p.y, r, 0, TAU);
         ctx.fillStyle = g;
         ctx.fill();
@@ -543,7 +544,7 @@ export class VisualEngine {
           ctx.beginPath();
           ctx.arc(p.x, p.y, r * 0.6, 0, TAU);
           ctx.lineWidth = params.outlineWidth;
-          ctx.strokeStyle = colorStr(hue, params, alpha * 0.8);
+          ctx.strokeStyle = col.trail(tt, alpha * 0.8);
           ctx.stroke();
         }
       }
@@ -551,21 +552,17 @@ export class VisualEngine {
       // la cabeza: círculo con centro claro. Siempre lleva un aro finito para
       // que se vea que se puede agarrar (más marcado y del color del círculo
       // si el estilo es contorno o ambos).
-      const headHue = hueA + c.hueShift;
-      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, size);
-      g.addColorStop(0, colorStr(headHue, params, op, 22));
-      g.addColorStop(1, colorStr(headHue, params, op * 0.55));
       warpedPath(ctx, c.x, c.y, size, params, c.hueShift * 0.1, params.deformFree);
       if (style !== "outline") {
-        ctx.fillStyle = g;
-        ctx.fill();
+        paintFreeHead(ctx, c, size, col, params, op, this.time);
+        warpedPath(ctx, c.x, c.y, size, params, c.hueShift * 0.1, params.deformFree); // (las texturas dibujan su propio trazo: se vuelve al círculo para el aro)
       }
       if (style === "fill") {
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = `rgba(255,255,255,${grabbed ? 0.9 : 0.4})`;
       } else {
         ctx.lineWidth = Math.max(params.outlineWidth, 1.5);
-        ctx.strokeStyle = grabbed ? "rgba(255,255,255,0.95)" : colorStr(headHue, params, Math.max(op, 0.5), 15);
+        ctx.strokeStyle = grabbed ? "rgba(255,255,255,0.95)" : col.light(Math.max(op, 0.5));
       }
       ctx.stroke();
 
@@ -855,6 +852,160 @@ function softAura(ctx, x, y, R0, hue, alpha, params, seed, enabled) {
       ctx.arc(0, 0, rr, 0, TAU);
       ctx.fill();
       ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- círculos libres: colores y texturas ----------
+
+const FREE_TEXTURES = new Set(["smooth", "flat", "aura", "glass", "gradient", "stripes", "dots", "rings", "grain"]);
+
+const cssRgba = (c, a) => `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${Math.max(0, Math.min(1, a))})`;
+const mixRgb = (a, b, t) => ({ r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t });
+
+// los colores de UN círculo libre según el modo elegido:
+//   same    → como el resto (el matiz del color A / B del panel + un corrimiento por círculo)
+//   own     → colores propios: A para la cabeza, B para el final de la estela
+//   each    → un color distinto por círculo (de la lista de 6)
+//   rainbow → arcoíris que va girando con el tiempo
+// devuelve funciones que arman el color con la opacidad que se pida
+function freeColors(params, c, index, time, hueA, hueB) {
+  const mode = params.freeColorMode ?? "same";
+  if (mode === "own" || mode === "each") {
+    const head = hexToRgb(mode === "own" ? params.freeColorA : params["freeColor" + ((index % 6) + 1)] ?? "#ff6bd6");
+    const tail = mode === "own" ? hexToRgb(params.freeColorB) : mix2(head);
+    return {
+      head: (a) => cssRgba(head, a),
+      light: (a) => cssRgba(mixRgb(head, { r: 255, g: 255, b: 255 }, 0.55), a),
+      sec: (a) => cssRgba(mode === "own" ? tail : mixRgb(head, { r: 0, g: 0, b: 0 }, 0.45), a),
+      trail: (t, a) => cssRgba(mixRgb(head, tail, t), a),
+    };
+  }
+  const baseHue = mode === "rainbow" ? time * 40 + index * 70 : hueA + c.hueShift;
+  const otherHue = mode === "rainbow" ? baseHue + 150 : hueB + c.hueShift;
+  return {
+    head: (a) => colorStr(baseHue, params, a),
+    light: (a) => colorStr(baseHue, params, a, 22),
+    sec: (a) => colorStr(otherHue, params, a),
+    trail: (t, a) => colorStr(mode === "rainbow" ? baseHue + t * 150 : lerpHue(hueA, hueB, t) + c.hueShift, params, a),
+  };
+}
+// (para "un color por círculo", la estela se apaga hacia el mismo color más claro)
+function mix2(rgb) {
+  return mixRgb(rgb, { r: 255, g: 255, b: 255 }, 0.35);
+}
+
+// dibuja la CABEZA de un círculo libre con la textura elegida (ya sobre su trazo: círculo
+// que puede estar deformado). Todo el patrón queda recortado adentro del círculo.
+function paintFreeHead(ctx, c, size, col, params, op, time) {
+  const tex = FREE_TEXTURES.has(params.freeTexture) ? params.freeTexture : "smooth";
+  const sc = Math.max(0.2, params.freeTextureScale ?? 1);
+  const st = Math.max(0, Math.min(1, params.freeTextureStrength ?? 0.7));
+  const spin = c.hueShift * 0.05 + time * 0.4; // el patrón gira despacio, distinto en cada círculo
+  const x = c.x, y = c.y;
+
+  if (tex === "smooth") {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, size);
+    g.addColorStop(0, col.light(op));
+    g.addColorStop(1, col.head(op * 0.55));
+    ctx.fillStyle = g;
+    ctx.fill();
+    return;
+  }
+  if (tex === "flat") {
+    ctx.fillStyle = col.head(op);
+    ctx.fill();
+    return;
+  }
+  if (tex === "aura") {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, size);
+    g.addColorStop(0, col.head(op));
+    g.addColorStop(0.55, col.head(op * 0.6));
+    g.addColorStop(1, col.head(0));
+    ctx.fillStyle = g;
+    ctx.fill();
+    return;
+  }
+  if (tex === "gradient") {
+    const dx = Math.cos(spin) * size, dy = Math.sin(spin) * size;
+    const g = ctx.createLinearGradient(x - dx, y - dy, x + dx, y + dy);
+    g.addColorStop(0, col.head(op));
+    g.addColorStop(1, col.sec(op));
+    ctx.fillStyle = g;
+    ctx.fill();
+    return;
+  }
+  if (tex === "glass") {
+    const g = ctx.createRadialGradient(x - size * 0.35, y - size * 0.4, size * 0.05, x, y, size);
+    g.addColorStop(0, `rgba(255,255,255,${op * (0.35 + 0.5 * st)})`);
+    g.addColorStop(0.35, col.light(op * 0.9));
+    g.addColorStop(0.85, col.head(op * 0.8));
+    g.addColorStop(1, col.sec(op));
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.beginPath();
+    ctx.ellipse(x - size * 0.3, y - size * 0.42, size * 0.38, size * 0.2, -0.6, 0, TAU);
+    ctx.fillStyle = `rgba(255,255,255,${op * 0.55 * st})`;
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  // los de patrón: base de color + el patrón en el segundo color, recortado al círculo
+  ctx.fillStyle = col.head(op);
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  const sa = op * (0.25 + 0.75 * st);
+  if (tex === "stripes") {
+    const gap = Math.max(3, size * 0.32 * sc);
+    ctx.translate(x, y);
+    ctx.rotate(spin);
+    ctx.strokeStyle = col.sec(sa);
+    ctx.lineWidth = gap * 0.5;
+    for (let d = -size * 1.5; d <= size * 1.5; d += gap) {
+      ctx.beginPath();
+      ctx.moveTo(d, -size * 1.5);
+      ctx.lineTo(d, size * 1.5);
+      ctx.stroke();
+    }
+  } else if (tex === "dots") {
+    const gap = Math.max(4, size * 0.4 * sc);
+    const r = gap * 0.28;
+    ctx.translate(x, y);
+    ctx.rotate(spin * 0.5);
+    ctx.fillStyle = col.sec(sa);
+    let row = 0;
+    for (let yy = -size * 1.4; yy <= size * 1.4; yy += gap * 0.87, row++) {
+      for (let xx = -size * 1.4 + (row % 2 ? gap / 2 : 0); xx <= size * 1.4; xx += gap) {
+        ctx.beginPath();
+        ctx.arc(xx, yy, r, 0, TAU);
+        ctx.fill();
+      }
+    }
+  } else if (tex === "rings") {
+    const gap = Math.max(3, size * 0.3 * sc);
+    ctx.strokeStyle = col.sec(sa);
+    ctx.lineWidth = gap * 0.45;
+    const phase = (time * 8) % gap;
+    for (let rr = phase; rr < size * 1.5; rr += gap) {
+      ctx.beginPath();
+      ctx.arc(x, y, rr, 0, TAU);
+      ctx.stroke();
+    }
+  } else if (tex === "grain") {
+    // granulado: puntitos al azar que cambian unas pocas veces por segundo (como cine)
+    const frame = Math.floor(time * 12);
+    let seed = (frame * 9301 + Math.round(c.hueShift) * 49297 + 233280) % 233280;
+    const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+    const n = Math.round(90 * sc * sc * (size / 28));
+    for (let i = 0; i < n; i++) {
+      const ang = rand() * TAU, rad = Math.sqrt(rand()) * size;
+      ctx.fillStyle = rand() < 0.5 ? col.sec(sa * (0.5 + rand() * 0.5)) : `rgba(255,255,255,${sa * 0.5 * rand()})`;
+      ctx.fillRect(x + Math.cos(ang) * rad, y + Math.sin(ang) * rad, 1.5 * sc, 1.5 * sc);
     }
   }
   ctx.restore();

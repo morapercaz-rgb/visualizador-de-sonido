@@ -228,6 +228,18 @@ Modo **"aura de colores (mezcla)"**: un aura grande hecha de varias luces de dis
 - Cada luz escucha una franja distinta del espectro, así que cada color late a su manera con la música. **tamaño** (hasta 3.000) y **agrandar (×)**, que lo multiplica de ×1 a ×40 para hacer el aura **enorme** (por ejemplo, para un lienzo muy ancho: 600 de tamaño × 40 da luces de 24.000 px), y **opacidad** del aura, y "aplicar deformación" (carpeta "Deformar") la estira o la hace ondular.
 - **mostrar manijas**: apagalo antes de grabar si no querés que los puntitos aparezcan en el video.
 
+## Círculos libres: colores y texturas
+
+Carpeta **"Círculos libres: colores y texturas"** (debajo de "Agarrar y mover"). Primero poné **cantidad de círculos** (también está en "Agarrar y mover"); aparecen en el medio y los agarrás con el mouse. Ahí podés jugar con cómo se ven:
+- **colores:**
+  - **como el resto:** los colores A y B del panel (como siempre).
+  - **colores propios:** aparecen dos selectores, **color de la cabeza** y **color del final de la estela**; la estela va pasando de uno al otro.
+  - **uno distinto por círculo:** seis selectores (círculo 1 a 6); cada círculo toma el suyo.
+  - **arcoíris que gira:** cada círculo recorre todos los colores con el tiempo.
+- **textura** (cómo se ve el relleno de cada círculo): **suave** (como siempre), **liso**, **aura** (se difumina en el borde), **cristal** (con brillo, como una burbuja), **degradado** (de un color a otro, girando despacio), **rayas**, **puntitos**, **anillos** (se mueven hacia afuera) y **granulado** (puntitos al azar que cambian, como cine). **tamaño del dibujo** agranda o achica las rayas, los puntitos y los anillos; **cuánto se nota** sube o baja la fuerza de la textura.
+- Los dibujos usan el segundo color (el de la estela en "colores propios") y quedan recortados adentro del círculo, y giran despacio, cada uno distinto. Con "estilo" en contorno solo se ve el aro (sin textura). Si la mezcla de formas es "luz (suma)", los colores se suman y las rayas o puntitos se ven más claros.
+- También están **tamaño** (hasta 300), **estilo**, **opacidad** y **duración de la estela**. Todo se guarda con el conjunto y vale en las exportaciones. La estela que deja cada círculo usa los mismos colores, con un degradado suave.
+
 ## Agarrar y mover con el mouse
 
 Carpeta "Agarrar y mover (mouse)". El cursor se vuelve una manito cuando estás sobre algo que se puede agarrar.

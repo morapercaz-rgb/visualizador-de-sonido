@@ -9,8 +9,8 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261026015525";
-import { defaultMixColor } from "./colorUtils.js?v=20261026015525";
+import { listPresets } from "./presets.js?v=20261027104309";
+import { defaultMixColor } from "./colorUtils.js?v=20261027104309";
 
 let mixRebuildTimer = 0;
 
@@ -180,6 +180,19 @@ export function createDefaultParams() {
     freeStyle: "fill",
     freeOpacity: 1,
     freeCircleSize: 28,
+    // colores y texturas de los círculos libres
+    freeColorMode: "same", // same (como el resto) | own (colores propios) | each (uno distinto por círculo) | rainbow
+    freeColorA: "#ff6bd6", // color propio de la cabeza
+    freeColorB: "#33aaff", // color propio del final de la estela
+    freeColor1: "#ff3b6b",
+    freeColor2: "#ffb02e",
+    freeColor3: "#3de0ff",
+    freeColor4: "#8a5bff",
+    freeColor5: "#3dff9a",
+    freeColor6: "#ff6bd6",
+    freeTexture: "smooth", // smooth | flat | aura | glass | gradient | stripes | dots | rings | grain
+    freeTextureScale: 1, // tamaño del dibujo de la textura
+    freeTextureStrength: 0.7, // cuánto se nota la textura
     trailLife: 3, // segundos que tarda en borrarse la estela
 
     // capa de video
@@ -668,6 +681,45 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   grabF.addInput(params, "freeCircleSize", { min: 8, max: 120, label: "tamaño" });
   grabF.addInput(params, "trailLife", { min: 0.5, max: 12, label: "duración estela (s)" });
   grabF.addButton({ title: "recentrar pieza y núcleos" }).on("click", () => actions.resetPiece?.());
+
+  // ---- círculos libres: colores y texturas, para jugar con ellos ----
+  const freeF = pane.addFolder({ title: "Círculos libres: colores y texturas" });
+  freeF.addInput(params, "freeCount", { min: 0, max: 12, step: 1, label: "cantidad de círculos" });
+  freeF.addInput(params, "freeCircleSize", { min: 8, max: 300, label: "tamaño" });
+  freeF.addInput(params, "freeColorMode", {
+    options: {
+      "como el resto (colores A / B del panel)": "same",
+      "colores propios (cabeza y estela)": "own",
+      "uno distinto por círculo": "each",
+      "arcoíris que gira": "rainbow",
+    },
+    label: "colores",
+  }).on("change", () => actions.rebuild?.());
+  if (params.freeColorMode === "own") {
+    freeF.addInput(params, "freeColorA", { label: "  color de la cabeza" });
+    freeF.addInput(params, "freeColorB", { label: "  color del final de la estela" });
+  } else if (params.freeColorMode === "each") {
+    for (let i = 1; i <= 6; i++) freeF.addInput(params, "freeColor" + i, { label: `  círculo ${i}` });
+  }
+  freeF.addInput(params, "freeTexture", {
+    options: {
+      "suave (como siempre)": "smooth",
+      "liso": "flat",
+      "aura (se difumina)": "aura",
+      "cristal (con brillo)": "glass",
+      "degradado": "gradient",
+      "rayas": "stripes",
+      "puntitos": "dots",
+      "anillos": "rings",
+      "granulado": "grain",
+    },
+    label: "textura",
+  });
+  freeF.addInput(params, "freeTextureScale", { min: 0.3, max: 3, step: 0.05, label: "  tamaño del dibujo" });
+  freeF.addInput(params, "freeTextureStrength", { min: 0, max: 1, label: "  cuánto se nota" });
+  freeF.addInput(params, "freeStyle", { options: STYLE, label: "estilo (relleno / contorno)" });
+  freeF.addInput(params, "freeOpacity", { min: 0, max: 1, label: "opacidad" });
+  freeF.addInput(params, "trailLife", { min: 0.5, max: 12, label: "duración estela (s)" });
 
   // paleta del modo "según frecuencia": cada fila es un check (prendido o
   // apagado) más su selector de color. Podés dejar 2 activos o los 6.
