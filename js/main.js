@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261027111713";
-import { VideoLayer } from "./videoLayer.js?v=20261027111713";
-import { Scene } from "./scene.js?v=20261027111713";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027111713";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027111713";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027111713";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027111713";
+import { AudioEngine } from "./audioEngine.js?v=20261027115244";
+import { VideoLayer } from "./videoLayer.js?v=20261027115244";
+import { Scene } from "./scene.js?v=20261027115244";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027115244";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027115244";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027115244";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027115244";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -801,6 +801,12 @@ async function startExport(kind, { forceTransparent = false, morph = false, seq 
       if (scale !== Math.round(globalParams.pngScale)) note += ` · la resolución se bajó a ×${scale}: más grande no aguanta el navegador`;
       if (scale > 1) note += ` · ${common.width * scale}×${common.height * scale} px`;
       note += targetNote;
+      const secs = seq ? scene.seqTotal() : morph ? scene.morph.seconds : globalParams.pngSeconds;
+      // aviso: si van a ser muchísimos datos y se guarda en memoria, conviene guardar directo en un archivo
+      const estBytes = common.width * common.height * scale * scale * 0.35 * Math.round(secs * globalParams.pngFps);
+      if (!fileHandle && !dirHandle && estBytes > 8e8) {
+        note += ` · ojo: son muchos datos (unos ${(estBytes / 1e9).toFixed(1)} GB): si se corta o se traba, elegí "un archivo ZIP que elijo" en "guardar en"`;
+      }
       const r = await exportPngSequence({ ...common, scale, seconds: seq ? scene.seqTotal() : morph ? scene.morph.seconds : globalParams.pngSeconds, fps: globalParams.pngFps, dirHandle, fileHandle, morph, seq });
       const where = r.mode === "carpeta" ? "en la carpeta que elegiste" : r.mode === "archivo" ? "en el ZIP que elegiste" : "en un ZIP descargado";
       recInfo.textContent = r.cancelled
