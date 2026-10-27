@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027193242";
-import { AudioEngine } from "./audioEngine.js?v=20261027193242";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261027193242";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027193242";
+import { Scene } from "./scene.js?v=20261027194035";
+import { AudioEngine } from "./audioEngine.js?v=20261027194035";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261027194035";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027194035";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -469,6 +469,10 @@ function liveLoop(now) {
   liveScene.renderScale = s;
   liveScene.timeline.playing = true; // (los keyframes de los conjuntos también se ven, como saldrán)
   liveScene.draw(liveCtx, W, H, liveAdjust(audioEng.analyze(128), dt), dt, ovCtx);
+  if (rec && now - rec.lastS >= 33) {
+    rec.lastS = now;
+    rec.samples.push(sampleScene((now - rec.start) / 1000));
+  }
   if ($("handles").checked) for (const c of liveScene.conjuntos) drawFocusMarker(ovCtx, c, W, H);
   if (countdown) drawCountdown(ovCtx, W, H, now);
   if (now - infoT > 250) {
@@ -634,6 +638,8 @@ function beginRec() {
   rec = {
     start: performance.now(),
     events: [],
+    samples: [], // dónde está cada pieza, luz y círculo en cada instante (así el export no depende de que un clic "pegue")
+    lastS: -1e9,
     W,
     H,
     snap: {
@@ -822,6 +828,55 @@ window.addEventListener("beforeunload", (e) => {
   if (busy) e.preventDefault(); // (si cerrás la pestaña mientras exporta, se pierde)
 });
 
+// Una "foto" de dónde está todo lo que se mueve con el mouse (en coordenadas del tamaño lógico).
+function sampleScene(t) {
+  const r1 = (n) => Math.round(n * 10) / 10;
+  const mv = (m) => [r1(m.x), r1(m.y)];
+  return {
+    t: Math.round(t * 1000) / 1000,
+    c: liveScene.conjuntos.map((c) => {
+      const e = c.engine;
+      return { n: c.name, o: [...mv(e.centerOffset), ...mv(e.coreOffsets.a), ...mv(e.coreOffsets.b)], l: e.lights.map((l) => [r1(l.x), r1(l.y)]), f: e.freeCircles.map((f) => [r1(f.x), r1(f.y), f.hueShift ?? 0, f.size ?? 28]) };
+    }),
+  };
+}
+
+// Pone cada pieza, luz y círculo donde estaban en el instante t de la grabación (entre dos fotos, a medio camino).
+function applySamples(scene, samples, t, fx, fy, cursor) {
+  while (cursor.i + 1 < samples.length && samples[cursor.i + 1].t <= t) cursor.i++;
+  const a = samples[cursor.i], b = samples[cursor.i + 1];
+  const u = b && b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 0;
+  const mix = (p, q) => (q === undefined ? p : p + (q - p) * u);
+  for (const c of scene.conjuntos) {
+    const ca = a.c.find((x) => x.n === c.name);
+    if (!ca) continue;
+    const cb = b?.c.find((x) => x.n === c.name);
+    const e = c.engine;
+    const set = (m, x, y) => {
+      m.x = x * fx;
+      m.y = y * fy;
+      m.vx = 0;
+      m.vy = 0;
+    };
+    const o = ca.o.map((v, k) => mix(v, cb?.o[k]));
+    set(e.centerOffset, o[0], o[1]);
+    set(e.coreOffsets.a, o[2], o[3]);
+    set(e.coreOffsets.b, o[4], o[5]);
+    ca.l.forEach((l, k) => {
+      if (!e.lights[k]) return;
+      const lb = cb?.l.length === ca.l.length ? cb.l[k] : null;
+      set(e.lights[k], mix(l[0], lb?.[0]), mix(l[1], lb?.[1]));
+    });
+    while (e.freeCircles.length > ca.f.length) e.freeCircles.pop();
+    ca.f.forEach((f, k) => {
+      if (!e.freeCircles[k]) e.freeCircles[k] = { x: 0, y: 0, vx: 0, vy: 0, hueShift: f[2], size: f[3], trail: [], lastPush: null };
+      const fb = cb?.f.length === ca.f.length ? cb.f[k] : null;
+      set(e.freeCircles[k], mix(f[0], fb?.[0]), mix(f[1], fb?.[1]));
+    });
+    c.params.freeCount = ca.f.length;
+  }
+}
+
 // Arma la escena tal cual se exporta: o desde la grabación (cada conjunto con el estado que tenía al grabar, emparejado
 // por NOMBRE y en el mismo orden de capas) o desde lo que se ve ahora en el paso 4. Devuelve también cómo repetir el mouse.
 function prepareScene(r0, W, H) {
@@ -856,6 +911,8 @@ function prepareScene(r0, W, H) {
   } else note += " · ⚠ esa grabación es de una versión anterior: las auras salen con su posición guardada (volvé a grabar y queda perfecta)";
   note += " · repitiendo lo que moviste";
   const ev = r0.events;
+  const samples = r0.samples?.length ? r0.samples : null; // (las grabaciones nuevas traen las posiciones; las viejas solo los clics)
+  const cursor = { i: 0 };
   let ei = 0;
   const fx = W / r0.W, fy = H / r0.H; // (por si cambió el tamaño entre grabar y exportar)
   const fc0 = r0.snap.fc ?? readFocus();
@@ -870,15 +927,17 @@ function prepareScene(r0, W, H) {
         tmp.width = tmp.height = 8;
         ctx.scene.draw(tmp.getContext("2d"), ctx.W, ctx.H, ctx.audio, 1e-4);
       }
-      // se aplican los movimientos del mouse que ocurrieron hasta este momento
+      // se aplican los movimientos que ocurrieron hasta este momento
       while (ei < ev.length && ev[ei].t <= t) {
         const e = ev[ei++];
-        if (e.k === "d") ctx.scene.pointerDown(e.x * fx, e.y * fy, e.a);
+        if (e.k === "f") ctx.scene.conjuntos.forEach((c) => applyFocus(c, e.f));
+        else if (samples) continue; // (con posiciones grabadas no hace falta repetir los clics)
+        else if (e.k === "d") ctx.scene.pointerDown(e.x * fx, e.y * fy, e.a);
         else if (e.k === "m") ctx.scene.pointerMove(e.x * fx, e.y * fy);
         else if (e.k === "u") ctx.scene.pointerUp();
-        else if (e.k === "f") ctx.scene.conjuntos.forEach((c) => applyFocus(c, e.f));
         else ctx.scene.doubleClick(e.x * fx, e.y * fy);
       }
+      if (samples) applySamples(ctx.scene, samples, t, fx, fy, cursor);
     },
   };
   return { scene, replay, note };
@@ -939,7 +998,7 @@ async function checkExport() {
       if (r0) {
         const kinds = {};
         for (const e of r0.events) kinds[e.k] = (kinds[e.k] ?? 0) + 1;
-        out.push(`  (grabación: ${r0.W}×${r0.H}, ${r0.duration.toFixed(1)} s, reloj ${(+r0.snap.clock).toFixed(1)}, línea de tiempo ${(+r0.snap.tl).toFixed(1)}, eventos ${JSON.stringify(kinds)}, ${(r0.snap.conj ?? []).every((x) => x.name) ? "con nombres: " + r0.snap.conj.map((x) => x.name).join(" → ") : "formato viejo, " + (r0.snap.conj?.length ?? 0) + " conjunto(s)"})`);
+        out.push(`  (grabación: ${r0.W}×${r0.H}, ${r0.duration.toFixed(1)} s, reloj ${(+r0.snap.clock).toFixed(1)}, línea de tiempo ${(+r0.snap.tl).toFixed(1)}, eventos ${JSON.stringify(kinds)}, ${r0.samples?.length ? r0.samples.length + " posiciones grabadas" : "SIN posiciones grabadas (repite clics)"}, ${(r0.snap.conj ?? []).every((x) => x.name) ? "con nombres: " + r0.snap.conj.map((x) => x.name).join(" → ") : "formato viejo, " + (r0.snap.conj?.length ?? 0) + " conjunto(s)"})`);
       }
       for (let j = 0; j < n; j++) {
         const without = await render(j, `sin «${names[j]}» (${j + 1}/${n})`);
