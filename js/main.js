@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261027125142";
-import { VideoLayer } from "./videoLayer.js?v=20261027125142";
-import { Scene } from "./scene.js?v=20261027125142";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027125142";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027125142";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027125142";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027125142";
+import { AudioEngine } from "./audioEngine.js?v=20261027143919";
+import { VideoLayer } from "./videoLayer.js?v=20261027143919";
+import { Scene } from "./scene.js?v=20261027143919";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027143919";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027143919";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027143919";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027143919";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");

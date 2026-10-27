@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027125142";
-import { AudioEngine } from "./audioEngine.js?v=20261027125142";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027125142";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027125142";
+import { Scene } from "./scene.js?v=20261027143919";
+import { AudioEngine } from "./audioEngine.js?v=20261027143919";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027143919";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027143919";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -346,9 +346,11 @@ function liveLoop(now) {
   liveScene.renderScale = s;
   liveScene.timeline.playing = true; // (los keyframes de los conjuntos también se ven, como saldrán)
   liveScene.draw(liveCtx, W, H, liveAdjust(audioEng.analyze(128), dt), dt, ovCtx);
+  if (countdown) drawCountdown(ovCtx, W, H, now);
   if (now - infoT > 250) {
     infoT = now;
-    if (rec) $("liveInfo").textContent = `● grabando ${fmt((now - rec.start) / 1000)} · ${rec.events.length} movimientos anotados`;
+    if (countdown) $("liveInfo").textContent = "Preparate: acomodá las auras. Cuando termine la cuenta arranca el audio y se graba.";
+    else if (rec) $("liveInfo").textContent = `● grabando ${fmt(Math.max(0, now - rec.start) / 1000)} · ${rec.events.length} movimientos anotados`;
     else if (audioEng.audioEl) $("liveInfo").textContent = `audio ${fmt(audioEng.audioEl.currentTime)} / ${fmt(audioEng.audioEl.duration || 0)}${audioEng.isPlaying ? "" : audioEng.audioEl.ended ? " (terminó)" : " (en pausa)"}`;
   }
 }
@@ -413,24 +415,45 @@ $("loop").addEventListener("change", () => {
 });
 $("handles").addEventListener("change", () => liveScene?.conjuntos.forEach((c) => (c.params.mixHandles = $("handles").checked)));
 
-$("recMoves").addEventListener("click", () => {
-  if (busy) return;
-  if (rec) {
-    // parar: queda todo anotado
-    rec.duration = (performance.now() - rec.start) / 1000;
-    lastRec = rec;
-    rec = null;
-    $("recMoves").textContent = "● grabar mis movimientos";
-    $("recMoves").classList.remove("rec");
-    $("goMoves").disabled = false;
-    $("goMoves").textContent = `▶ Exportar lo que moví (grabé ${lastRec.duration.toFixed(1)} s)`;
-    $("liveInfo").textContent = `Grabé ${lastRec.duration.toFixed(1)} s con ${lastRec.events.length} movimientos. Ya podés exportarlo abajo (paso 5), o grabar de nuevo.`;
-    return;
-  }
-  if (!liveScene) return rebuildLive();
+// cuenta regresiva 3·2·1 antes de grabar: el audio arranca recién cuando termina
+const COUNT_SECS = 3;
+let countdown = null; // { t0, timer }
+
+function drawCountdown(ctx, W, H, now) {
+  const el = (now - countdown.t0) / 1000;
+  const n = Math.max(1, COUNT_SECS - Math.floor(el));
+  const f = el - Math.floor(el); // 0 → 1 dentro de cada segundo
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${0.25 * (1 - f)})`;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = Math.min(1, 1.4 - f);
+  ctx.font = `700 ${Math.round(H * 0.4 * (1 + 0.25 * (1 - f)))}px -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = Math.max(2, H * 0.012);
+  ctx.strokeStyle = "rgba(0,0,0,0.6)";
+  ctx.fillStyle = "#fff";
+  ctx.strokeText(n, W / 2, H / 2);
+  ctx.fillText(n, W / 2, H / 2);
+  ctx.restore();
+}
+
+function cancelCountdown(message) {
+  if (!countdown) return;
+  clearTimeout(countdown.timer);
+  countdown = null;
+  $("recMoves").textContent = "● grabar mis movimientos";
+  $("recMoves").classList.remove("rec");
+  if (message) $("liveInfo").textContent = message;
+}
+
+function beginRec() {
+  countdown = null;
+  if (!liveScene) return cancelCountdown();
   // si hay un audio cargado, suena mientras se graba (así los movimientos y el audio quedan sincronizados)
-  if (active() && !audioEng.isPlaying) {
-    audioEng.play();
+  if (active()) {
+    if (audioEng.audioEl.ended) audioEng.audioEl.currentTime = +$("offset").value || 0;
+    if (!audioEng.isPlaying) audioEng.play();
     setPlayLabel();
   }
   const [W, H] = logicalSize();
@@ -450,6 +473,33 @@ $("recMoves").addEventListener("click", () => {
   };
   $("recMoves").textContent = "■ parar de grabar";
   $("recMoves").classList.add("rec");
+}
+
+$("recMoves").addEventListener("click", () => {
+  if (busy) return;
+  if (countdown) return cancelCountdown("Cancelaste la cuenta regresiva.");
+  if (rec) {
+    // parar: queda todo anotado
+    rec.duration = (performance.now() - rec.start) / 1000;
+    lastRec = rec;
+    rec = null;
+    $("recMoves").textContent = "● grabar mis movimientos";
+    $("recMoves").classList.remove("rec");
+    $("goMoves").disabled = false;
+    $("goMoves").textContent = `▶ Exportar lo que moví (grabé ${lastRec.duration.toFixed(1)} s)`;
+    $("liveInfo").textContent = `Grabé ${lastRec.duration.toFixed(1)} s con ${lastRec.events.length} movimientos. Ya podés exportarlo abajo (paso 5), o grabar de nuevo.`;
+    return;
+  }
+  if (!liveScene) return rebuildLive();
+  // el audio espera en pausa hasta que termine la cuenta (3 · 2 · 1); mientras tanto podés acomodar las auras
+  if (audioEng.isPlaying) {
+    audioEng.pause();
+    setPlayLabel();
+  }
+  countdown = { t0: performance.now(), timer: setTimeout(beginRec, COUNT_SECS * 1000) };
+  $("recMoves").textContent = "✕ cancelar la cuenta";
+  $("recMoves").classList.add("rec");
+  $("liveInfo").textContent = "Preparate: acomodá las auras. Cuando termine la cuenta arranca el audio y se graba.";
 });
 
 // la escena de la vista en vivo se vuelve a armar cuando cambian los conjuntos incluidos (se pierden las posiciones movidas)
