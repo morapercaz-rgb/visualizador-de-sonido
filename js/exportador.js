@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027161108";
-import { AudioEngine } from "./audioEngine.js?v=20261027161108";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027161108";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027161108";
+import { Scene } from "./scene.js?v=20261027161247";
+import { AudioEngine } from "./audioEngine.js?v=20261027161247";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027161247";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027161247";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -793,6 +793,15 @@ async function run(withMoves = false) {
     if (r0) note += " · repitiendo lo que moviste";
 
     let replay = {};
+    if (!r0 && liveScene && liveScene.conjuntos.length === scene.conjuntos.length) {
+      // sin grabación: sale tal cual lo ves en el paso 4 (cada aura donde la dejaste)
+      scene.conjuntos.forEach((c, i) => {
+        const lv = liveScene.conjuntos[i];
+        c.engine.importState(lv.engine.exportState());
+        c.spinAngle = lv.spinAngle;
+      });
+      note += " · con las auras donde las dejaste en el paso 4";
+    }
     if (r0) {
       // las piezas arrancan donde estaban cuando empezó la grabación
       scene.conjuntos.forEach((c, i) => {
