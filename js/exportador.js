@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027161247";
-import { AudioEngine } from "./audioEngine.js?v=20261027161247";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027161247";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027161247";
+import { Scene } from "./scene.js?v=20261027162500";
+import { AudioEngine } from "./audioEngine.js?v=20261027162500";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio } from "./exporter.js?v=20261027162500";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027162500";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -350,13 +350,75 @@ function focusChanged() {
 for (const id of ["fcOn", "fcX", "fcW", "fcA"]) $(id).addEventListener("input", focusChanged);
 $("fcOn").addEventListener("change", focusChanged);
 
+let visWarn = ""; // aviso de conjuntos que no se ven en la imagen final
+// Revisa si cada conjunto realmente se ve en la imagen final: dibuja la imagen con y sin él, y si no cambia
+// nada es que está tapado por otro (por ejemplo un aura de colores que cubre todo) o que no dibuja nada.
+function hiddenConjuntos() {
+  try {
+    const [W, H] = logicalSize();
+    const s = Math.min(1, 320 / W);
+    const PW = Math.max(8, Math.round(W * s)), PH = Math.max(8, Math.round(H * s));
+    const au = { bass: 0.5, mid: 0.5, treble: 0.4, overall: 0.5, centroid: 0.4, spectrum: new Array(128).fill(0.5) };
+    const frame = (hide) => {
+      const sc = buildScene();
+      sc.conjuntos.forEach((c, i) => {
+        const lv = liveScene?.conjuntos[i];
+        if (lv && liveScene.conjuntos.length === sc.conjuntos.length) {
+          c.engine.importState(lv.engine.exportState());
+          c.spinAngle = lv.spinAngle;
+        }
+        c.params.mixHandles = false;
+        if (i === hide) c.visible = false;
+      });
+      const cv = document.createElement("canvas");
+      cv.width = PW;
+      cv.height = PH;
+      const ctx = cv.getContext("2d", { willReadFrequently: true });
+      sc.renderScale = s;
+      sc.timeline.playing = true;
+      for (let k = 0; k < 24; k++) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, PW, PH);
+        if (!$("transparent").checked) {
+          ctx.fillStyle = $("bg").value;
+          ctx.fillRect(0, 0, PW, PH);
+        }
+        ctx.setTransform(s, 0, 0, s, 0, 0);
+        sc.draw(ctx, W, H, au, 1 / 30);
+      }
+      return { px: ctx.getImageData(0, 0, PW, PH).data, names: sc.conjuntos.map((c) => c.name) };
+    };
+    const all = frame(-1);
+    if (all.names.length < 2) return [];
+    const bad = [];
+    all.names.forEach((name, i) => {
+      const without = frame(i).px;
+      let changed = 0;
+      for (let k = 0; k < without.length; k += 4) {
+        // como se vería sobre negro (el color por la opacidad): lo que cambia a simple vista
+        const a1 = without[k + 3] / 255, a2 = all.px[k + 3] / 255;
+        const d = Math.abs(without[k] * a1 - all.px[k] * a2) + Math.abs(without[k + 1] * a1 - all.px[k + 1] * a2) + Math.abs(without[k + 2] * a1 - all.px[k + 2] * a2);
+        if (d > 30) changed++;
+      }
+      if (changed / (without.length / 4) < 0.01) bad.push(name); // (si sacarlo cambia menos del 1% de la imagen, no se ve)
+    });
+    return bad;
+  } catch (e) {
+    console.warn("no se pudo revisar qué conjuntos se ven:", e);
+    return [];
+  }
+}
+
 function rebuildLive(message) {
   try {
     liveScene = buildScene();
     for (const c of liveScene.conjuntos) c.params.mixHandles = $("handles").checked;
     const names = liveScene.conjuntos.map((c) => c.name);
+    const hidden = hiddenConjuntos();
+    visWarn = hidden.length ? ` ⚠ En la imagen NO se ve: ${hidden.join(", ")} (lo tapa otro conjunto o no dibuja nada). Probá subirlo o bajarlo con ▲ ▼ en el paso 1.` : "";
     $("liveInfo").textContent = (message ?? "Listo: movés las auras con el mouse.") +
-      (names.length > 1 ? ` Se dibujan ${names.length}, de atrás para adelante: ${names.join(" → ")}.` : ` Se dibuja: ${names[0]}.`);
+      (names.length > 1 ? ` Se dibujan ${names.length}, de atrás para adelante: ${names.join(" → ")}.` : ` Se dibuja: ${names[0]}.`) +
+      visWarn;
   } catch (e) {
     liveScene = null;
     $("liveInfo").textContent = e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
@@ -413,7 +475,7 @@ function liveLoop(now) {
     infoT = now;
     if (countdown) $("liveInfo").textContent = "Preparate: acomodá las auras. Cuando termine la cuenta arranca el audio y se graba.";
     else if (rec) $("liveInfo").textContent = `● grabando ${fmt(Math.max(0, now - rec.start) / 1000)} · ${rec.events.length} movimientos anotados`;
-    else if (audioEng.audioEl) $("liveInfo").textContent = `audio ${fmt(audioEng.audioEl.currentTime)} / ${fmt(audioEng.audioEl.duration || 0)}${audioEng.isPlaying ? "" : audioEng.audioEl.ended ? " (terminó)" : " (en pausa)"}`;
+    else if (audioEng.audioEl) $("liveInfo").textContent = `audio ${fmt(audioEng.audioEl.currentTime)} / ${fmt(audioEng.audioEl.duration || 0)}${audioEng.isPlaying ? "" : audioEng.audioEl.ended ? " (terminó)" : " (en pausa)"}${visWarn}`;
   }
 }
 
@@ -843,6 +905,7 @@ async function run(withMoves = false) {
       videoLayer: { active: null, draw() {} },
       globalParams: { bgColor: $("bg").value },
       ...replay,
+      keepSpin: true,
       audioFile: a?.file ?? null,
       audioOffset: r0 ? r0.snap.audioT : +$("offset").value || 0,
       audioLoop: r0 ? r0.snap.loop : $("loop").checked,

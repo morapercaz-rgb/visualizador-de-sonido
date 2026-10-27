@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027161247";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027161247";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261027162500";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261027162500";
 
 export { crc32 };
 
@@ -274,7 +274,7 @@ export async function renderAnimation(o, onFrame) {
   if (o.morph) Object.assign(scene.morph, { on: true, playing: false, repeat: "once", time: 0 });
   if (o.seq) Object.assign(scene.seq, { on: true, playing: false, repeat: "once", time: 0 });
   for (const { c } of saved.conjuntos) {
-    c.spinAngle = 0;
+    if (!o.keepSpin) c.spinAngle = 0; // (keepSpin: cada pieza sigue girada como estaba, para que salga igual a lo que se veía)
     c._lastT = null;
     c.params.mixHandles = false;
   }
