@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261027192544";
-import { AudioEngine } from "./audioEngine.js?v=20261027192544";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261027192544";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027192544";
+import { Scene } from "./scene.js?v=20261027193242";
+import { AudioEngine } from "./audioEngine.js?v=20261027193242";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261027193242";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261027193242";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -914,20 +914,33 @@ async function checkExport() {
         names = scene.conjuntos.map((c) => c.name);
         if (hide >= 0) scene.conjuntos[hide].visible = false;
         const frames = [];
+        const trace = [];
+        const nF = Math.round(secs * FPS);
+        const where = () => scene.conjuntos.map((c) => {
+          const f = (n) => (Number.isFinite(n) ? Math.round(n) : "?");
+          const pc = c.engine.pieceCenter(W, H, c.params);
+          return `${c.name}: pos ${f(c.xf?.tx)},${f(c.xf?.ty)} · esc ${(c.xf?.s ?? 0).toFixed(2)} · centro ${f(pc.x)},${f(pc.y)} · opac ${(+c.params.tOpacity).toFixed(2)}`;
+        });
         await renderAnimation(
           { scene, videoLayer: { active: null, draw() {} }, globalParams: { bgColor: $("bg").value }, ...replay, keepSpin: true, audioFrames, audioFile: null, width: W, height: H, transparent: $("transparent").checked, includeVideo: false, seconds: secs, fps: FPS, scale: 1, isCancelled: () => cancelFlag },
           async (canvas) => {
             sctx.clearRect(0, 0, SW, SH);
             sctx.drawImage(canvas, 0, 0, SW, SH);
             frames.push(sctx.getImageData(0, 0, SW, SH).data);
+            if (hide < 0 && (frames.length === 1 || frames.length === nF)) trace.push(where());
           },
         );
         $("status").textContent = `revisando ${label}: ${step}`;
-        return { frames, scene };
+        return { frames, scene, trace };
       };
       const all = await render(-1, "imagen completa");
       const n = names.length;
       out.push(`${label} · ${a ? "audio: " + a.name : "sin audio"} · ${secs.toFixed(1)} s`);
+      if (r0) {
+        const kinds = {};
+        for (const e of r0.events) kinds[e.k] = (kinds[e.k] ?? 0) + 1;
+        out.push(`  (grabación: ${r0.W}×${r0.H}, ${r0.duration.toFixed(1)} s, reloj ${(+r0.snap.clock).toFixed(1)}, línea de tiempo ${(+r0.snap.tl).toFixed(1)}, eventos ${JSON.stringify(kinds)}, ${(r0.snap.conj ?? []).every((x) => x.name) ? "con nombres: " + r0.snap.conj.map((x) => x.name).join(" → ") : "formato viejo, " + (r0.snap.conj?.length ?? 0) + " conjunto(s)"})`);
+      }
       for (let j = 0; j < n; j++) {
         const without = await render(j, `sin «${names[j]}» (${j + 1}/${n})`);
         let seen = 0, seenDark = 0, best = 0;
@@ -950,6 +963,8 @@ async function checkExport() {
         const verdict = seen === 0 && seenDark > 0 ? `⚠ se ve casi negro/transparente (muy oscuro)` : seen === 0 ? `⚠ NO se ve en ningún cuadro` : seen < total * 0.5 ? `⚠ se ve solo en ${seen} de ${total} cuadros` : `✔ se ve en ${seen} de ${total} cuadros (hasta ${(best * 100).toFixed(0)} % de la imagen)`;
         out.push(`  ${names[j]}: ${verdict} ${info}`);
       }
+      out.push("  dónde queda cada uno (cuadro 1 → último):");
+      all.trace[0]?.forEach((t0, j) => out.push(`    ${t0}  →  ${all.trace.at(-1)[j].split(": ")[1]}`));
     }
     out.push("(Si dice ⚠: probá subirlo o bajarlo con ▲ ▼ en el paso 1, o revisalo en el programa principal.)");
     $("status").textContent = "Revisión lista, mirá el recuadro de abajo.";
