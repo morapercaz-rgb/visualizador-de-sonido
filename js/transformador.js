@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028161851";
-import { silentAudio } from "./audioEngine.js?v=20261028161851";
-import { exportPngSequence } from "./exporter.js?v=20261028161851";
-import { progressAt } from "./morph.js?v=20261028161851";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028161851";
+import { Scene } from "./scene.js?v=20261028162620";
+import { silentAudio } from "./audioEngine.js?v=20261028162620";
+import { exportPngSequence } from "./exporter.js?v=20261028162620";
+import { progressAt } from "./morph.js?v=20261028162620";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028162620";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -131,7 +131,16 @@ function buildScene() {
     const c = first ? sc.replaceFromPreset(p) : sc.addFromPreset(p); // (el primero ocupa el conjunto que la escena trae de entrada)
     first = false;
     c._mk = mk;
-    if (moves[mk]) c.engine.importState(moves[mk]); // lo que movés con el mouse
+    c._p0 = pickTf(c.params); // cómo venía guardado (para saber si lo cambiaste)
+    const m = moves[mk];
+    if (m) {
+      if (m.s) c.engine.importState(m.s); // lo que movés con el mouse
+      else if (m.centerOffset) c.engine.importState(m); // (formato anterior)
+      if (m.p) {
+        Object.assign(c.params, m.p); // rotación, escala y posición que pusiste
+        if (m.p.rotation !== c._p0.rotation) c.spinAngle = 0; // (la rotación que elegiste es exacta: el giro guardado no se le suma)
+      }
+    }
     return c;
   };
   // los fijos van primero (abajo de todo)
@@ -147,8 +156,22 @@ function buildScene() {
     if (!mine.has(mk)) mine.set(mk, make(p, mk));
     return `set:${mine.get(mk).id}`;
   };
-  let a = slot(1, "sa"), b = slot(1, "sb"), c = slot(1, "sc");
-  let a2 = slot(2, "sa2"), b2 = slot(2, "sb2"), c2 = slot(2, "sc2");
+  const labels = new Map(); // conjunto → "A", "B / C"…
+  const slotName = (set, id, label) => {
+    const key = slot(set, id);
+    if (key) {
+      const cj = sc.conjuntos.find((x) => `set:${x.id}` === key);
+      labels.set(cj, [...(labels.get(cj) ?? []), label]);
+    }
+    return key;
+  };
+  let a = slotName(1, "sa", "A"), b = slotName(1, "sb", "B"), c = slotName(1, "sc", "C");
+  let a2 = slotName(2, "sa2", "A2"), b2 = slotName(2, "sb2", "B2"), c2 = slotName(2, "sc2", "C2");
+  sc._slots = [...labels].map(([cj, ls]) => ({ c: cj, label: `${ls.join(" / ")} · ${cj.name}` }));
+  for (const p of fixed) {
+    const cj = sc.conjuntos.find((x) => x._mk === `fijo|${p.name}`);
+    if (cj) sc._slots.push({ c: cj, label: `fijo · ${cj.name}` });
+  }
   // si un juego tiene tres pasos y el otro dos, el de dos se queda en su último paso
   if (c || c2) {
     if (a && b && !c) c = b;
@@ -166,15 +189,76 @@ function buildScene() {
 // después de mover algo: se anota dónde quedó cada conjunto
 function keepMoves() {
   if (!scene) return;
-  for (const c of scene.conjuntos) if (c._mk) moves[c._mk] = c.engine.exportState();
+  for (const c of scene.conjuntos) {
+    if (!c._mk) continue;
+    const now = pickTf(c.params);
+    const changed = TF_KEYS.some((k) => now[k] !== c._p0[k]);
+    moves[c._mk] = changed ? { s: c.engine.exportState(), p: now } : { s: c.engine.exportState() };
+  }
   save();
 }
+
+// rotación, escala y posición de un conjunto (lo que se acomoda con los controles o las manijas)
+const TF_KEYS = ["posX", "posY", "rotation", "scale", "pivotX", "pivotY", "pivotMode"];
+const pickTf = (p) => Object.fromEntries(TF_KEYS.map((k) => [k, p[k]]));
+
+// ---- acomodar un conjunto ----
+const FIT = [["fitRot", "rotation"], ["fitScale", "scale"], ["fitX", "posX"], ["fitY", "posY"]];
+const fitCj = () => scene?._slots?.find((s) => s.c.id === fitId)?.c ?? scene?._slots?.[0]?.c ?? null;
+let fitId = null;
+
+function fillFit() {
+  const sel = $("fitSel");
+  sel.replaceChildren();
+  for (const s of scene?._slots ?? []) sel.add(new Option(s.label, String(s.c.id)));
+  if (scene?._slots?.length) {
+    const keep = scene._slots.find((s) => s.c.id === fitId) ?? scene._slots[0];
+    fitId = keep.c.id;
+    sel.value = String(fitId);
+    scene.selectedId = fitId; // (las manijas del mouse son del conjunto elegido)
+  }
+  const [W, H] = logicalSize();
+  $("fitX").min = -Math.max(W, 2000);
+  $("fitX").max = Math.max(W, 2000);
+  $("fitY").min = -Math.max(H, 1000);
+  $("fitY").max = Math.max(H, 1000);
+  syncFit();
+}
+function syncFit() {
+  const c = fitCj();
+  for (const [id, k] of FIT) {
+    const v = c ? c.params[k] : 0;
+    $(id).value = v;
+    $(id + "N").value = Math.round(v * 100) / 100;
+  }
+}
+function fitChanged(id, k, v) {
+  const c = fitCj();
+  if (!c || !Number.isFinite(v)) return;
+  c.params[k] = k === "scale" ? Math.max(0.05, v) : v;
+  if (k === "rotation") c.spinAngle = 0; // (la rotación que ponés es la de verdad)
+  syncFit();
+  keepMoves();
+}
+for (const [id, k] of FIT) {
+  $(id).addEventListener("input", () => fitChanged(id, k, +$(id).value));
+  $(id + "N").addEventListener("change", () => fitChanged(id, k, +$(id + "N").value));
+}
+$("fitSel").addEventListener("change", () => {
+  fitId = +$("fitSel").value;
+  if (scene) scene.selectedId = fitId;
+  syncFit();
+});
+$("gizmoOn").addEventListener("change", () => {
+  if (scene) scene.settings.gizmo = $("gizmoOn").checked;
+  save();
+});
 
 // lo que se puede cambiar sin volver a armar la escena
 function applyLive(sc) {
   Object.assign(sc.morph, { ease: $("ease").value, travel: num("travel"), stagger: num("stagger"), swirl: num("swirl"), scatter: num("scatter"), scatterDir: $("scatterDir").value });
   sc.settings.wrap = $("wrap").checked;
-  sc.settings.gizmo = false;
+  sc.settings.gizmo = $("gizmoOn").checked; // (las manijas de girar y agrandar: solo en la vista, nunca en lo exportado)
 }
 
 // ---------- 3 · vista ----------
@@ -188,6 +272,7 @@ let dragging = false;
 function rebuild(message) {
   try {
     scene = buildScene();
+    fillFit();
     $("liveInfo").textContent = message ?? "";
   } catch (e) {
     scene = null;
@@ -249,7 +334,7 @@ function liveLoop(now) {
   liveCtx.setTransform(s, 0, 0, s, 0, 0);
   ovCtx.setTransform(s, 0, 0, s, 0, 0);
   scene.renderScale = s;
-  scene.draw(liveCtx, W, H, SILENT, dt, $("handles").checked ? ovCtx : null); // (las manijas van en la capa de encima: nunca salen en lo exportado)
+  scene.draw(liveCtx, W, H, SILENT, dt, ovCtx); // (las manijas van en la capa de encima: nunca salen en lo exportado)
 
   if (!dragging) $("scrub").value = eff;
   if (now - infoT > 200) {
@@ -295,6 +380,7 @@ liveCv.addEventListener("pointermove", (e) => {
   if (!scene || busy) return;
   const p = toLogical(e);
   scene.pointerMove(p.x, p.y);
+  if (scene.gdrag) syncFit(); // (si estás girando con la manija, los números siguen)
   if (!scene.isDragging) liveCv.style.cursor = scene.hover(p.x, p.y) ? "grab" : "default";
 });
 const dropIt = () => {
@@ -302,7 +388,10 @@ const dropIt = () => {
   const was = scene.isDragging;
   scene.pointerUp();
   liveCv.style.cursor = "default";
-  if (was) keepMoves();
+  if (was) {
+    keepMoves();
+    syncFit();
+  }
 };
 liveCv.addEventListener("pointerup", dropIt);
 liveCv.addEventListener("pointercancel", dropIt);
@@ -396,6 +485,7 @@ function save() {
         fixed: [...document.querySelectorAll("#fixList input:checked")].map((cb) => cb.dataset.name),
         moves,
         handles: $("handles").checked,
+        gizmoOn: $("gizmoOn").checked,
         trans: num("trans"),
         hold: num("hold"),
         ease: $("ease").value,
@@ -557,6 +647,7 @@ $("scatter").value = prefs.scatter ?? 0.6;
 $("scatterDir").value = prefs.scatterDir ?? "horizontal";
 $("wrap").checked = prefs.wrap ?? false;
 $("handles").checked = prefs.handles ?? true;
+$("gizmoOn").checked = prefs.gizmoOn ?? true;
 $("repeat").value = prefs.repeat ?? "loop";
 $("vsize").value = prefs.vsize ?? "720";
 $("preset").value = prefs.preset ?? "1920x1080";

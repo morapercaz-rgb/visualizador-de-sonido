@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Transformador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261028161851" />
+  <link rel="stylesheet" href="exportador.css?v=20261028162620" />
 </head>
 <body>
   <main>
@@ -71,6 +71,14 @@
       </div>
       <label class="row"><span>ir a</span><input type="range" id="scrub" min="0" max="1" step="0.01" value="0" /><output id="scrubOut"></output></label>
       <p class="status" id="liveInfo"></p>
+      <h3>Acomodar un conjunto: girarlo, agrandarlo, ponerlo donde empieza</h3>
+      <label class="row"><span>conjunto</span><select id="fitSel"></select></label>
+      <label class="row"><span>rotación (°)</span><input type="range" id="fitRot" min="-360" max="360" step="0.5" /><input type="number" id="fitRotN" min="-3600" max="3600" step="0.5" style="width: 86px" /></label>
+      <label class="row"><span>escala</span><input type="range" id="fitScale" min="0.05" max="5" step="0.01" /><input type="number" id="fitScaleN" min="0.05" max="20" step="0.01" style="width: 86px" /></label>
+      <label class="row"><span>posición X</span><input type="range" id="fitX" min="-2000" max="2000" step="1" /><input type="number" id="fitXN" step="1" style="width: 86px" /></label>
+      <label class="row"><span>posición Y</span><input type="range" id="fitY" min="-1000" max="1000" step="1" /><input type="number" id="fitYN" step="1" style="width: 86px" /></label>
+      <label class="row"><span>girar y agrandar con el mouse (manijas)</span><input type="checkbox" id="gizmoOn" /></label>
+      <p class="hint">Elegí un conjunto y acomodalo: la rotación exacta en grados (podés escribir el número) o con las manijas en la vista (la cruz mueve, el círculo gira, el cuadradito agranda; con Alt la cruz mueve el punto de giro). Para ver ese conjunto en su paso, usá la barra "ir a". Lo que pongas queda guardado y <b>es como empieza</b> ese conjunto, tanto en la vista como en lo exportado.</p>
       <p class="hint"><b>Podés mover las auras con el mouse</b> (agarrá una luz, un núcleo o la pieza entera; doble click recentra). Conviene pausar en el paso que querés acomodar con la barra "ir a". Lo que movés queda guardado en este navegador y <b>es lo que sale en la exportación</b>. La vista es liviana (como mucho el tamaño que elijas) pero muestra lo mismo que va a salir: la misma composición y los mismos tiempos. Lo que se exporta se dibuja cuadro por cuadro en el tamaño que pongas abajo, así que no se traba.</p>
     </section>
 
@@ -117,6 +125,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/transformador.js?v=20261028161851"></script>
+  <script type="module" src="js/transformador.js?v=20261028162620"></script>
 </body>
 </html>
