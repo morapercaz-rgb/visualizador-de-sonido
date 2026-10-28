@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261028162620";
-import { createDefaultParams } from "./params.js?v=20261028162620";
-import { silentAudio } from "./audioEngine.js?v=20261028162620";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261028162620";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028162620";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028162620";
+import { VisualEngine } from "./visualEngine.js?v=20261028163610";
+import { createDefaultParams } from "./params.js?v=20261028163610";
+import { silentAudio } from "./audioEngine.js?v=20261028163610";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261028163610";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028163610";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028163610";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -42,7 +42,7 @@ export class Scene {
 
     // transformación de un conjunto en otro (ver morph.js). a y b son
     // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
-    this.morph = { on: false, a: "", b: "", c: "", a2: "", b2: "", c2: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, scatterDir: "horizontal", travel: 0, time: 0, playing: false };
+    this.morph = { on: false, a: "", b: "", c: "", a2: "", b2: "", c2: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, scatterDir: "horizontal", travel: 0, still: false, time: 0, playing: false };
     // línea de tiempo de varias etapas: cada etapa es un conjunto (de la escena o
     // guardado) con su posición; entre una etapa y la siguiente se transforma
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
@@ -656,8 +656,15 @@ export class Scene {
     capB.begin(w, h, this.renderScale);
     this._prep(A);
     this._prep(B);
-    A.engine.draw(capA.ctx, w, h, this._audioFor(A, audioData), A.params, dt);
-    B.engine.draw(capB.ctx, w, h, this._audioFor(B, audioData), B.params, dt);
+    // "formas quietas": cada conjunto deja de moverse por su cuenta (no titila ni se mueve solo) y lo único que cambia
+    // es la transformación. Se lo agarra con el mouse igual (el que se está arrastrando sigue con su tiempo).
+    const still = !!this.morph.still;
+    if (still) {
+      this._warm(A, w, h);
+      this._warm(B, w, h);
+    }
+    A.engine.draw(capA.ctx, w, h, this._audioFor(A, audioData), A.params, still && this.active !== A ? 0 : dt);
+    B.engine.draw(capB.ctx, w, h, this._audioFor(B, audioData), B.params, still && this.active !== B ? 0 : dt);
 
     // la transformación de A se calcula con los parámetros de movimiento ya mezclados
     const mixed = mixParams(pa, pb, u, u < 0.5 ? "a" : "b");
@@ -710,6 +717,31 @@ export class Scene {
       ctx.restore();
     });
     ctx.restore();
+  }
+
+  // Un conjunto que nunca se dibujó todavía no tiene formas (las auras las van sacando con el tiempo): antes de dejarlo
+  // quieto se lo hace correr un rato "en secreto" (en un lienzo diminuto, así no pesa) para que ya esté armado.
+  _warm(c, w, h, seconds = 1.5) {
+    if (c._warm) return;
+    c._warm = true;
+    const cv = (this._warmCv ??= document.createElement("canvas"));
+    const s = Math.min(1, 96 / Math.max(w, h, 1));
+    cv.width = Math.max(2, Math.round(w * s));
+    cv.height = Math.max(2, Math.round(h * s));
+    const x = cv.getContext("2d");
+    const rs = this.renderScale;
+    this.renderScale = s;
+    this._prep(c);
+    const au = this._audioFor(c, SILENT);
+    const dt = 1 / 30;
+    for (let i = 0; i < Math.round(seconds / dt); i++) {
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      x.clearRect(0, 0, cv.width, cv.height);
+      x.setTransform(s, 0, 0, s, 0, 0);
+      c.engine.draw(x, w, h, au, c.params, dt);
+    }
+    this.renderScale = rs;
+    this._prep(c);
   }
 
   // las manijas que un motor anotó (ver visualEngine._drawMix), llevadas a la

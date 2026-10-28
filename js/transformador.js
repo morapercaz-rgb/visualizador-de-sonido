@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028162620";
-import { silentAudio } from "./audioEngine.js?v=20261028162620";
-import { exportPngSequence } from "./exporter.js?v=20261028162620";
-import { progressAt } from "./morph.js?v=20261028162620";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028162620";
+import { Scene } from "./scene.js?v=20261028163610";
+import { silentAudio } from "./audioEngine.js?v=20261028163610";
+import { exportPngSequence } from "./exporter.js?v=20261028163610";
+import { progressAt } from "./morph.js?v=20261028163610";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028163610";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -256,7 +256,7 @@ $("gizmoOn").addEventListener("change", () => {
 
 // lo que se puede cambiar sin volver a armar la escena
 function applyLive(sc) {
-  Object.assign(sc.morph, { ease: $("ease").value, travel: num("travel"), stagger: num("stagger"), swirl: num("swirl"), scatter: num("scatter"), scatterDir: $("scatterDir").value });
+  Object.assign(sc.morph, { ease: $("ease").value, travel: num("travel"), stagger: num("stagger"), swirl: num("swirl"), scatter: num("scatter"), scatterDir: $("scatterDir").value, still: $("still").checked });
   sc.settings.wrap = $("wrap").checked;
   sc.settings.gizmo = $("gizmoOn").checked; // (las manijas de girar y agrandar: solo en la vista, nunca en lo exportado)
 }
@@ -467,7 +467,7 @@ $("transparent").addEventListener("change", () => ($("bgRow").hidden = $("transp
 // los que cambian qué se arma, y los que se aplican en vivo
 for (const id of SELECTS) $(id).addEventListener("change", () => (save(), rebuild()));
 for (const id of ["trans", "hold"]) $(id).addEventListener("input", () => (updateTiming(), save()));
-for (const id of ["ease", "travel", "stagger", "swirl", "scatter", "scatterDir", "wrap"]) {
+for (const id of ["ease", "travel", "stagger", "swirl", "scatter", "scatterDir", "still", "wrap"]) {
   $(id).addEventListener("input", () => {
     if (scene) applyLive(scene);
     updateTiming();
@@ -494,6 +494,7 @@ function save() {
         swirl: num("swirl"),
         scatter: num("scatter"),
         scatterDir: $("scatterDir").value,
+        still: $("still").checked,
         wrap: $("wrap").checked,
         repeat: $("repeat").value,
         vsize: $("vsize").value,
@@ -645,6 +646,7 @@ $("stagger").value = prefs.stagger ?? 0.35;
 $("swirl").value = prefs.swirl ?? 0.18;
 $("scatter").value = prefs.scatter ?? 0.6;
 $("scatterDir").value = prefs.scatterDir ?? "horizontal";
+$("still").checked = prefs.still ?? true;
 $("wrap").checked = prefs.wrap ?? false;
 $("handles").checked = prefs.handles ?? true;
 $("gizmoOn").checked = prefs.gizmoOn ?? true;
