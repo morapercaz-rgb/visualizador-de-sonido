@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261027212921";
-import { createDefaultParams } from "./params.js?v=20261027212921";
-import { silentAudio } from "./audioEngine.js?v=20261027212921";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261027212921";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261027212921";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261027212921";
+import { VisualEngine } from "./visualEngine.js?v=20261028151038";
+import { createDefaultParams } from "./params.js?v=20261028151038";
+import { silentAudio } from "./audioEngine.js?v=20261028151038";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261028151038";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028151038";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028151038";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -42,7 +42,7 @@ export class Scene {
 
     // transformación de un conjunto en otro (ver morph.js). a y b son
     // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
-    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, travel: 0, time: 0, playing: false };
+    this.morph = { on: false, a: "", b: "", a2: "", b2: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, travel: 0, time: 0, playing: false };
     // línea de tiempo de varias etapas: cada etapa es un conjunto (de la escena o
     // guardado) con su posición; entre una etapa y la siguiente se transforma
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
@@ -332,8 +332,9 @@ export class Scene {
     const sq = this.seq;
     const sched = sq.on ? this.seqSchedule() : null;
     const seqOn = !!sched?.segs.length;
-    const ends = m.on && !seqOn ? this.morphEnds() : null;
-    if (ends && m.playing) {
+    const pairs = m.on && !seqOn ? this.morphEnds() : null; // los pares (A→B y, si lo hay, A2→B2) que se transforman a la vez
+    const inMorph = pairs ? new Set(pairs.flatMap((p) => [p.a, p.b])) : null;
+    if (pairs && m.playing) {
       m.time += dt;
       if (m.repeat === "once" && m.time >= m.seconds) {
         m.time = m.seconds;
@@ -347,11 +348,11 @@ export class Scene {
         sq.playing = false;
       }
     }
-    const inSeq = seqOn ? new Set(sched.segs.map((v) => v.c)) : null;
+    const inSeq = seqOn ? new Set(sched.segs.flatMap((v) => (v.c2 ? [v.c, v.c2] : [v.c]))) : null;
 
     for (const c of this.conjuntos) {
-      if (ends && (c === ends.a || c === ends.b)) continue; // estos dos se dibujan como transformación
-      if (ends && m.only) continue; // y con "solo estos dos" no se dibuja nada más
+      if (inMorph?.has(c)) continue; // estos se dibujan como transformación
+      if (pairs && m.only) continue; // y con "solo estos" no se dibuja nada más
       if (inSeq && (inSeq.has(c) || sq.only)) continue; // lo mismo con la línea de tiempo
       if (!c.visible) continue;
       const au = this._audioFor(c, audioData);
@@ -366,9 +367,10 @@ export class Scene {
       if (overlay) this._drawHandles(overlay, c);
     }
 
-    if (ends) {
-      this._drawMorph(ctx, w, h, audioData, dt, ends.a, ends.b, easeMorph(this.morphProgress(), m.ease));
-      if (overlay) for (const c of [ends.a, ends.b]) if (this.conjuntos.includes(c)) this._drawHandles(overlay, c);
+    if (pairs) {
+      const u = easeMorph(this.morphProgress(), m.ease);
+      for (const p of pairs) this._drawMorph(ctx, w, h, audioData, dt, p.a, p.b, u);
+      if (overlay) for (const c of inMorph) if (this.conjuntos.includes(c)) this._drawHandles(overlay, c);
     }
 
     if (seqOn) this._drawSeq(ctx, w, h, audioData, dt, sched);
@@ -385,7 +387,7 @@ export class Scene {
     const valid = [];
     this.seq.stops.forEach((s, i) => {
       const c = this._resolveEnd(s.src);
-      if (c) valid.push({ i, s, c });
+      if (c) valid.push({ i, s, c, c2: this._resolveEnd(s.src2) }); // c2: el 2.º conjunto de la etapa (opcional), que va a la vez
     });
     valid.forEach((v, k) => {
       const last = k === valid.length - 1;
@@ -419,17 +421,34 @@ export class Scene {
     return null;
   }
 
-  // parámetros de un conjunto con la posición que tiene en esa etapa
-  _stopParams(v) {
-    const p = v.s.pos;
-    return { ...v.c.params, posX: p.x, posY: p.y, scale: p.scale, rotation: p.rot, tOpacity: p.op };
+  // parámetros de un conjunto con la posición que tiene en esa etapa (second = el 2.º conjunto de la etapa)
+  _stopParams(v, second = false) {
+    const p = second ? v.s.pos2 ?? this._posOf(v.c2) : v.s.pos;
+    return { ...(second ? v.c2 : v.c).params, posX: p.x, posY: p.y, scale: p.scale, rotation: p.rot, tOpacity: p.op };
   }
 
-  // etapa nueva a partir de un conjunto: arranca con la posición que ese conjunto ya tiene
-  seqNewStop(src, hold = 1, trans = 2) {
-    const c = this._resolveEnd(src);
+  // la posición (x, y, escala, rotación, opacidad) que un conjunto tiene ahora
+  _posOf(c) {
     const p = c?.params ?? createDefaultParams();
-    return { src, hold, trans, pos: { x: p.posX, y: p.posY, scale: p.scale, rot: p.rotation, op: p.tOpacity } };
+    return { x: p.posX, y: p.posY, scale: p.scale, rot: p.rotation, op: p.tOpacity };
+  }
+
+  // a las etapas con 2.º conjunto les da su posición si todavía no tenían (y se la saca si ya no hay 2.º conjunto)
+  seqFix() {
+    for (const s of this.seq.stops) {
+      if (s.src2 && !s.pos2) s.pos2 = this._posOf(this._resolveEnd(s.src2));
+      if (!s.src2) delete s.pos2;
+    }
+  }
+
+  // etapa nueva a partir de un conjunto (y, si se quiere, un 2.º que va a la vez): arranca con la posición que ya tienen
+  seqNewStop(src, hold = 1, trans = 2, src2 = "") {
+    const st = { src, hold, trans, pos: this._posOf(this._resolveEnd(src)) };
+    if (src2) {
+      st.src2 = src2;
+      st.pos2 = this._posOf(this._resolveEnd(src2));
+    }
+    return st;
   }
 
   seqTotal() {
@@ -490,15 +509,46 @@ export class Scene {
   _drawSeq(ctx, w, h, audioData, dt, sched) {
     const st = this.seqStateAt(this._seqEffective(sched.total), sched.segs);
     if (!st) return;
-    const pa = this._stopParams(st.a);
-    if (!st.b) return this._drawDirect(ctx, st.a.c, pa, w, h, audioData, dt);
-    const u = easeMorph(st.u, this.seq.ease);
-    const pb = this._stopParams(st.b);
-    if (st.a.c === st.b.c) {
+    const u = st.b ? easeMorph(st.u, this.seq.ease) : 0;
+    // el 1.er conjunto de cada etapa y el 2.º (si lo hay) se transforman a la vez, cada uno con su cadena de etapas
+    this._drawSeqStream(ctx, w, h, audioData, dt, st, u, false);
+    this._drawSeqStream(ctx, w, h, audioData, dt, st, u, true);
+  }
+
+  // un conjunto que aparece o desaparece: se dibuja en un lienzo aparte y se pone encima con la transparencia que toque
+  // (dibujarlo directo no sirve: algunos modos del motor ignoran la opacidad)
+  _drawFaded(ctx, w, h, audioData, dt, c, params, f) {
+    const cap = this._caps.a;
+    cap.begin(w, h, this.renderScale);
+    this._prep(c);
+    const au = this._audioFor(c, audioData);
+    c.engine.draw(cap.ctx, w, h, au, params, dt);
+    const orig = c.params;
+    c.params = params;
+    c.xf = this._transform(c, w, h, au, dt);
+    c.params = orig;
+    ctx.save();
+    this._apply(ctx, c.xf);
+    ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity)) * Math.min(1, Math.max(0, f));
+    const m = cap.margin;
+    ctx.drawImage(cap.canvas, -m, -m, cap.canvas.width / cap.k, cap.canvas.height / cap.k);
+    ctx.restore();
+  }
+
+  _drawSeqStream(ctx, w, h, audioData, dt, st, u, second) {
+    const ca = second ? st.a.c2 : st.a.c;
+    const cb = st.b ? (second ? st.b.c2 : st.b.c) : null;
+    if (!ca && !cb) return;
+    if (!st.b) return this._drawDirect(ctx, ca, this._stopParams(st.a, second), w, h, audioData, dt);
+    if (ca && !cb) return this._drawFaded(ctx, w, h, audioData, dt, ca, this._stopParams(st.a, second), 1 - u); // en la etapa que sigue este conjunto no está: se desvanece
+    if (!ca) return this._drawFaded(ctx, w, h, audioData, dt, cb, this._stopParams(st.b, second), u); // y al revés: aparece
+    const pa = this._stopParams(st.a, second);
+    const pb = this._stopParams(st.b, second);
+    if (ca === cb) {
       // el mismo conjunto en otro lugar: solo se mueve
-      this._drawDirect(ctx, st.a.c, mixParams(pa, pb, u, "a"), w, h, audioData, dt);
+      this._drawDirect(ctx, ca, mixParams(pa, pb, u, "a"), w, h, audioData, dt);
     } else {
-      this._drawMorph(ctx, w, h, audioData, dt, st.a.c, st.b.c, u, pa, pb);
+      this._drawMorph(ctx, w, h, audioData, dt, ca, cb, u, pa, pb);
     }
   }
 
@@ -535,11 +585,15 @@ export class Scene {
     return null;
   }
 
-  // los dos conjuntos de la transformación, o null si falta alguno
+  // los pares de la transformación [{a, b}, …] (el segundo es opcional: A2 → B2 corre a la vez), o null si no hay ninguno completo
   morphEnds() {
-    const a = this._resolveEnd(this.morph.a);
-    const b = this._resolveEnd(this.morph.b);
-    return a && b ? { a, b } : null;
+    const pairs = [];
+    for (const [ka, kb] of [["a", "b"], ["a2", "b2"]]) {
+      const a = this._resolveEnd(this.morph[ka]);
+      const b = this._resolveEnd(this.morph[kb]);
+      if (a && b) pairs.push({ a, b });
+    }
+    return pairs.length ? pairs : null;
   }
 
   // avance de la transformación, de 0 (todo A) a 1 (todo B)

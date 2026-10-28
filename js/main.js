@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261027212921";
-import { VideoLayer } from "./videoLayer.js?v=20261027212921";
-import { Scene } from "./scene.js?v=20261027212921";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261027212921";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261027212921";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261027212921";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261027212921";
+import { AudioEngine } from "./audioEngine.js?v=20261028151038";
+import { VideoLayer } from "./videoLayer.js?v=20261028151038";
+import { Scene } from "./scene.js?v=20261028151038";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028151038";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028151038";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028151038";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028151038";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -51,8 +51,8 @@ function savePrefs() {
 // la configuración de la transformación (qué dos conjuntos, cuánto dura…) también queda guardada
 const MORPH_KEY = "visualizador-de-sonido.transformacion.v1";
 try {
-  const { a, b, seconds, ease, repeat, only, stagger, swirl, scatter, travel } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
-  Object.assign(scene.morph, { a: a ?? "", b: b ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true, stagger: stagger ?? 0.35, swirl: swirl ?? 0.18, scatter: scatter ?? 0.6, travel: travel ?? 0 });
+  const { a, b, a2, b2, seconds, ease, repeat, only, stagger, swirl, scatter, travel } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
+  Object.assign(scene.morph, { a: a ?? "", b: b ?? "", a2: a2 ?? "", b2: b2 ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true, stagger: stagger ?? 0.35, swirl: swirl ?? 0.18, scatter: scatter ?? 0.6, travel: travel ?? 0 });
 } catch {}
 const SEQ_KEY = "visualizador-de-sonido.linea-de-tiempo.v1";
 try {
@@ -60,7 +60,12 @@ try {
   if (Array.isArray(d.stops)) {
     scene.seq.stops = d.stops
       .filter((x) => x && typeof x.src === "string" && x.pos)
-      .map((x) => ({ src: x.src, hold: +x.hold || 0, trans: +x.trans || 1, pos: { x: +x.pos.x || 0, y: +x.pos.y || 0, scale: +x.pos.scale || 1, rot: +x.pos.rot || 0, op: x.pos.op ?? 1 } }));
+      .map((x) => {
+        const pos = (o) => ({ x: +o.x || 0, y: +o.y || 0, scale: +o.scale || 1, rot: +o.rot || 0, op: o.op ?? 1 });
+        const st = { src: x.src, hold: +x.hold || 0, trans: +x.trans || 1, pos: pos(x.pos) };
+        if (typeof x.src2 === "string" && x.src2 && x.pos2) Object.assign(st, { src2: x.src2, pos2: pos(x.pos2) });
+        return st;
+      });
   }
   Object.assign(scene.seq, { sel: d.sel ?? 0, repeat: d.repeat ?? "once", ease: d.ease ?? "smooth", only: d.only ?? true });
 } catch {}
@@ -74,8 +79,8 @@ function saveMorphSettings() {
   savePrefs();
   saveSeqSettings();
   try {
-    const { a, b, seconds, ease, repeat, only, stagger, swirl, scatter, travel } = scene.morph;
-    localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, seconds, ease, repeat, only, stagger, swirl, scatter, travel }));
+    const { a, b, a2, b2, seconds, ease, repeat, only, stagger, swirl, scatter, travel } = scene.morph;
+    localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, a2, b2, seconds, ease, repeat, only, stagger, swirl, scatter, travel }));
   } catch {}
 }
 
@@ -158,12 +163,15 @@ function buildPanel() {
         if (!scene.morphEnds()) { recInfo.textContent = "elegí dos conjuntos (desde y hasta) para exportar la transformación"; return; }
         startExport("seq", { morph: true });
       },
-      seqAdd: (src) => {
+      seqAdd: (src, src2 = "") => {
         if (!src) { recInfo.textContent = "elegí un conjunto para agregar como etapa"; return; }
         const q = scene.seq;
         const prev = q.stops[q.stops.length - 1];
-        const st = scene.seqNewStop(src);
-        if (prev) st.pos = { ...prev.pos, x: prev.pos.x + 120 }; // la etapa nueva sale al costado de la anterior, para que se note
+        const st = scene.seqNewStop(src, 1, 2, src2);
+        if (prev) {
+          st.pos = { ...prev.pos, x: prev.pos.x + 120 }; // la etapa nueva sale al costado de la anterior, para que se note
+          if (st.pos2 && prev.pos2) st.pos2 = { ...prev.pos2, x: prev.pos2.x + 120 };
+        }
         q.stops.push(st);
         q.sel = q.stops.length - 1;
         afterSeqChange(true);
@@ -177,8 +185,10 @@ function buildPanel() {
         if (!c) return;
         const p = c.params;
         st.pos = { x: p.posX, y: p.posY, scale: p.scale, rot: p.rotation, op: p.tOpacity };
+        const c2 = st.src2 && scene._resolveEnd(st.src2);
+        if (c2) st.pos2 = scene._posOf(c2);
         afterSeqChange(true);
-        recInfo.textContent = "tomé la posición que tiene ahora el conjunto";
+        recInfo.textContent = c2 ? "tomé la posición que tienen ahora los dos conjuntos" : "tomé la posición que tiene ahora el conjunto";
       },
       seqDup: () => {
         const q = scene.seq, st = q.stops[q.sel];
@@ -941,7 +951,7 @@ function renderSeqBar() {
       seqBlocks.appendChild(d);
     };
     const sel = v.i === scene.seq.sel;
-    add(v.holdEnd - v.start, `hsl(${stopHue(v.i)} 55% 38%)`, `${v.i + 1} · ${v.c.name}`, sel, () => actionsRef.seqSelect(v.i));
+    add(v.holdEnd - v.start, `hsl(${stopHue(v.i)} 55% 38%)`, `${v.i + 1} · ${v.c.name}${v.c2 ? " + " + v.c2.name : ""}`, sel, () => actionsRef.seqSelect(v.i));
     if (next) add(v.end - v.holdEnd, `linear-gradient(90deg, hsl(${stopHue(v.i)} 55% 38%), hsl(${stopHue(next.i)} 55% 38%))`, "⟶", false, null);
   });
 }
@@ -959,6 +969,7 @@ function updateSeqBar() {
 
 // al cambiar etapas: se guarda, se rearma la barra y (si hace falta) el panel
 function afterSeqChange(rebuild) {
+  scene.seqFix();
   saveSeqSettings();
   renderSeqBar();
   if (rebuild) setTimeout(buildPanel, 0);

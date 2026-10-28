@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261027212921";
-import { defaultMixColor } from "./colorUtils.js?v=20261027212921";
+import { listPresets } from "./presets.js?v=20261028151038";
+import { defaultMixColor } from "./colorUtils.js?v=20261028151038";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261027212921";
+import { createDefaultParams } from "./params.js?v=20261028151038";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -130,6 +130,12 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   if (!validKeys.includes(m.b)) m.b = validKeys[1] ?? validKeys[0] ?? "";
   mf.addInput(m, "a", { options: endOpts, label: "desde (A)" });
   mf.addInput(m, "b", { options: endOpts, label: "hasta (B)" });
+  // un segundo par que se transforma al mismo tiempo (opcional)
+  const endOpts2 = { "— ninguno —": "", ...endOpts };
+  if (m.a2 && !validKeys.includes(m.a2)) m.a2 = "";
+  if (m.b2 && !validKeys.includes(m.b2)) m.b2 = "";
+  mf.addInput(m, "a2", { options: endOpts2, label: "2.º par: desde (A2)" });
+  mf.addInput(m, "b2", { options: endOpts2, label: "2.º par: hasta (B2)" });
   mf.addInput(m, "seconds", { min: 0.5, max: 60, step: 0.5, label: "duración (s)" });
   mf.addInput(m, "ease", { options: { "suave (arranca y frena)": "smooth", "constante": "linear" }, label: "curva" });
   mf.addInput(m, "repeat", { options: { "una vez": "once", "repetir": "loop", "ida y vuelta": "pingpong" }, label: "al terminar" });
@@ -137,7 +143,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   mf.addInput(m, "stagger", { min: 0, max: 0.9, step: 0.05, label: "escalonado (0 = todo junto)" });
   mf.addInput(m, "swirl", { min: -0.6, max: 0.6, step: 0.02, label: "curva del camino (0 = recto)" });
   mf.addInput(m, "scatter", { min: 0, max: 1.5, step: 0.05, label: "dispersión (se esparcen y se juntan)" });
-  mf.addInput(m, "only", { label: "solo estos dos" });
+  mf.addInput(m, "only", { label: "solo estos (esconde el resto)" });
   mf.addButton({ title: "▶ ver la transformación" }).on("click", () => actions.morphPlay?.());
   mf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.morphToggle?.());
   mf.addButton({ title: "■ salir de la transformación" }).on("click", () => actions.morphStop?.());
@@ -153,9 +159,10 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   const q = scene.seq;
   const labelOf = (src) => Object.keys(endOpts).find((k) => endOpts[k] === src)?.replace(/ · (en la escena|guardado|de todos)$/, "") ?? "⚠ falta";
   qf.addMonitor({ txt: "cada etapa = un conjunto en una posición; entre etapas se transforma. Agregá etapas y mirá la barra de abajo." }, "txt", { label: "cómo" });
-  const addv = { src: validKeys[0] ?? "" };
+  const addv = { src: validKeys[0] ?? "", src2: "" };
   qf.addInput(addv, "src", { options: endOpts, label: "conjunto" });
-  qf.addButton({ title: "+ agregar etapa al final" }).on("click", () => actions.seqAdd?.(addv.src));
+  qf.addInput(addv, "src2", { options: endOpts2, label: "2.º conjunto a la vez (opcional)" });
+  qf.addButton({ title: "+ agregar etapa al final" }).on("click", () => actions.seqAdd?.(addv.src, addv.src2));
   if (q.stops.length) {
     q.sel = Math.min(Math.max(0, q.sel), q.stops.length - 1);
     const stopOpts = {};
@@ -172,6 +179,17 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     qf.addInput(stop.pos, "scale", { min: 0.05, max: 5, label: "  escala" });
     qf.addInput(stop.pos, "rot", { min: -720, max: 720, step: 0.5, label: "  rotación (°)" });
     qf.addInput(stop.pos, "op", { min: 0, max: 1, label: "  opacidad" });
+    stop.src2 ??= "";
+    const src2Opts = { ...endOpts2 };
+    if (stop.src2 && !validKeys.includes(stop.src2)) src2Opts["⚠ falta (elegí otro)"] = stop.src2;
+    qf.addInput(stop, "src2", { options: src2Opts, label: "  2.º conjunto (a la vez)" }).on("change", () => actions.seqChanged?.(true));
+    if (stop.src2 && stop.pos2) {
+      qf.addInput(stop.pos2, "x", { min: -1500, max: 1500, step: 1, label: "  2.º posición X" });
+      qf.addInput(stop.pos2, "y", { min: -1000, max: 1000, step: 1, label: "  2.º posición Y" });
+      qf.addInput(stop.pos2, "scale", { min: 0.05, max: 5, label: "  2.º escala" });
+      qf.addInput(stop.pos2, "rot", { min: -720, max: 720, step: 0.5, label: "  2.º rotación (°)" });
+      qf.addInput(stop.pos2, "op", { min: 0, max: 1, label: "  2.º opacidad" });
+    }
     qf.addButton({ title: "tomar la posición que tiene el conjunto" }).on("click", () => actions.seqTake?.());
     qf.addButton({ title: "duplicar esta etapa" }).on("click", () => actions.seqDup?.());
     qf.addButton({ title: "▲ subir  (pasa antes)" }).on("click", () => actions.seqMove?.(-1));
