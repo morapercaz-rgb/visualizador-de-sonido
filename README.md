@@ -81,6 +81,10 @@ Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos 
 - **escalonado** (0 = todas las piezas salen a la vez; más alto = salen una tras otra dando la vuelta, como una ola) y **curva del camino** (0 = recto; con valores positivos o negativos el camino se curva hacia un lado u otro, con aire de remolino).
 - **⬇ exportar la transformación (secuencia de PNG)**: una imagen por cuadro, desde el primero (todo A) hasta el último (todo B), con la duración que pusiste. Usa los cuadros/seg, el fondo transparente y el "guardar en" (ZIP o carpeta) de "Exportar animación". Se guarda como `transformacion-fecha`, con su `LEEME.txt`; se importa en After igual que cualquier secuencia. Si hay un audio activo, las formas reaccionan a él durante la transformación.
 
+## ZIP de más de 4 GB
+
+El ZIP "que se escribe de a poco" (exportador y Transformador) ahora usa **ZIP64** cuando pasa los 4 GB. Antes, pasados los 4 GB las posiciones de las imágenes se cortaban y el índice quedaba mal: al descomprimir faltaban cuadros o salían cambiados (en After Effects se veía como partes más lentas y un momento en que desaparecía todo). Los datos en sí salían completos. Para rescatar un ZIP grande hecho con la versión anterior hay que leerlo sin el índice (recorriendo las imágenes una por una).
+
 ## Pantalla infinita
 
 En "Transformar y mover" del panel (y en el **Transformador**) está el tilde **pantalla infinita**: todo lo que sale por un borde de la pantalla **vuelve a entrar por el borde opuesto**, como un espacio circular. Vale para la posición de cada conjunto (movido a mano, con órbita, deriva, línea de tiempo, transformación…): cuando el centro de la pieza se pasa del borde, aparece del otro lado. Cada conjunto se dibuja hasta 4 veces (las copias no hacen avanzar la animación otra vez), así que con muchos conjuntos grandes pesa más. Queda guardado aunque refresques. No cambia lo que se mueve por dentro de un conjunto (por ejemplo las luces de un aura): solo la pieza entera.

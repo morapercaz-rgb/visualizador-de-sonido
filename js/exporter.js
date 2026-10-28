@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028170255";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028170255";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028172342";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028172342";
 
 export { crc32 };
 
@@ -117,14 +117,19 @@ export class ZipStream {
   }
 
   // escribe el índice del ZIP y cierra el archivo
+  // (pasados los 4 GB las posiciones ya no entran en 32 bits: se usa ZIP64, si no el índice queda mal y al abrirlo faltan
+  // cuadros o salen cambiados)
   async finish() {
+    const M32 = 0xffffffff;
     const cdStart = this.offset;
     let cdSize = 0;
     for (const e of this.entries) {
-      const h = new DataView(new ArrayBuffer(46));
+      const big = e.offset >= M32;
+      const extraLen = big ? 12 : 0;
+      const h = new DataView(new ArrayBuffer(46 + extraLen));
       h.setUint32(0, 0x02014b50, true);
-      h.setUint16(4, 20, true);
-      h.setUint16(6, 20, true);
+      h.setUint16(4, big ? 45 : 20, true);
+      h.setUint16(6, big ? 45 : 20, true);
       h.setUint16(8, 0x0800, true);
       h.setUint16(10, 0, true);
       h.setUint16(12, 0, true);
@@ -133,17 +138,45 @@ export class ZipStream {
       h.setUint32(20, e.size, true);
       h.setUint32(24, e.size, true);
       h.setUint16(28, e.nameBytes.length, true);
-      h.setUint32(42, e.offset, true);
-      await this.w.write(new Uint8Array(h.buffer));
+      h.setUint16(30, extraLen, true);
+      h.setUint32(42, big ? M32 : e.offset, true);
+      await this.w.write(new Uint8Array(h.buffer, 0, 46));
       await this.w.write(e.nameBytes);
-      cdSize += 46 + e.nameBytes.length;
+      if (big) {
+        const x = new DataView(new ArrayBuffer(12));
+        x.setUint16(0, 0x0001, true); // campo extra ZIP64
+        x.setUint16(2, 8, true);
+        x.setBigUint64(4, BigInt(e.offset), true);
+        await this.w.write(new Uint8Array(x.buffer));
+      }
+      cdSize += 46 + e.nameBytes.length + extraLen;
+    }
+    const n = this.entries.length;
+    const zip64 = cdStart >= M32 || cdSize >= M32 || n >= 0xffff;
+    if (zip64) {
+      const rec = new DataView(new ArrayBuffer(56 + 20));
+      rec.setUint32(0, 0x06064b50, true); // fin del índice ZIP64
+      rec.setBigUint64(4, 44n, true);
+      rec.setUint16(12, 45, true);
+      rec.setUint16(14, 45, true);
+      rec.setUint32(16, 0, true);
+      rec.setUint32(20, 0, true);
+      rec.setBigUint64(24, BigInt(n), true);
+      rec.setBigUint64(32, BigInt(n), true);
+      rec.setBigUint64(40, BigInt(cdSize), true);
+      rec.setBigUint64(48, BigInt(cdStart), true);
+      rec.setUint32(56, 0x07064b50, true); // y dónde está
+      rec.setUint32(60, 0, true);
+      rec.setBigUint64(64, BigInt(cdStart + cdSize), true);
+      rec.setUint32(72, 1, true);
+      await this.w.write(new Uint8Array(rec.buffer));
     }
     const end = new DataView(new ArrayBuffer(22));
     end.setUint32(0, 0x06054b50, true);
-    end.setUint16(8, this.entries.length, true);
-    end.setUint16(10, this.entries.length, true);
-    end.setUint32(12, cdSize, true);
-    end.setUint32(16, cdStart, true);
+    end.setUint16(8, zip64 ? 0xffff : n, true);
+    end.setUint16(10, zip64 ? 0xffff : n, true);
+    end.setUint32(12, zip64 ? M32 : cdSize, true);
+    end.setUint32(16, zip64 ? M32 : cdStart, true);
     await this.w.write(new Uint8Array(end.buffer));
     await this.w.close();
   }
