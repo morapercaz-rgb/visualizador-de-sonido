@@ -75,7 +75,7 @@ export class Capture {
     let path = newPath();
 
     function newPath() {
-      return { pts: [], arcs: [], p: null };
+      return { pts: [], arcs: [], p: null, poly: false }; // poly: la forma tiene lados rectos (un rectángulo, un polígono)
     }
     function pt(x, y) {
       const m = ctx.getTransform();
@@ -91,10 +91,12 @@ export class Capture {
       P.moveTo.call(ctx, x, y);
     };
     ctx.lineTo = (x, y) => {
+      path.poly = true;
       path.pts.push(pt(x, y));
       P.lineTo.call(ctx, x, y);
     };
     ctx.rect = (x, y, w, h) => {
+      path.poly = true;
       path.pts.push(pt(x, y), pt(x + w, y), pt(x + w, y + h), pt(x, y + h));
       P.rect.call(ctx, x, y, w, h);
     };
@@ -135,6 +137,7 @@ export class Capture {
       if (path.p) return path.p;
       const pts = [...path.pts];
       let x, y, r;
+      let circle = path.arcs.length > 0 && !path.poly; // (redonda de verdad, no un rectángulo o polígono aproximado con un círculo)
       if (path.arcs.length === 1 && !pts.length) {
         ({ x, y, r } = path.arcs[0]);
       } else {
@@ -144,8 +147,15 @@ export class Capture {
         y = pts.reduce((s, q) => s + q.y, 0) / pts.length;
         r = pts.reduce((s, q) => s + Math.hypot(q.x - x, q.y - y), 0) / pts.length;
         if (path.arcs.length) r += path.arcs.reduce((s, a) => s + a.r, 0) / path.arcs.length;
+        // una mancha dibujada con muchos puntos (un círculo deformado) también es redonda: sus puntos están todos a un radio parecido
+        if (!circle && !path.arcs.length && pts.length >= 8) {
+          const rs = pts.map((q) => Math.hypot(q.x - x, q.y - y));
+          const mean = rs.reduce((t, v) => t + v, 0) / rs.length;
+          const sd = Math.sqrt(rs.reduce((t, v) => t + (v - mean) ** 2, 0) / rs.length);
+          circle = mean > 0 && sd / mean < 0.25;
+        }
       }
-      path.p = { x, y, r: Math.max(0.5, r), fi: NONE, fo: NONE, st: NONE, lw: 1 };
+      path.p = { x, y, r: Math.max(0.5, r), fi: NONE, fo: NONE, st: NONE, lw: 1, circle };
       self.particles.push(path.p);
       return path.p;
     };
@@ -165,6 +175,7 @@ export class Capture {
     };
     ctx.fillRect = (x, y, w, h) => {
       path = newPath();
+      path.poly = true;
       path.pts.push(pt(x, y), pt(x + w, y), pt(x + w, y + h), pt(x, y + h));
       const p = particleFor();
       if (p) ({ inner: p.fi, outer: p.fo } = paintColors(ctx.fillStyle));
@@ -198,7 +209,13 @@ function sortAround(list) {
   const cx = list.reduce((s, p) => s + p.x, 0) / list.length;
   const cy = list.reduce((s, p) => s + p.y, 0) / list.length;
   return list
-    .map((p) => ({ p, k: Math.atan2(p.y - cy, p.x - cx) + Math.hypot(p.x - cx, p.y - cy) * 1e-7 }))
+    .map((p) => {
+      const d = Math.hypot(p.x - cx, p.y - cy);
+      // las formas concéntricas (aros del remolino, ecos…) tienen todas el mismo centro, así que el "ángulo" no dice nada:
+      // se ordenan de la más chica a la más grande, y cada aro de A viaja al aro de B de su mismo lugar (si no, se cruzan y todo colapsa)
+      const central = d < Math.max(1, p.r * 0.05);
+      return { p, k: central ? -10 + p.r * 1e-4 : Math.atan2(p.y - cy, p.x - cx) + d * 1e-7 };
+    })
     .sort((a, b) => a.k - b.k)
     .map((o) => o.p);
 }
@@ -208,6 +225,10 @@ const rnd = (k, salt) => {
   const x = Math.sin(k * 127.1 + salt * 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
+
+// qué tan "lisa" es una forma: 1 = relleno parejo hasta el borde (un círculo lleno), 0 = se apaga hacia el borde (un aura)
+// (solo para círculos de verdad: una barra o un pico, que el morph aproxima con un círculo, sigue con borde suave)
+const flatness = (q) => (!q.circle ? 0 : q.fi[3] > 0.01 ? Math.min(1, Math.max(0, q.fo[3] / q.fi[3])) : 1);
 
 // superficie rellena que cubren unas formas (para no pasarse de luz)
 // (el relleno cuenta por su superficie y el contorno por su largo por su grosor)
@@ -240,7 +261,7 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
   }
 
   const clear = (c) => [c[0], c[1], c[2], 0];
-  const ghost = (p) => ({ x: p.x, y: p.y, r: 0, fi: clear(p.fi), fo: clear(p.fo), st: clear(p.st), lw: p.lw }); // para lo que no tiene pareja: crece o se achica en su lugar
+  const ghost = (p) => ({ x: p.x, y: p.y, r: 0, fi: clear(p.fi), fo: clear(p.fo), st: clear(p.st), lw: p.lw, circle: p.circle }); // para lo que no tiene pareja: crece o se achica en su lugar
 
   // centro de todo, para saber hacia dónde es "afuera" cuando se dispersan
   const all = [...A, ...B];
@@ -311,7 +332,10 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
     // el final del camino no cambia nada: ahí se ve A o B tal cual)
     const body = Math.sin(Math.PI * p);
     const baseA = Math.max(fi[3], fo[3]);
-    if (body > 0.02 && st[3] > baseA) {
+    // (solo si alguno de los dos extremos tiene relleno: si A y B son puro contorno, como los aros del remolino,
+    // se quedan en contorno; si no, los aros finos se volverían discos enormes y todo se apagaría)
+    const hasFill = Math.max(a.fi[3], a.fo[3], b.fi[3], b.fo[3]) > 0.01;
+    if (hasFill && body > 0.02 && st[3] > baseA) {
       const want = st[3] * 0.6 * body;
       if (want > baseA) {
         const col = baseA > 0.01 ? fi : st;
@@ -320,7 +344,7 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
       }
     }
     mixArea += ((fi[3] + fo[3]) / 2) * Math.PI * r * r + st[3] * 2 * Math.PI * r * Math.max(1, lerp(a.lw, b.lw, p));
-    items.push({ x, y, r, fi, fo, st, lw: lerp(a.lw, b.lw, p) });
+    items.push({ x, y, r, fi, fo, st, lw: lerp(a.lw, b.lw, p), flat: lerp(flatness(a), flatness(b), p), circle: !!(a.circle || b.circle) });
   }
 
   // 2) límite de luz: lo relleno no puede cubrir mucho más que lo que cubren A o
@@ -334,18 +358,26 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
   const cell = Math.max(20, size / 8);
   const dens = new Map();
   const keyOf = (it) => Math.floor(it.x / cell) + "," + Math.floor(it.y / cell);
+  const covOf = (it) => ((it.fi[3] + it.fo[3]) / 2) * Math.min(1, (Math.PI * it.r * it.r) / (cell * cell));
+  const densOf = (list) => {
+    const d = new Map();
+    for (const it of list) d.set(keyOf(it), (d.get(keyOf(it)) ?? 0) + covOf(it));
+    return d;
+  };
+  const densA = densOf(A), densB = densOf(B); // (lo que ya tenían A y B por separado: eso nunca se baja)
   for (const it of items) {
-    const cov = ((it.fi[3] + it.fo[3]) / 2) * Math.min(1, (Math.PI * it.r * it.r) / (cell * cell));
-    it.cov = cov;
     const k = keyOf(it);
-    dens.set(k, (dens.get(k) ?? 0) + cov);
+    dens.set(k, (dens.get(k) ?? 0) + covOf(it));
   }
 
   // 3) se dibujan
   ctx.lineCap = "round";
   for (const it of items) {
     const { x, y, r } = it;
-    const local = Math.min(1, 0.8 / Math.max(0.001, dens.get(keyOf(it))));
+    const key = keyOf(it);
+    // (en las formas redondas no se baja de la densidad que ya tenían A o B; las barras y picos se aproximan con círculos, así que siguen con el límite de siempre)
+    const allow = it.circle ? Math.max(0.8, densA.get(key) ?? 0, densB.get(key) ?? 0) : 0.8;
+    const local = Math.min(1, allow / Math.max(0.001, dens.get(key)));
     const gg = g * local;
     const fi = [it.fi[0], it.fi[1], it.fi[2], it.fi[3] * gg];
     const fo = [it.fo[0], it.fo[1], it.fo[2], it.fo[3] * gg];
@@ -359,7 +391,8 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
       const edge = Math.min(fo[3], fi[3] * 0.35);
       const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
       for (const rho of [0, 0.25, 0.5, 0.75, 1]) {
-        const a = fi[3] * Math.pow(1 - rho, 1.5) + edge * Math.pow(rho, 1.5);
+        const soft = fi[3] * Math.pow(1 - rho, 1.5) + edge * Math.pow(rho, 1.5);
+        const a = lerp(soft, fi[3], it.flat); // (si en A y en B la forma es lisa, se queda lisa: no se achica ni se tiñe de borroso)
         gr.addColorStop(rho, css([lerp(fi[0], fo[0], rho), lerp(fi[1], fo[1], rho), lerp(fi[2], fo[2], rho), a]));
       }
       ctx.fillStyle = gr;
