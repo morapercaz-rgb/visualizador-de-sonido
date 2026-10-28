@@ -129,7 +129,20 @@ export class Capture {
       const stops = grads.get(style);
       if (!stops?.length) return { inner: NONE, outer: NONE };
       const s = [...stops].sort((a, b) => a[0] - b[0]);
-      return { inner: mul(parseColor(s[0][1])), outer: mul(parseColor(s[s.length - 1][1])) };
+      const inner = mul(parseColor(s[0][1])), outer = mul(parseColor(s[s.length - 1][1]));
+      // cómo cae la opacidad hacia el borde (el exponente de 1 - radio): se mide a mitad de radio, así se respeta la caída real del aura
+      let curve = 1.5;
+      if (inner[3] > 0.01 && s.length >= 2) {
+        let a50 = null;
+        for (let i = 0; i + 1 < s.length; i++) {
+          if (s[i][0] <= 0.5 && s[i + 1][0] >= 0.5) {
+            const q = s[i + 1][0] > s[i][0] ? (0.5 - s[i][0]) / (s[i + 1][0] - s[i][0]) : 0;
+            a50 = lerp(mul(parseColor(s[i][1]))[3], mul(parseColor(s[i + 1][1]))[3], q);
+          }
+        }
+        if (a50 !== null && a50 > 0.002) curve = Math.min(3, Math.max(0.4, Math.log(a50 / inner[3]) / Math.log(0.5)));
+      }
+      return { inner, outer, curve };
     };
 
     // resume el camino que se está pintando en una forma: centro y radio
@@ -155,14 +168,14 @@ export class Capture {
           circle = mean > 0 && sd / mean < 0.25;
         }
       }
-      path.p = { x, y, r: Math.max(0.5, r), fi: NONE, fo: NONE, st: NONE, lw: 1, circle };
+      path.p = { x, y, r: Math.max(0.5, r), fi: NONE, fo: NONE, st: NONE, lw: 1, circle, curve: 1.5 };
       self.particles.push(path.p);
       return path.p;
     };
 
     ctx.fill = (...a) => {
       const p = particleFor();
-      if (p) ({ inner: p.fi, outer: p.fo } = paintColors(ctx.fillStyle));
+      if (p) ({ inner: p.fi, outer: p.fo, curve: p.curve = 1.5 } = paintColors(ctx.fillStyle));
       P.fill.apply(ctx, a);
     };
     ctx.stroke = (...a) => {
@@ -261,7 +274,7 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
   }
 
   const clear = (c) => [c[0], c[1], c[2], 0];
-  const ghost = (p) => ({ x: p.x, y: p.y, r: 0, fi: clear(p.fi), fo: clear(p.fo), st: clear(p.st), lw: p.lw, circle: p.circle }); // para lo que no tiene pareja: crece o se achica en su lugar
+  const ghost = (p) => ({ x: p.x, y: p.y, r: 0, fi: clear(p.fi), fo: clear(p.fo), st: clear(p.st), lw: p.lw, circle: p.circle, curve: p.curve }); // para lo que no tiene pareja: crece o se achica en su lugar
 
   // centro de todo, para saber hacia dónde es "afuera" cuando se dispersan
   const all = [...A, ...B];
@@ -275,6 +288,24 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
   const seen = (r, fi, fo) => r * (fo[3] < fi[3] * 0.5 ? 0.7 : 1);
   const reach = (list) => list.reduce((mx, q) => Math.max(mx, Math.hypot(q.x - cx, q.y - cy) + seen(q.r, q.fi, q.fo)), 0);
   const extA = reach(A), extB = reach(B);
+
+  // Si A y B son nubes de formas en lugares distintos (por ejemplo, gotas de aura al azar), al ir cada forma en línea
+  // recta hacia la suya, la nube de a mitad de camino queda más JUNTA que las dos (el promedio de dos nubes sueltas se
+  // encoge). Se calcula dónde irían sin dispersión y se las abre lo justo para que el tamaño de la nube vaya de A a B.
+  const base = [];
+  for (let k = 0; k < K; k++) {
+    const [ia, ib] = pairs[k];
+    const a = ia >= 0 ? A[ia] : ghost(B[ib]);
+    const b = ib >= 0 ? B[ib] : ghost(A[ia]);
+    const d = K > 1 ? k / (K - 1) : 0;
+    const raw = Math.min(1, Math.max(0, (u - d * stagger) / (1 - stagger)));
+    const p = raw * raw * (3 - 2 * raw);
+    const bulge = swirl * Math.sin(Math.PI * p);
+    base.push({ x: lerp(a.x, b.x, p) - (b.y - a.y) * bulge, y: lerp(a.y, b.y, p) + (b.x - a.x) * bulge });
+  }
+  const spread = (pts) => Math.sqrt(pts.reduce((t, q) => t + (q.x - cx) ** 2 + (q.y - cy) ** 2, 0) / Math.max(1, pts.length));
+  const sMid = spread(base);
+  const grow = sMid > 1 ? Math.min(2, Math.max(1, lerp(spread(A), spread(B), u) / sMid)) : 1; // (solo abre: nunca encoge de más)
 
   // 1) dónde y cómo está cada forma en este instante
   const items = [];
@@ -290,10 +321,9 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
     const raw = Math.min(1, Math.max(0, (u - d * stagger) / (1 - stagger)));
     const p = raw * raw * (3 - 2 * raw);
 
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const bulge = swirl * Math.sin(Math.PI * p); // el camino se curva: sale por un costado y llega por el otro
-    let x = lerp(a.x, b.x, p) - dy * bulge;
-    let y = lerp(a.y, b.y, p) + dx * bulge;
+    // (el camino ya viene curvado —sale por un costado y llega por el otro— y abierto para no encogerse: ver arriba)
+    let x = cx + (base[k].x - cx) * grow;
+    let y = cy + (base[k].y - cy) * grow;
 
     // dispersión: un desvío que crece hasta la mitad del camino y vuelve a cero al llegar
     if (scatter > 0) {
@@ -344,7 +374,7 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
       }
     }
     mixArea += ((fi[3] + fo[3]) / 2) * Math.PI * r * r + st[3] * 2 * Math.PI * r * Math.max(1, lerp(a.lw, b.lw, p));
-    items.push({ x, y, r, fi, fo, st, lw: lerp(a.lw, b.lw, p), flat: lerp(flatness(a), flatness(b), p), circle: !!(a.circle || b.circle) });
+    items.push({ x, y, r, fi, fo, st, lw: lerp(a.lw, b.lw, p), flat: lerp(flatness(a), flatness(b), p), circle: !!(a.circle || b.circle), curve: lerp(a.curve ?? 1.5, b.curve ?? 1.5, p) });
   }
 
   // 2) límite de luz: lo relleno no puede cubrir mucho más que lo que cubren A o
@@ -391,7 +421,7 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
       const edge = Math.min(fo[3], fi[3] * 0.35);
       const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
       for (const rho of [0, 0.25, 0.5, 0.75, 1]) {
-        const soft = fi[3] * Math.pow(1 - rho, 1.5) + edge * Math.pow(rho, 1.5);
+        const soft = fi[3] * Math.pow(1 - rho, it.curve) + edge * Math.pow(rho, it.curve);
         const a = lerp(soft, fi[3], it.flat); // (si en A y en B la forma es lisa, se queda lisa: no se achica ni se tiñe de borroso)
         gr.addColorStop(rho, css([lerp(fi[0], fo[0], rho), lerp(fi[1], fo[1], rho), lerp(fi[2], fo[2], rho), a]));
       }
