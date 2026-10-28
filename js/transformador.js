@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028203257";
-import { silentAudio } from "./audioEngine.js?v=20261028203257";
-import { exportPngSequence, renderAnimation, pixelScale, frameClock, fmtDur } from "./exporter.js?v=20261028203257";
-import { progressAt } from "./morph.js?v=20261028203257";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028203257";
+import { Scene } from "./scene.js?v=20261028204023";
+import { silentAudio } from "./audioEngine.js?v=20261028204023";
+import { exportPngSequence, renderAnimation, pixelScale, frameClock, fmtDur } from "./exporter.js?v=20261028204023";
+import { progressAt } from "./morph.js?v=20261028204023";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028204023";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -650,6 +650,8 @@ async function run() {
   $("bar").value = 0;
   await keepAwake(true);
   const clock = frameClock();
+  const stats = { wait: 0 };
+  const t0run = performance.now();
   try {
     const W = Math.round(+$("w").value / 2) * 2, H = Math.round(+$("h").value / 2) * 2;
     const k = finalScale();
@@ -680,11 +682,12 @@ async function run() {
       scale: k,
       dirHandle: target.dirHandle,
       fileHandle: target.fileHandle,
+      stats,
       onPreview: drawPreview,
       onProgress: ({ phase, i, total: n }) => {
         $("bar").max = Math.max(1, n);
         $("bar").value = i;
-        $("status").textContent = `${phase} ${i}/${n}${phase === "dibujando cuadros" ? clock(i, n) : ""}${note}`;
+        $("status").textContent = `${phase} ${i}/${n}${phase === "dibujando cuadros" ? clock(i, n) + (i > 14 ? ` · ${Math.round((stats.wait / Math.max(1, performance.now() - t0run)) * 100)}% del tiempo esperando a que se guarde (si es alto, el cuello es el disco o el JPG, no el dibujo)` : "") : ""}${note}`;
       },
       isCancelled: () => cancelFlag,
     });

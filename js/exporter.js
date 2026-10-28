@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028203257";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028203257";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028204023";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028204023";
 
 export { crc32 };
 
@@ -503,7 +503,9 @@ export async function exportPngSequence(o) {
       task.catch(() => {}); // (el error se atiende abajo)
       pending.push(task);
       // si ya hay muchos cuadros esperando, se espera al más viejo antes de seguir
+      const w0 = performance.now();
       while (pending.length >= MAX_PENDING) await pending.shift();
+      if (o.stats) o.stats.wait = (o.stats.wait ?? 0) + performance.now() - w0; // tiempo esperando a que se codifique y se escriba
       if (failure) throw failure;
     });
   } catch (e) {
