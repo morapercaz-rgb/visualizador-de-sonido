@@ -413,26 +413,48 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
   const cell = Math.max(20, size / 8);
   const rad = cell * 0.8;
   const covOf = (it) => ((it.fi[3] + it.fo[3]) / 2) * Math.min(1, (Math.PI * it.r * it.r) / (cell * cell));
-  const densAt = (list, covs, x, y) => {
-    let t = 0;
+  // (para no comparar cada forma con todas las demás —que se hace eterno con miles—, se las ordena por zonas del tamaño del radio:
+  // solo se miran las 9 zonas de alrededor. El resultado es exactamente el mismo)
+  const zone = (v) => Math.floor(v / rad);
+  const zkey = (zx, zy) => (zx + 50000) * 100003 + (zy + 50000);
+  const index = (list, covs) => {
+    const m = new Map();
     for (let i = 0; i < list.length; i++) {
-      const dx = list[i].x - x, dy = list[i].y - y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 >= rad * rad) continue;
-      const w = 1 - Math.sqrt(d2) / rad; // peso suave: 1 encima, 0 a la distancia "rad"
-      t += covs[i] * w * w * (3 - 2 * w);
+      const k = zkey(zone(list[i].x), zone(list[i].y));
+      const b = m.get(k);
+      if (b) b.push(i);
+      else m.set(k, [i]);
+    }
+    return { list, covs, m };
+  };
+  const densAt = (ix, x, y) => {
+    let t = 0;
+    const zx = zone(x), zy = zone(y);
+    for (let a = -1; a <= 1; a++) {
+      for (let b = -1; b <= 1; b++) {
+        const bucket = ix.m.get(zkey(zx + a, zy + b));
+        if (!bucket) continue;
+        for (let n = 0; n < bucket.length; n++) {
+          const i = bucket[n];
+          const dx = ix.list[i].x - x, dy = ix.list[i].y - y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= rad * rad) continue;
+          const w = 1 - Math.sqrt(d2) / rad; // peso suave: 1 encima, 0 a la distancia "rad"
+          t += ix.covs[i] * w * w * (3 - 2 * w);
+        }
+      }
     }
     return t;
   };
-  const covItems = items.map(covOf), covA = A.map(covOf), covB = B.map(covOf);
+  const ixItems = index(items, items.map(covOf)), ixA = index(A, A.map(covOf)), ixB = index(B, B.map(covOf));
 
   // 3) se dibujan
   ctx.lineCap = "round";
   for (const it of items) {
     const { x, y, r } = it;
     // (en las formas redondas no se baja de la densidad que ya tenían A o B; las barras y picos se aproximan con círculos, así que siguen con el límite de siempre)
-    const allow = it.circle ? Math.max(0.8, densAt(A, covA, x, y), densAt(B, covB, x, y)) : 0.8;
-    const local = Math.min(1, allow / Math.max(0.001, densAt(items, covItems, x, y)));
+    const allow = it.circle ? Math.max(0.8, densAt(ixA, x, y), densAt(ixB, x, y)) : 0.8;
+    const local = Math.min(1, allow / Math.max(0.001, densAt(ixItems, x, y)));
     const gg = g * local;
     const fi = [it.fi[0], it.fi[1], it.fi[2], it.fi[3] * gg];
     const fo = [it.fo[0], it.fo[1], it.fo[2], it.fo[3] * gg];
