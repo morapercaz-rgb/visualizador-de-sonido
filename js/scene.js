@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261028155910";
-import { createDefaultParams } from "./params.js?v=20261028155910";
-import { silentAudio } from "./audioEngine.js?v=20261028155910";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261028155910";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028155910";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028155910";
+import { VisualEngine } from "./visualEngine.js?v=20261028161348";
+import { createDefaultParams } from "./params.js?v=20261028161348";
+import { silentAudio } from "./audioEngine.js?v=20261028161348";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261028161348";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028161348";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028161348";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -389,13 +389,18 @@ export class Scene {
       if (overlay) this._drawHandles(overlay, c);
     }
 
+    this._vis = pairs ? new Map() : null; // cuánto se ve cada conjunto de la transformación ahora (para saber cuál agarrar con el mouse)
     if (pairs) {
       const prog = this.morphProgress();
       for (const p of pairs) {
         // con un 3.er conjunto (C) son dos tramos iguales: la primera mitad A → B y la segunda B → C
-        if (p.c && prog >= 0.5) this._drawMorph(ctx, w, h, audioData, dt, p.b, p.c, easeMorph(prog * 2 - 1, m.ease));
-        else this._drawMorph(ctx, w, h, audioData, dt, p.a, p.b, easeMorph(p.c ? prog * 2 : prog, m.ease));
+        const [x, y, tramo] = p.c && prog >= 0.5 ? [p.b, p.c, prog * 2 - 1] : [p.a, p.b, p.c ? prog * 2 : prog];
+        const u = easeMorph(tramo, m.ease);
+        this._drawMorph(ctx, w, h, audioData, dt, x, y, u);
+        this._vis.set(x, Math.max(this._vis.get(x) ?? 0, 1 - u));
+        this._vis.set(y, Math.max(this._vis.get(y) ?? 0, u));
       }
+      for (const c of inMorph) if (!this._vis.has(c)) this._vis.set(c, 0);
       if (overlay) for (const c of inMorph) if (this.conjuntos.includes(c)) this._drawHandles(overlay, c);
     }
 
@@ -886,10 +891,18 @@ export class Scene {
   // arriba hacia abajo: gana el que está más arriba. A cada motor se le pasa
   // el mouse ya "deshecho" de la transformación de su conjunto.
 
+  // los conjuntos que se pueden agarrar, el de arriba primero. En una transformación se agarra el que más se ve
+  // en este momento (el de arriba de la lista podría ser el que todavía no apareció) y no el que no se ve.
+  _grabOrder() {
+    const list = [...this.conjuntos].reverse();
+    if (!this._vis) return list;
+    const wt = (c) => this._vis.get(c) ?? 1;
+    return list.filter((c) => wt(c) > 0.02).sort((a, b) => wt(b) - wt(a));
+  }
+
   pointerDown(x, y, altKey = false) {
     if (this.settings.gizmo && this._gizmoDown(x, y, altKey)) return true;
-    for (let i = this.conjuntos.length - 1; i >= 0; i--) {
-      const c = this.conjuntos[i];
+    for (const c of this._grabOrder()) {
       if (!c.visible || c.locked) continue;
       const p = this._toLocal(c, x, y);
       if (c.engine.pointerDown(p.x, p.y)) {
@@ -923,7 +936,7 @@ export class Scene {
 
   hover(x, y) {
     if (this.settings.gizmo && this._gizmoHit(x, y)) return true;
-    return this.conjuntos.some((c) => {
+    return this._grabOrder().some((c) => {
       if (!c.visible || c.locked) return false;
       const p = this._toLocal(c, x, y);
       return c.engine.hover(p.x, p.y);
@@ -933,8 +946,7 @@ export class Scene {
   // doble click: sobre algo agarrable, lo que haga ese conjunto (borrar un
   // círculo libre, o recentrar su pieza); sobre un lugar vacío, recentra todos
   doubleClick(x, y) {
-    for (let i = this.conjuntos.length - 1; i >= 0; i--) {
-      const c = this.conjuntos[i];
+    for (const c of this._grabOrder()) {
       if (!c.visible || c.locked) continue;
       const p = this._toLocal(c, x, y);
       if (c.engine.hover(p.x, p.y)) {

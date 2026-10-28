@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028155910";
-import { silentAudio } from "./audioEngine.js?v=20261028155910";
-import { exportPngSequence } from "./exporter.js?v=20261028155910";
-import { progressAt } from "./morph.js?v=20261028155910";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028155910";
+import { Scene } from "./scene.js?v=20261028161348";
+import { silentAudio } from "./audioEngine.js?v=20261028161348";
+import { exportPngSequence } from "./exporter.js?v=20261028161348";
+import { progressAt } from "./morph.js?v=20261028161348";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028161348";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -119,24 +119,55 @@ function updateTiming() {
 
 // ---------- la escena (la misma para la vista y para exportar) ----------
 
+// Lo que moviste con el mouse (por conjunto de cada juego), para que la vista y la exportación lo repitan
+let moves = prefs.moves ?? {};
+
 function buildScene() {
-  const key = (id) => ($(id).value ? `lib:${$(id).value}` : "");
-  let a = key("sa"), b = key("sb"), c = key("sc");
-  let a2 = key("sa2"), b2 = key("sb2"), c2 = key("sc2");
-  if (!a || !b) throw friendly("elegí al menos el conjunto de partida (A) y el que sigue (B)");
+  if (!$("sa").value || !$("sb").value) throw friendly("elegí al menos el conjunto de partida (A) y el que sigue (B)");
   if (!getPreset($("sa").value) || !getPreset($("sb").value)) throw friendly("falta alguno de los conjuntos (¿lo borraste?)");
+  const sc = new Scene();
+  let first = true;
+  const make = (p, mk) => {
+    const c = first ? sc.replaceFromPreset(p) : sc.addFromPreset(p); // (el primero ocupa el conjunto que la escena trae de entrada)
+    first = false;
+    c._mk = mk;
+    if (moves[mk]) c.engine.importState(moves[mk]); // lo que movés con el mouse
+    return c;
+  };
+  // los fijos van primero (abajo de todo)
+  const fixed = [...document.querySelectorAll("#fixList input:checked")].map((cb) => getPreset(cb.dataset.name)).filter(Boolean);
+  for (const p of fixed) make(p, `fijo|${p.name}`);
+  // cada paso es un conjunto de la escena (así se puede agarrar con el mouse); si el mismo conjunto es el paso 1 y el 3 de un juego, es el mismo
+  const mine = new Map();
+  const slot = (set, id) => {
+    const name = $(id).value;
+    const p = name && getPreset(name);
+    if (!p) return "";
+    const mk = `${set}|${name}`;
+    if (!mine.has(mk)) mine.set(mk, make(p, mk));
+    return `set:${mine.get(mk).id}`;
+  };
+  let a = slot(1, "sa"), b = slot(1, "sb"), c = slot(1, "sc");
+  let a2 = slot(2, "sa2"), b2 = slot(2, "sb2"), c2 = slot(2, "sc2");
   // si un juego tiene tres pasos y el otro dos, el de dos se queda en su último paso
   if (c || c2) {
     if (a && b && !c) c = b;
     if (a2 && b2 && !c2) c2 = b2;
   }
-  const sc = new Scene();
-  const fixed = [...document.querySelectorAll("#fixList input:checked")].map((cb) => getPreset(cb.dataset.name)).filter(Boolean);
-  fixed.forEach((p, i) => (i === 0 ? sc.replaceFromPreset(p) : sc.addFromPreset(p)));
   Object.assign(sc.morph, { a, b, c, a2, b2, c2, on: true, playing: false, repeat: "once", seconds: 1, time: 0, only: fixed.length === 0 });
   applyLive(sc);
-  for (const cj of sc.conjuntos) cj.params.reactAudio = false; // sin audio
+  for (const cj of sc.conjuntos) {
+    cj.params.reactAudio = false; // sin audio
+    cj.params.mixHandles = $("handles").checked;
+  }
   return sc;
+}
+
+// después de mover algo: se anota dónde quedó cada conjunto
+function keepMoves() {
+  if (!scene) return;
+  for (const c of scene.conjuntos) if (c._mk) moves[c._mk] = c.engine.exportState();
+  save();
 }
 
 // lo que se puede cambiar sin volver a armar la escena
@@ -167,6 +198,7 @@ function rebuild(message) {
 
 const logicalSize = () => [Math.max(64, Math.round((num("w") || 1920) / 2) * 2), Math.max(64, Math.round((num("h") || 1080) / 2) * 2)];
 const liveCv = $("live"), liveCtx = liveCv.getContext("2d");
+const ovCv = $("liveOv"), ovCtx = ovCv.getContext("2d");
 let lastT = performance.now(), infoT = 0;
 
 function setPlayLabel() {
@@ -182,11 +214,13 @@ function liveLoop(now) {
   const s = Math.min(1, +$("vsize").value / W); // la vista es liviana: como mucho 480 / 720 / 1080 px de ancho
   const PW = Math.max(2, Math.round(W * s)), PH = Math.max(2, Math.round(H * s));
   if (liveCv.width !== PW || liveCv.height !== PH) {
-    liveCv.width = PW;
-    liveCv.height = PH;
+    liveCv.width = ovCv.width = PW;
+    liveCv.height = ovCv.height = PH;
   }
   liveCtx.setTransform(1, 0, 0, 1, 0, 0);
   liveCtx.clearRect(0, 0, PW, PH);
+  ovCtx.setTransform(1, 0, 0, 1, 0, 0);
+  ovCtx.clearRect(0, 0, PW, PH);
   if (!$("transparent").checked) {
     liveCtx.fillStyle = $("bg").value;
     liveCtx.fillRect(0, 0, PW, PH);
@@ -207,14 +241,15 @@ function liveLoop(now) {
   const lap = total > 0 ? Math.floor(T / (rep === "pingpong" ? 2 * total : total)) : 0;
   if (lap !== lastLap) {
     lastLap = lap;
-    if (rep === "loop" || rep === "pingpong") rebuild();
+    if ((rep === "loop" || rep === "pingpong") && !scene.isDragging) rebuild();
   }
   const eff = rep === "once" ? Math.min(T, total) : progressAt(T, total, rep) * total;
   scene.morph.time = progAt(eff);
 
   liveCtx.setTransform(s, 0, 0, s, 0, 0);
+  ovCtx.setTransform(s, 0, 0, s, 0, 0);
   scene.renderScale = s;
-  scene.draw(liveCtx, W, H, SILENT, dt);
+  scene.draw(liveCtx, W, H, SILENT, dt, $("handles").checked ? ovCtx : null); // (las manijas van en la capa de encima: nunca salen en lo exportado)
 
   if (!dragging) $("scrub").value = eff;
   if (now - infoT > 200) {
@@ -238,6 +273,55 @@ $("restart").addEventListener("click", () => {
   setPlayLabel();
   rebuild();
 });
+// el mouse sobre la vista (el mismo manejo que en el programa principal)
+const toLogical = (e) => {
+  const r = liveCv.getBoundingClientRect();
+  const [W, H] = logicalSize();
+  return { x: ((e.clientX - r.left) * W) / r.width, y: ((e.clientY - r.top) * H) / r.height };
+};
+liveCv.addEventListener("pointerdown", (e) => {
+  if (!scene || busy) return;
+  const p = toLogical(e);
+  if (scene.pointerDown(p.x, p.y, e.altKey)) {
+    try {
+      liveCv.setPointerCapture(e.pointerId);
+    } catch {}
+    liveCv.style.cursor = "grabbing";
+    playing = false; // al agarrar algo se pausa, para poder acomodarlo tranquilo
+    setPlayLabel();
+  }
+});
+liveCv.addEventListener("pointermove", (e) => {
+  if (!scene || busy) return;
+  const p = toLogical(e);
+  scene.pointerMove(p.x, p.y);
+  if (!scene.isDragging) liveCv.style.cursor = scene.hover(p.x, p.y) ? "grab" : "default";
+});
+const dropIt = () => {
+  if (!scene) return;
+  const was = scene.isDragging;
+  scene.pointerUp();
+  liveCv.style.cursor = "default";
+  if (was) keepMoves();
+};
+liveCv.addEventListener("pointerup", dropIt);
+liveCv.addEventListener("pointercancel", dropIt);
+liveCv.addEventListener("dblclick", (e) => {
+  if (!scene || busy) return;
+  const p = toLogical(e);
+  scene.doubleClick(p.x, p.y);
+  keepMoves();
+});
+$("resetMoves").addEventListener("click", () => {
+  moves = {};
+  save();
+  rebuild("volvió todo a como lo guardaste");
+});
+$("handles").addEventListener("change", () => {
+  if (scene) for (const c of scene.conjuntos) c.params.mixHandles = $("handles").checked;
+  save();
+});
+
 $("scrub").addEventListener("pointerdown", () => (dragging = true));
 window.addEventListener("pointerup", () => (dragging = false));
 $("scrub").addEventListener("input", () => {
@@ -310,6 +394,8 @@ function save() {
       JSON.stringify({
         sel: Object.fromEntries(SELECTS.map((id) => [id, $(id).value])),
         fixed: [...document.querySelectorAll("#fixList input:checked")].map((cb) => cb.dataset.name),
+        moves,
+        handles: $("handles").checked,
         trans: num("trans"),
         hold: num("hold"),
         ease: $("ease").value,
@@ -468,6 +554,7 @@ $("stagger").value = prefs.stagger ?? 0.35;
 $("swirl").value = prefs.swirl ?? 0.18;
 $("scatter").value = prefs.scatter ?? 0.6;
 $("wrap").checked = prefs.wrap ?? false;
+$("handles").checked = prefs.handles ?? true;
 $("repeat").value = prefs.repeat ?? "loop";
 $("vsize").value = prefs.vsize ?? "720";
 $("preset").value = prefs.preset ?? "1920x1080";

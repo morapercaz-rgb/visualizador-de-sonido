@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Transformador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261028155910" />
+  <link rel="stylesheet" href="exportador.css?v=20261028161348" />
 </head>
 <body>
   <main>
@@ -57,16 +57,18 @@
     <!-- 3 · vista -->
     <section class="card">
       <h2>3 · Vista</h2>
-      <div class="livebox"><canvas id="live" width="640" height="360"></canvas></div>
+      <div class="livebox"><canvas id="live" width="640" height="360"></canvas><canvas id="liveOv" width="640" height="360"></canvas></div>
       <div class="actions small">
         <button id="playBtn">▶ reproducir</button>
         <button id="restart">⏮ volver a empezar</button>
+        <button id="resetMoves">↺ deshacer lo que moví</button>
+        <label class="inl"><input type="checkbox" id="handles" checked /> manijas</label>
         <label class="inl">repetir <select id="repeat"><option value="loop">siempre</option><option value="once">una vez</option><option value="pingpong">ida y vuelta</option></select></label>
         <label class="inl">tamaño de la vista <select id="vsize"><option value="480">chica</option><option value="720">media</option><option value="1080">grande</option></select></label>
       </div>
       <label class="row"><span>ir a</span><input type="range" id="scrub" min="0" max="1" step="0.01" value="0" /><output id="scrubOut"></output></label>
       <p class="status" id="liveInfo"></p>
-      <p class="hint">La vista es liviana (como mucho el tamaño que elijas) pero muestra lo mismo que va a salir: la misma composición y los mismos tiempos. Lo que se exporta se dibuja cuadro por cuadro en el tamaño que pongas abajo, así que no se traba.</p>
+      <p class="hint"><b>Podés mover las auras con el mouse</b> (agarrá una luz, un núcleo o la pieza entera; doble click recentra). Conviene pausar en el paso que querés acomodar con la barra "ir a". Lo que movés queda guardado en este navegador y <b>es lo que sale en la exportación</b>. La vista es liviana (como mucho el tamaño que elijas) pero muestra lo mismo que va a salir: la misma composición y los mismos tiempos. Lo que se exporta se dibuja cuadro por cuadro en el tamaño que pongas abajo, así que no se traba.</p>
     </section>
 
     <!-- 4 · exportar -->
@@ -112,6 +114,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/transformador.js?v=20261028155910"></script>
+  <script type="module" src="js/transformador.js?v=20261028161348"></script>
 </body>
 </html>
