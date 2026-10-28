@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028174603";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028174603";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028175444";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028175444";
 
 export { crc32 };
 
@@ -283,6 +283,29 @@ export const breathe = () => {
     _bus.port2.postMessage(0);
   });
 };
+
+// Lo que se muestra mientras se exporta: cuánto llevás, cuánto tarda un cuadro y cuánto falta. El tiempo que falta se calcula con el
+// ritmo de los ÚLTIMOS cuadros (no desde el principio): los primeros cuadros siempre son los más lentos (se reservan los lienzos
+// gigantes, se prepara la tarjeta gráfica) y un promedio desde el primero daba horas de más.
+const fmtDur = (ms) => {
+  const s = Math.round(ms / 1000);
+  if (s < 90) return `${s} s`;
+  const m = Math.round(s / 60);
+  return m < 90 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+};
+export function frameClock(window = 10) {
+  const stamps = [];
+  let t0 = null;
+  return (i, total) => {
+    const now = performance.now();
+    t0 ??= now;
+    stamps[i] = now;
+    const back = Math.min(i, window);
+    if (i < 14 || !stamps[i - back]) return ` · llevás ${fmtDur(now - t0)} (midiendo cuánto tarda cada cuadro…)`;
+    const per = (now - stamps[i - back]) / back;
+    return ` · llevás ${fmtDur(now - t0)} · ${(per / 1000).toFixed(1)} s por cuadro · faltan ~${fmtDur(per * (total - i))}`;
+  };
+}
 
 // cuántos píxeles por cada unidad del tamaño lógico: enteros desde 1 (más resolución) o fracciones (½, ¼) para achicar el archivo
 export const pixelScale = (s) => {

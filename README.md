@@ -81,6 +81,10 @@ Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos 
 - **escalonado** (0 = todas las piezas salen a la vez; más alto = salen una tras otra dando la vuelta, como una ola) y **curva del camino** (0 = recto; con valores positivos o negativos el camino se curva hacia un lado u otro, con aire de remolino).
 - **⬇ exportar la transformación (secuencia de PNG)**: una imagen por cuadro, desde el primero (todo A) hasta el último (todo B), con la duración que pusiste. Usa los cuadros/seg, el fondo transparente y el "guardar en" (ZIP o carpeta) de "Exportar animación". Se guarda como `transformacion-fecha`, con su `LEEME.txt`; se importa en After igual que cualquier secuencia. Si hay un audio activo, las formas reaccionan a él durante la transformación.
 
+## Cuánto falta para terminar
+
+Mientras exporta, el estado dice **cuánto llevás**, **cuánto tarda cada cuadro** y **cuánto falta**. El tiempo que falta se calcula con el ritmo de los **últimos 10 cuadros**, y recién aparece desde el cuadro 14. Antes se promediaba desde el primer cuadro, y los primeros cuadros siempre son los más lentos (se reservan los lienzos gigantes y se prepara la tarjeta gráfica), así que al principio mostraba horas de más (por ejemplo 370 minutos para algo que tardó 10).
+
 ## Exportar sin que se frene en segundo plano
 
 Entre cuadro y cuadro el exportador hace una pausa corta para que el navegador respire. Antes usaba un temporizador, y Chrome frena los temporizadores de las pestañas que quedan en segundo plano (hasta **uno por minuto** pasados unos minutos): una exportación de cientos de cuadros podía pasar de unos minutos a **horas** apenas se cambiaba de ventana. Ahora, con la pestaña oculta, la pausa se hace con un mensaje interno (`MessageChannel`) que no se frena. Aun así, dibujar es trabajo de la compu: con la pestaña a la vista y sin otras cosas pesadas abiertas va lo más rápido posible.

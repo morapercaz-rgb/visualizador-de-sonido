@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028174603";
-import { AudioEngine } from "./audioEngine.js?v=20261028174603";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261028174603";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028174603";
+import { Scene } from "./scene.js?v=20261028175444";
+import { AudioEngine } from "./audioEngine.js?v=20261028175444";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation, frameClock } from "./exporter.js?v=20261028175444";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028175444";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
@@ -1054,7 +1054,7 @@ async function run(withMoves = false) {
   cancelFlag = false;
   $("bar").value = 0;
   await keepAwake(true);
-  let t0 = 0;
+  const clock = frameClock();
   try {
     const W = Math.round(+$("w").value / 2) * 2, H = Math.round(+$("h").value / 2) * 2;
     const k = finalScale();
@@ -1093,13 +1093,9 @@ async function run(withMoves = false) {
       fileHandle: target.fileHandle,
       onPreview: drawPreview,
       onProgress: ({ phase, i, total }) => {
-        const now = performance.now();
-        if (i === 0) t0 = now;
         $("bar").max = Math.max(1, total);
         $("bar").value = i;
-        const eta = phase === "dibujando cuadros" && i > 2 ? ((now - t0) / i) * (total - i) : 0;
-        const etaTxt = eta > 1500 ? ` · faltan ~${eta > 90000 ? Math.round(eta / 60000) + " min" : Math.round(eta / 1000) + " s"}` : "";
-        $("status").textContent = `${phase} ${i}/${total}${etaTxt}${note}`;
+        $("status").textContent = `${phase} ${i}/${total}${phase === "dibujando cuadros" ? clock(i, total) : ""}${note}`;
       },
       isCancelled: () => cancelFlag,
     });

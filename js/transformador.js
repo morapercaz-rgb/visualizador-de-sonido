@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028174603";
-import { silentAudio } from "./audioEngine.js?v=20261028174603";
-import { exportPngSequence, renderAnimation, pixelScale } from "./exporter.js?v=20261028174603";
-import { progressAt } from "./morph.js?v=20261028174603";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028174603";
+import { Scene } from "./scene.js?v=20261028175444";
+import { silentAudio } from "./audioEngine.js?v=20261028175444";
+import { exportPngSequence, renderAnimation, pixelScale, frameClock } from "./exporter.js?v=20261028175444";
+import { progressAt } from "./morph.js?v=20261028175444";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028175444";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -644,7 +644,7 @@ async function run() {
   cancelFlag = false;
   $("bar").value = 0;
   await keepAwake(true);
-  let t0 = 0;
+  const clock = frameClock();
   try {
     const W = Math.round(+$("w").value / 2) * 2, H = Math.round(+$("h").value / 2) * 2;
     const k = finalScale();
@@ -677,13 +677,9 @@ async function run() {
       fileHandle: target.fileHandle,
       onPreview: drawPreview,
       onProgress: ({ phase, i, total: n }) => {
-        const now = performance.now();
-        if (i === 0) t0 = now;
         $("bar").max = Math.max(1, n);
         $("bar").value = i;
-        const eta = phase === "dibujando cuadros" && i > 2 ? ((now - t0) / i) * (n - i) : 0;
-        const etaTxt = eta > 1500 ? ` · faltan ~${eta > 90000 ? Math.round(eta / 60000) + " min" : Math.round(eta / 1000) + " s"}` : "";
-        $("status").textContent = `${phase} ${i}/${n}${etaTxt}${note}`;
+        $("status").textContent = `${phase} ${i}/${n}${phase === "dibujando cuadros" ? clock(i, n) : ""}${note}`;
       },
       isCancelled: () => cancelFlag,
     });
