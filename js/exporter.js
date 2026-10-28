@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028175444";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028175444";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028203257";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028203257";
 
 export { crc32 };
 
@@ -287,7 +287,7 @@ export const breathe = () => {
 // Lo que se muestra mientras se exporta: cuánto llevás, cuánto tarda un cuadro y cuánto falta. El tiempo que falta se calcula con el
 // ritmo de los ÚLTIMOS cuadros (no desde el principio): los primeros cuadros siempre son los más lentos (se reservan los lienzos
 // gigantes, se prepara la tarjeta gráfica) y un promedio desde el primero daba horas de más.
-const fmtDur = (ms) => {
+export const fmtDur = (ms) => {
   const s = Math.round(ms / 1000);
   if (s < 90) return `${s} s`;
   const m = Math.round(s / 60);

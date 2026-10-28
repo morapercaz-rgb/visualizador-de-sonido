@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028175444";
-import { silentAudio } from "./audioEngine.js?v=20261028175444";
-import { exportPngSequence, renderAnimation, pixelScale, frameClock } from "./exporter.js?v=20261028175444";
-import { progressAt } from "./morph.js?v=20261028175444";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028175444";
+import { Scene } from "./scene.js?v=20261028203257";
+import { silentAudio } from "./audioEngine.js?v=20261028203257";
+import { exportPngSequence, renderAnimation, pixelScale, frameClock, fmtDur } from "./exporter.js?v=20261028203257";
+import { progressAt } from "./morph.js?v=20261028203257";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028203257";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -506,18 +506,23 @@ async function weigh() {
     $("status").textContent = "dibujando 3 cuadros de muestra…";
     const sizes = [];
     const probe = [0.25, 0.5, 0.75].map((f) => progAt(f * total));
+    const stamps = [];
     await renderAnimation(
       { scene: sc, videoLayer: { active: null, draw() {} }, globalParams: { bgColor: $("bg").value }, morph: true, morphTime: (i) => probe[i] ?? 1, keepSpin: true, audioFile: null, width: W, height: H, transparent: $("transparent").checked && !jpg, includeVideo: false, timelinePlay: $("keysOn").checked, seconds: 3 / fps, fps, scale: k, isCancelled: () => cancelFlag },
       async (canvas) => {
         const blob = await new Promise((res) => (jpg ? canvas.toBlob(res, "image/jpeg", +$("quality").value) : canvas.toBlob(res, "image/png")));
         if (!blob) throw friendly("el navegador no pudo armar la imagen de este tamaño: bajá el tamaño o la resolución");
         sizes.push(blob.size);
+        stamps.push(performance.now());
       }
     );
     const avg = sizes.reduce((t, v) => t + v, 0) / Math.max(1, sizes.length);
     const gb = (avg * frames) / 1e9;
     const txt = gb >= 1 ? `${gb.toFixed(1)} GB` : gb >= 0.001 ? `${Math.round(gb * 1000)} MB` : `${Math.round(gb * 1e6)} KB`;
-    $("status").textContent = `⚖ ${frames} imágenes de ${Math.round(W * k)} × ${Math.round(H * k)} px en ${jpg ? "JPG" : "PNG"}: unos ${avg >= 1e6 ? (avg / 1e6).toFixed(1) + " MB" : Math.round(avg / 1e3) + " KB"} cada una, ${txt} en total (aproximado: depende del cuadro).`;
+    // los cuadros 2 y 3 ya no pagan el arranque: su separación es lo que tarda cada uno
+    const per = stamps.length >= 3 ? (stamps[2] - stamps[0]) / 2 : 0;
+    const eta = per ? ` Tiempo: ~${(per / 1000).toFixed(1)} s por cuadro, o sea unos ${fmtDur(per * frames)} para los ${frames}.` : "";
+    $("status").textContent = `⚖ ${frames} imágenes de ${Math.round(W * k)} × ${Math.round(H * k)} px en ${jpg ? "JPG" : "PNG"}: unos ${avg >= 1e6 ? (avg / 1e6).toFixed(1) + " MB" : Math.round(avg / 1e3) + " KB"} cada una, ${txt} en total (aproximado: depende del cuadro).${eta}`;
   } catch (e) {
     $("status").textContent = e.message === "cancelado" ? "cancelado" : e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
   } finally {
