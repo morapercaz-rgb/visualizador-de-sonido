@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261028163610";
-import { createDefaultParams } from "./params.js?v=20261028163610";
-import { silentAudio } from "./audioEngine.js?v=20261028163610";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261028163610";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028163610";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028163610";
+import { VisualEngine } from "./visualEngine.js?v=20261028164334";
+import { createDefaultParams } from "./params.js?v=20261028164334";
+import { silentAudio } from "./audioEngine.js?v=20261028164334";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261028164334";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028164334";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028164334";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -712,7 +712,7 @@ export class Scene {
         ctx.globalAlpha = alpha * tau;
         ctx.globalCompositeOperation = mixed.visualMode === "mix" ? mixed.mixBlend : mixed.shapeBlendMode; // la misma mezcla que usa el conjunto
         ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount * this.renderScale}px)` : "none";
-        drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h) });
+        drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h), key: `${A.id}>${B.id}` });
       }
       ctx.restore();
     });

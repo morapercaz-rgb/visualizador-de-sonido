@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261028163610";
-import { defaultMixColor } from "./colorUtils.js?v=20261028163610";
+import { listPresets } from "./presets.js?v=20261028164334";
+import { defaultMixColor } from "./colorUtils.js?v=20261028164334";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261028163610";
+import { createDefaultParams } from "./params.js?v=20261028164334";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -145,7 +145,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   mf.addInput(m, "swirl", { min: -0.6, max: 0.6, step: 0.02, label: "curva del camino (0 = recto)" });
   mf.addInput(m, "scatter", { min: 0, max: 3, step: 0.05, label: "dispersión (se esparcen y se juntan)" });
   mf.addInput(m, "scatterDir", { options: { "horizontal (a los costados)": "horizontal", "para todos lados": "all" }, label: "hacia dónde se dispersan" });
-  mf.addInput(m, "still", { label: "formas quietas (no titilan ni se mueven solas: solo cambian de tamaño y lugar)" });
+  mf.addInput(m, "still", { label: "formas quietas (congela lo que se mueve solo; si no, siguen rebotando)" });
   mf.addInput(m, "only", { label: "solo estos (esconde el resto)" });
   mf.addButton({ title: "▶ ver la transformación" }).on("click", () => actions.morphPlay?.());
   mf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.morphToggle?.());

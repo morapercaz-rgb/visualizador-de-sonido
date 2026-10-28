@@ -215,6 +215,20 @@ function thin(list) {
   return Array.from({ length: MAX_PARTICLES }, (_, i) => list[Math.floor(i * step)]);
 }
 
+// El orden en que se emparejan las formas se calcula UNA vez por tramo y se mantiene: si se recalculara en cada cuadro,
+// cuando las formas se mueven (rebotan, derivan) cambiaría el orden por ángulo y cada una saltaría de golpe a otra pareja
+// (se ve como un titileo). Las formas llegan siempre en el mismo orden de dibujo, así que alcanza con guardar la permutación.
+const ORDERS = new Map();
+function stableSort(list, key) {
+  if (!key) return sortAround(list);
+  const hit = ORDERS.get(key);
+  if (hit && hit.length === list.length) return hit.map((i) => list[i]);
+  const sorted = sortAround(list);
+  const pos = new Map(list.map((p, i) => [p, i]));
+  ORDERS.set(key, sorted.map((p) => pos.get(p)));
+  return sorted;
+}
+
 // ordena las formas dando la vuelta alrededor de su centro: así las de A y
 // las de B quedan en un orden parecido y cada una viaja a la que le toca
 function sortAround(list) {
@@ -256,9 +270,10 @@ const fillArea = (list) =>
 //              según scatterDir) y se vuelven a juntar en su lugar de B (0 = van directo)
 //   scatterDir → "horizontal" (a izquierda y derecha) o "all" (para todos lados)
 //   size     → tamaño de referencia del lienzo (para medir cuánto se dispersan)
-export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl = 0.18, scatter = 0.6, scatterDir = "horizontal", size = 400 } = {}) {
-  const A = sortAround(thin(listA));
-  const B = sortAround(thin(listB));
+export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl = 0.18, scatter = 0.6, scatterDir = "horizontal", size = 400, key = "" } = {}) {
+  if (u < 0.02) for (const k of ORDERS.keys()) if (k.startsWith(key + "|")) ORDERS.delete(k); // al empezar un tramo se vuelve a emparejar
+  const A = stableSort(thin(listA), key && key + "|a");
+  const B = stableSort(thin(listB), key && key + "|b");
   const n = A.length, m = B.length;
   if (!n && !m) return;
   const K = Math.max(n, m);
@@ -393,29 +408,31 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
 
   // límite local: donde se amontonan muchas formas la luz se suma y se quema a
   // blanco; en cada zona se baja un poco para que no pase de lo que se ve en A o B
+  // (la densidad se mide con un peso suave según la distancia, no con celdas de una grilla: con celdas, cuando una forma
+  // en movimiento cruzaba el borde de una celda la luz de todas las de esa celda cambiaba de golpe y se veía un titileo)
   const cell = Math.max(20, size / 8);
-  const dens = new Map();
-  const keyOf = (it) => Math.floor(it.x / cell) + "," + Math.floor(it.y / cell);
+  const rad = cell * 0.8;
   const covOf = (it) => ((it.fi[3] + it.fo[3]) / 2) * Math.min(1, (Math.PI * it.r * it.r) / (cell * cell));
-  const densOf = (list) => {
-    const d = new Map();
-    for (const it of list) d.set(keyOf(it), (d.get(keyOf(it)) ?? 0) + covOf(it));
-    return d;
+  const densAt = (list, covs, x, y) => {
+    let t = 0;
+    for (let i = 0; i < list.length; i++) {
+      const dx = list[i].x - x, dy = list[i].y - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= rad * rad) continue;
+      const w = 1 - Math.sqrt(d2) / rad; // peso suave: 1 encima, 0 a la distancia "rad"
+      t += covs[i] * w * w * (3 - 2 * w);
+    }
+    return t;
   };
-  const densA = densOf(A), densB = densOf(B); // (lo que ya tenían A y B por separado: eso nunca se baja)
-  for (const it of items) {
-    const k = keyOf(it);
-    dens.set(k, (dens.get(k) ?? 0) + covOf(it));
-  }
+  const covItems = items.map(covOf), covA = A.map(covOf), covB = B.map(covOf);
 
   // 3) se dibujan
   ctx.lineCap = "round";
   for (const it of items) {
     const { x, y, r } = it;
-    const key = keyOf(it);
     // (en las formas redondas no se baja de la densidad que ya tenían A o B; las barras y picos se aproximan con círculos, así que siguen con el límite de siempre)
-    const allow = it.circle ? Math.max(0.8, densA.get(key) ?? 0, densB.get(key) ?? 0) : 0.8;
-    const local = Math.min(1, allow / Math.max(0.001, dens.get(key)));
+    const allow = it.circle ? Math.max(0.8, densAt(A, covA, x, y), densAt(B, covB, x, y)) : 0.8;
+    const local = Math.min(1, allow / Math.max(0.001, densAt(items, covItems, x, y)));
     const gg = g * local;
     const fi = [it.fi[0], it.fi[1], it.fi[2], it.fi[3] * gg];
     const fo = [it.fo[0], it.fo[1], it.fo[2], it.fo[3] * gg];

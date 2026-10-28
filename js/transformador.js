@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028163610";
-import { silentAudio } from "./audioEngine.js?v=20261028163610";
-import { exportPngSequence } from "./exporter.js?v=20261028163610";
-import { progressAt } from "./morph.js?v=20261028163610";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028163610";
+import { Scene } from "./scene.js?v=20261028164334";
+import { silentAudio } from "./audioEngine.js?v=20261028164334";
+import { exportPngSequence } from "./exporter.js?v=20261028164334";
+import { progressAt } from "./morph.js?v=20261028164334";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028164334";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -646,7 +646,7 @@ $("stagger").value = prefs.stagger ?? 0.35;
 $("swirl").value = prefs.swirl ?? 0.18;
 $("scatter").value = prefs.scatter ?? 0.6;
 $("scatterDir").value = prefs.scatterDir ?? "horizontal";
-$("still").checked = prefs.still ?? true;
+$("still").checked = prefs.still ?? false;
 $("wrap").checked = prefs.wrap ?? false;
 $("handles").checked = prefs.handles ?? true;
 $("gizmoOn").checked = prefs.gizmoOn ?? true;

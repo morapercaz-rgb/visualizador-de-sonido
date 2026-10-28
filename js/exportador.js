@@ -9,10 +9,10 @@
 // dibuja uno por uno (ver exporter.js), con los mismos archivos que el programa principal,
 // por lo que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028163610";
-import { AudioEngine } from "./audioEngine.js?v=20261028163610";
-import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261028163610";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028163610";
+import { Scene } from "./scene.js?v=20261028164334";
+import { AudioEngine } from "./audioEngine.js?v=20261028164334";
+import { exportPngSequence, analyzeAudioFrames, adjustAudio, renderAnimation } from "./exporter.js?v=20261028164334";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028164334";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.exportador.v2";
