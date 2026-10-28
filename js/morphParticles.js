@@ -252,10 +252,11 @@ const fillArea = (list) =>
 //   u        → avance de 0 (todo A) a 1 (todo B), ya con la curva aplicada
 //   stagger  → 0 = todas a la vez, 1 = una tras otra dando la vuelta
 //   swirl    → cuánto se curva el camino (0 = recto)
-//   scatter  → cuánto se dispersan por el camino: salen para todos lados y se
-//              vuelven a juntar en su lugar de B (0 = van directo)
+//   scatter  → cuánto se dispersan por el camino: salen para los costados (o para todos lados,
+//              según scatterDir) y se vuelven a juntar en su lugar de B (0 = van directo)
+//   scatterDir → "horizontal" (a izquierda y derecha) o "all" (para todos lados)
 //   size     → tamaño de referencia del lienzo (para medir cuánto se dispersan)
-export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl = 0.18, scatter = 0.6, size = 400 } = {}) {
+export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl = 0.18, scatter = 0.6, scatterDir = "horizontal", size = 400 } = {}) {
   const A = sortAround(thin(listA));
   const B = sortAround(thin(listB));
   const n = A.length, m = B.length;
@@ -330,8 +331,15 @@ export function drawParticleMorph(ctx, listA, listB, u, { stagger = 0.35, swirl 
       const mx = (a.x + b.x) / 2 - cx, my = (a.y + b.y) / 2 - cy;
       const ml = Math.hypot(mx, my) || 1;
       const ang = rnd(k, 1) * TAU;
-      let ox = (mx / ml) * 0.6 + Math.cos(ang);
-      let oy = (my / ml) * 0.6 + Math.sin(ang);
+      let ox, oy;
+      if (scatterDir === "all") {
+        ox = (mx / ml) * 0.6 + Math.cos(ang);
+        oy = (my / ml) * 0.6 + Math.sin(ang);
+      } else {
+        // solo a los costados: cada una sale para la izquierda o para la derecha (con apenas un poco de altura distinta)
+        ox = (rnd(k, 3) < 0.5 ? -1 : 1) * (0.6 + 0.4 * rnd(k, 4));
+        oy = (rnd(k, 5) - 0.5) * 0.12;
+      }
       const ol = Math.hypot(ox, oy) || 1;
       const amount = scatter * size * 0.3 * (0.35 + 0.65 * rnd(k, 2)) * Math.pow(Math.sin(Math.PI * p), 1.2);
       x += (ox / ol) * amount;

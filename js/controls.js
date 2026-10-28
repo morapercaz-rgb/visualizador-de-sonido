@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261028161348";
-import { defaultMixColor } from "./colorUtils.js?v=20261028161348";
+import { listPresets } from "./presets.js?v=20261028161851";
+import { defaultMixColor } from "./colorUtils.js?v=20261028161851";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261028161348";
+import { createDefaultParams } from "./params.js?v=20261028161851";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -143,7 +143,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   mf.addInput(m, "travel", { min: 0, max: 1, step: 0.05, label: "viaje de las formas (0 = fundido exacto: no cambia tamaño ni brillo; más = las formas viajan, pero baja un poco el brillo)" });
   mf.addInput(m, "stagger", { min: 0, max: 0.9, step: 0.05, label: "escalonado (0 = todo junto)" });
   mf.addInput(m, "swirl", { min: -0.6, max: 0.6, step: 0.02, label: "curva del camino (0 = recto)" });
-  mf.addInput(m, "scatter", { min: 0, max: 1.5, step: 0.05, label: "dispersión (se esparcen y se juntan)" });
+  mf.addInput(m, "scatter", { min: 0, max: 3, step: 0.05, label: "dispersión (se esparcen y se juntan)" });
+  mf.addInput(m, "scatterDir", { options: { "horizontal (a los costados)": "horizontal", "para todos lados": "all" }, label: "hacia dónde se dispersan" });
   mf.addInput(m, "only", { label: "solo estos (esconde el resto)" });
   mf.addButton({ title: "▶ ver la transformación" }).on("click", () => actions.morphPlay?.());
   mf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.morphToggle?.());
@@ -202,7 +203,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   qf.addInput(m, "travel", { min: 0, max: 1, step: 0.05, label: "viaje de las formas (0 = fundido)" });
   qf.addInput(m, "stagger", { min: 0, max: 0.9, step: 0.05, label: "escalonado" });
   qf.addInput(m, "swirl", { min: -0.6, max: 0.6, step: 0.02, label: "curva del camino" });
-  qf.addInput(m, "scatter", { min: 0, max: 1.5, step: 0.05, label: "dispersión" });
+  qf.addInput(m, "scatter", { min: 0, max: 3, step: 0.05, label: "dispersión" });
+  qf.addInput(m, "scatterDir", { options: { "horizontal (a los costados)": "horizontal", "para todos lados": "all" }, label: "hacia dónde se dispersan" });
   qf.addInput(q, "only", { label: "solo estas etapas" });
   qf.addButton({ title: "▶ reproducir la línea de tiempo" }).on("click", () => actions.seqPlay?.());
   qf.addButton({ title: "⏯ pausa / seguir" }).on("click", () => actions.seqToggle?.());

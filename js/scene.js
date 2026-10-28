@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261028161348";
-import { createDefaultParams } from "./params.js?v=20261028161348";
-import { silentAudio } from "./audioEngine.js?v=20261028161348";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261028161348";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028161348";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028161348";
+import { VisualEngine } from "./visualEngine.js?v=20261028161851";
+import { createDefaultParams } from "./params.js?v=20261028161851";
+import { silentAudio } from "./audioEngine.js?v=20261028161851";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261028161851";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028161851";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028161851";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -42,7 +42,7 @@ export class Scene {
 
     // transformación de un conjunto en otro (ver morph.js). a y b son
     // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
-    this.morph = { on: false, a: "", b: "", c: "", a2: "", b2: "", c2: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, travel: 0, time: 0, playing: false };
+    this.morph = { on: false, a: "", b: "", c: "", a2: "", b2: "", c2: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, scatterDir: "horizontal", travel: 0, time: 0, playing: false };
     // línea de tiempo de varias etapas: cada etapa es un conjunto (de la escena o
     // guardado) con su posición; entre una etapa y la siguiente se transforma
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]

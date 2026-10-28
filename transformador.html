@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Transformador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261028161348" />
+  <link rel="stylesheet" href="exportador.css?v=20261028161851" />
 </head>
 <body>
   <main>
@@ -48,7 +48,10 @@
       <label class="row"><span>viaje de las formas (0 = fundido)</span><input type="range" id="travel" min="0" max="1" step="0.05" /><output id="travelOut"></output></label>
       <label class="row"><span>escalonado</span><input type="range" id="stagger" min="0" max="0.9" step="0.05" /><output id="staggerOut"></output></label>
       <label class="row"><span>curva del camino</span><input type="range" id="swirl" min="-0.6" max="0.6" step="0.02" /><output id="swirlOut"></output></label>
-      <label class="row"><span>dispersión</span><input type="range" id="scatter" min="0" max="1.5" step="0.05" /><output id="scatterOut"></output></label>
+      <label class="row"><span>dispersión</span><input type="range" id="scatter" min="0" max="3" step="0.05" /><output id="scatterOut"></output></label>
+      <label class="row"><span>hacia dónde se dispersan</span>
+        <select id="scatterDir"><option value="horizontal">horizontal (a los costados)</option><option value="all">para todos lados</option></select>
+      </label>
       <p class="hint">Con el viaje en 0 es un fundido exacto: no cambia el tamaño ni el brillo. Más viaje hace que las formas se muevan de un lado a otro, pero puede bajar un poco el brillo a mitad de camino.</p>
       <h3>Pantalla infinita</h3>
       <label class="row"><span>lo que sale por un lado entra por el otro</span><input type="checkbox" id="wrap" /></label>
@@ -114,6 +117,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/transformador.js?v=20261028161348"></script>
+  <script type="module" src="js/transformador.js?v=20261028161851"></script>
 </body>
 </html>

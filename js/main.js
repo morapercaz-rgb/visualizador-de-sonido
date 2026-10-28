@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028161348";
-import { VideoLayer } from "./videoLayer.js?v=20261028161348";
-import { Scene } from "./scene.js?v=20261028161348";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028161348";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028161348";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028161348";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028161348";
+import { AudioEngine } from "./audioEngine.js?v=20261028161851";
+import { VideoLayer } from "./videoLayer.js?v=20261028161851";
+import { Scene } from "./scene.js?v=20261028161851";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028161851";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028161851";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028161851";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028161851";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -51,8 +51,8 @@ function savePrefs() {
 // la configuración de la transformación (qué dos conjuntos, cuánto dura…) también queda guardada
 const MORPH_KEY = "visualizador-de-sonido.transformacion.v1";
 try {
-  const { a, b, c, a2, b2, c2, seconds, ease, repeat, only, stagger, swirl, scatter, travel } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
-  Object.assign(scene.morph, { a: a ?? "", b: b ?? "", c: c ?? "", a2: a2 ?? "", b2: b2 ?? "", c2: c2 ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true, stagger: stagger ?? 0.35, swirl: swirl ?? 0.18, scatter: scatter ?? 0.6, travel: travel ?? 0 });
+  const { a, b, c, a2, b2, c2, seconds, ease, repeat, only, stagger, swirl, scatter, scatterDir, travel } = JSON.parse(localStorage.getItem(MORPH_KEY) ?? "{}");
+  Object.assign(scene.morph, { a: a ?? "", b: b ?? "", c: c ?? "", a2: a2 ?? "", b2: b2 ?? "", c2: c2 ?? "", seconds: seconds ?? 4, ease: ease ?? "smooth", repeat: repeat ?? "once", only: only ?? true, stagger: stagger ?? 0.35, swirl: swirl ?? 0.18, scatter: scatter ?? 0.6, scatterDir: scatterDir ?? "horizontal", travel: travel ?? 0 });
 } catch {}
 const WRAP_KEY = "visualizador-de-sonido.pantalla-infinita.v1";
 try {
@@ -86,8 +86,8 @@ function saveMorphSettings() {
   savePrefs();
   saveSeqSettings();
   try {
-    const { a, b, c, a2, b2, c2, seconds, ease, repeat, only, stagger, swirl, scatter, travel } = scene.morph;
-    localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, c, a2, b2, c2, seconds, ease, repeat, only, stagger, swirl, scatter, travel }));
+    const { a, b, c, a2, b2, c2, seconds, ease, repeat, only, stagger, swirl, scatter, scatterDir, travel } = scene.morph;
+    localStorage.setItem(MORPH_KEY, JSON.stringify({ a, b, c, a2, b2, c2, seconds, ease, repeat, only, stagger, swirl, scatter, scatterDir, travel }));
   } catch {}
 }
 
