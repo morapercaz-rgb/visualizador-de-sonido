@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028173051";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028173051";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028174603";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028174603";
 
 export { crc32 };
 
@@ -270,6 +270,20 @@ function seek(video, t) {
 const pad = (n, len = 5) => String(n).padStart(len, "0");
 const stampNow = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
+// Una pausa corta entre cuadro y cuadro. Con la pestaña a la vista alcanza un setTimeout(0), pero Chrome frena los temporizadores
+// de las pestañas en segundo plano (hasta uno por MINUTO pasados unos minutos), y una exportación de cientos de cuadros pasaba de
+// minutos a horas apenas se cambiaba de ventana. Un mensaje por un MessageChannel no se frena nunca.
+const _bus = typeof MessageChannel !== "undefined" ? new MessageChannel() : null;
+const _waiting = [];
+if (_bus) _bus.port1.onmessage = () => _waiting.shift()?.();
+export const breathe = () => {
+  if (!_bus || document.visibilityState === "visible") return new Promise((r) => setTimeout(r));
+  return new Promise((r) => {
+    _waiting.push(r);
+    _bus.port2.postMessage(0);
+  });
+};
+
 // cuántos píxeles por cada unidad del tamaño lógico: enteros desde 1 (más resolución) o fracciones (½, ¼) para achicar el archivo
 export const pixelScale = (s) => {
   const k = +s || 1;
@@ -365,7 +379,7 @@ export async function renderAnimation(o, onFrame) {
       o.onPreview?.(canvas, i, frames); // (opcional) para mostrar una miniatura del cuadro que se acaba de dibujar
 
       await onFrame(canvas, i);
-      await new Promise((r) => setTimeout(r)); // deja respirar al navegador en cada cuadro (si no, la página se siente trabada)
+      await breathe(); // deja respirar al navegador en cada cuadro (si no, la página se siente trabada)
     }
   } finally {
     // se deja todo como estaba
@@ -555,7 +569,7 @@ export async function exportGif(o) {
   });
 
   o.onProgress?.({ phase: "armando el GIF", i: frames.length, total: frames.length });
-  await new Promise((r) => setTimeout(r)); // para que se vea el aviso antes de que trabaje fuerte
+  await breathe(); // para que se vea el aviso antes de que trabaje fuerte
   const blob = buildGif(frames, outW, outH, o.fps, !!o.transparent);
   return { blob, ext: "gif", frames: frames.length, width: outW, height: outH, name: `animacion-${stampNow()}` };
 }
@@ -610,7 +624,7 @@ export async function convertAnimationToSequence({ file, dirHandle = null, onPro
       zip.add(`${name}/${out}`, new Uint8Array(await blob.arrayBuffer()));
       if (zip.bytes > 1.5e9) throw new Error("demasiado grande para un ZIP en memoria: usá Chrome para guardar en una carpeta");
     }
-    if (i % 4 === 3) await new Promise((r) => setTimeout(r));
+    if (i % 4 === 3) await breathe();
   }
 
   // cuadros por segundo: lo que dura cada cuadro, en promedio

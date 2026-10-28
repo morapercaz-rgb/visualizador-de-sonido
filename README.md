@@ -81,6 +81,10 @@ Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos 
 - **escalonado** (0 = todas las piezas salen a la vez; más alto = salen una tras otra dando la vuelta, como una ola) y **curva del camino** (0 = recto; con valores positivos o negativos el camino se curva hacia un lado u otro, con aire de remolino).
 - **⬇ exportar la transformación (secuencia de PNG)**: una imagen por cuadro, desde el primero (todo A) hasta el último (todo B), con la duración que pusiste. Usa los cuadros/seg, el fondo transparente y el "guardar en" (ZIP o carpeta) de "Exportar animación". Se guarda como `transformacion-fecha`, con su `LEEME.txt`; se importa en After igual que cualquier secuencia. Si hay un audio activo, las formas reaccionan a él durante la transformación.
 
+## Exportar sin que se frene en segundo plano
+
+Entre cuadro y cuadro el exportador hace una pausa corta para que el navegador respire. Antes usaba un temporizador, y Chrome frena los temporizadores de las pestañas que quedan en segundo plano (hasta **uno por minuto** pasados unos minutos): una exportación de cientos de cuadros podía pasar de unos minutos a **horas** apenas se cambiaba de ventana. Ahora, con la pestaña oculta, la pausa se hace con un mensaje interno (`MessageChannel`) que no se frena. Aun así, dibujar es trabajo de la compu: con la pestaña a la vista y sin otras cosas pesadas abiertas va lo más rápido posible.
+
 ## ZIP de más de 4 GB
 
 El ZIP "que se escribe de a poco" (exportador y Transformador) ahora usa **ZIP64** cuando pasa los 4 GB. Antes, pasados los 4 GB las posiciones de las imágenes se cortaban y el índice quedaba mal: al descomprimir faltaban cuadros o salían cambiados (en After Effects se veía como partes más lentas y un momento en que desaparecía todo). Los datos en sí salían completos. Para rescatar un ZIP grande hecho con la versión anterior hay que leerlo sin el índice (recorriendo las imágenes una por una).
