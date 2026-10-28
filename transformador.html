@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Transformador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261028164334" />
+  <link rel="stylesheet" href="exportador.css?v=20261028170255" />
 </head>
 <body>
   <main>
@@ -100,12 +100,16 @@
       <label class="row"><span>ancho (px)</span><input type="number" id="w" min="64" max="32000" step="2" /></label>
       <label class="row"><span>alto (px)</span><input type="number" id="h" min="64" max="16000" step="2" /></label>
       <label class="row"><span>resolución</span>
-        <select id="scale"><option value="1">×1 (ese tamaño)</option><option value="2">×2 (el doble)</option><option value="3">×3</option><option value="4">×4 (muy pesado)</option></select>
+        <select id="scale"><option value="0.25">×¼ (la cuarta parte de los píxeles por lado: muy liviano)</option><option value="0.5">×½ (la mitad por lado: 4 veces menos peso)</option><option value="1">×1 (ese tamaño)</option><option value="2">×2 (el doble)</option><option value="3">×3</option><option value="4">×4 (muy pesado)</option></select>
       </label>
       <p class="hint" id="finalSize"></p>
       <label class="row"><span>cuadros/seg</span>
         <select id="fps"><option value="24">24</option><option value="30">30</option><option value="60">60</option></select>
       </label>
+      <label class="row"><span>formato de las imágenes</span>
+        <select id="format"><option value="png">PNG (con transparencia; pesa mucho)</option><option value="jpg">JPG (sin transparencia; pesa mucho menos)</option></select>
+      </label>
+      <label class="row" id="qualRow"><span>calidad del JPG</span><input type="range" id="quality" min="0.5" max="1" step="0.01" /><output id="qualityOut"></output></label>
       <label class="row"><span>sin fondo (transparente)</span><input type="checkbox" id="transparent" /></label>
       <label class="row" id="bgRow"><span>color de fondo</span><input type="color" id="bg" /></label>
       <label class="row"><span>guardar en</span>
@@ -118,6 +122,7 @@
       <p class="hint" id="destHint"></p>
       <div class="actions">
         <button id="go" class="primary">▶ Exportar la transformación</button>
+        <button id="weigh">⚖ Calcular cuánto va a pesar</button>
         <button id="cancel" disabled>■ Cancelar (se guarda lo hecho)</button>
       </div>
       <progress id="bar" value="0" max="1"></progress>
@@ -126,6 +131,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/transformador.js?v=20261028164334"></script>
+  <script type="module" src="js/transformador.js?v=20261028170255"></script>
 </body>
 </html>

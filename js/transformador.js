@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028164334";
-import { silentAudio } from "./audioEngine.js?v=20261028164334";
-import { exportPngSequence } from "./exporter.js?v=20261028164334";
-import { progressAt } from "./morph.js?v=20261028164334";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028164334";
+import { Scene } from "./scene.js?v=20261028170255";
+import { silentAudio } from "./audioEngine.js?v=20261028170255";
+import { exportPngSequence, renderAnimation, pixelScale } from "./exporter.js?v=20261028170255";
+import { progressAt } from "./morph.js?v=20261028170255";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028170255";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -423,14 +423,15 @@ $("scrub").addEventListener("input", () => {
 
 function finalScale() {
   const W = +$("w").value, H = +$("h").value;
-  let k = +$("scale").value;
+  let k = pixelScale(+$("scale").value);
   const fits = (n) => W * n <= 32000 && H * n <= 32000 && W * H * n * n <= 268_000_000;
   while (k > 1 && !fits(k)) k--;
   return k;
 }
 function updateFinalSize() {
   const W = +$("w").value, H = +$("h").value, want = +$("scale").value, k = finalScale();
-  $("finalSize").textContent = `Salen imágenes de ${W * k} × ${H * k} px` + (k !== want ? ` (la resolución se bajó a ×${k}: más grande no aguanta el navegador)` : "");
+  const { n, total } = timing();
+  $("finalSize").textContent = `Salen ${Math.round(total * (+$("fps").value || 30))} imágenes de ${Math.round(W * k)} × ${Math.round(H * k)} px` + (k !== pixelScale(want) ? ` (la resolución se bajó a ×${k}: más grande no aguanta el navegador)` : "") + ". Tocá ⚖ para ver cuánto pesarían.";
 }
 function updateDestHint() {
   const d = $("dest").value;
@@ -461,8 +462,61 @@ for (const id of ["w", "h"]) {
   });
 }
 $("scale").addEventListener("change", updateFinalSize);
+$("fps").addEventListener("change", updateFinalSize);
+for (const id of ["trans", "hold"]) $(id).addEventListener("input", updateFinalSize);
+// JPG no tiene transparencia: se dibuja con el color de fondo
+function updateFormat() {
+  const jpg = $("format").value === "jpg";
+  $("qualRow").hidden = !jpg;
+  $("qualityOut").textContent = (+$("quality").value).toFixed(2);
+  if (jpg) $("transparent").checked = false;
+  $("transparent").disabled = jpg || busy;
+  $("bgRow").hidden = $("transparent").checked;
+}
+$("format").addEventListener("change", () => (updateFormat(), save()));
+$("quality").addEventListener("input", () => ($("qualityOut").textContent = (+$("quality").value).toFixed(2)));
+$("quality").addEventListener("change", save);
 $("dest").addEventListener("change", updateDestHint);
 $("transparent").addEventListener("change", () => ($("bgRow").hidden = $("transparent").checked));
+
+// Calcula cuánto pesaría: dibuja 3 cuadros de muestra (a un cuarto, la mitad y tres cuartos del camino) con la configuración
+// de abajo, los codifica y multiplica por la cantidad de cuadros.
+async function weigh() {
+  if (busy) return;
+  setBusy(true);
+  cancelFlag = false;
+  try {
+    const W = Math.round(+$("w").value / 2) * 2, H = Math.round(+$("h").value / 2) * 2;
+    const k = finalScale();
+    const fps = +$("fps").value;
+    const { total } = timing();
+    const frames = Math.round(total * fps);
+    if (!(frames >= 2)) throw friendly("revisá el tiempo y los cuadros por segundo");
+    const jpg = $("format").value === "jpg";
+    const sc = buildScene();
+    $("status").textContent = "dibujando 3 cuadros de muestra…";
+    const sizes = [];
+    const probe = [0.25, 0.5, 0.75].map((f) => progAt(f * total));
+    await renderAnimation(
+      { scene: sc, videoLayer: { active: null, draw() {} }, globalParams: { bgColor: $("bg").value }, morph: true, morphTime: (i) => probe[i] ?? 1, keepSpin: true, audioFile: null, width: W, height: H, transparent: $("transparent").checked && !jpg, includeVideo: false, seconds: 3 / fps, fps, scale: k, isCancelled: () => cancelFlag },
+      async (canvas) => {
+        const blob = await new Promise((res) => (jpg ? canvas.toBlob(res, "image/jpeg", +$("quality").value) : canvas.toBlob(res, "image/png")));
+        if (!blob) throw friendly("el navegador no pudo armar la imagen de este tamaño: bajá el tamaño o la resolución");
+        sizes.push(blob.size);
+      }
+    );
+    const avg = sizes.reduce((t, v) => t + v, 0) / Math.max(1, sizes.length);
+    const gb = (avg * frames) / 1e9;
+    const txt = gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(gb * 1000)} MB`;
+    $("status").textContent = `⚖ ${frames} imágenes de ${Math.round(W * k)} × ${Math.round(H * k)} px en ${jpg ? "JPG" : "PNG"}: unos ${avg >= 1e6 ? (avg / 1e6).toFixed(1) + " MB" : Math.round(avg / 1e3) + " KB"} cada una, ${txt} en total (aproximado: depende del cuadro).`;
+  } catch (e) {
+    $("status").textContent = e.message === "cancelado" ? "cancelado" : e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
+  } finally {
+    setBusy(false);
+    updateFormat();
+  }
+}
+$("weigh").addEventListener("click", weigh);
 
 // los que cambian qué se arma, y los que se aplican en vivo
 for (const id of SELECTS) $(id).addEventListener("change", () => (save(), rebuild()));
@@ -504,6 +558,8 @@ function save() {
         scale: num("scale"),
         fps: num("fps"),
         transparent: $("transparent").checked,
+        format: $("format").value,
+        quality: +$("quality").value,
         bg: $("bg").value,
         dest: $("dest").value,
       })
@@ -517,7 +573,10 @@ function setBusy(on) {
   for (const el of document.querySelectorAll("main select, main input, main button")) {
     if (el.id !== "cancel") el.disabled = on;
   }
-  if (!on) updateDestHint();
+  if (!on) {
+    updateDestHint();
+    updateFormat();
+  }
 }
 
 // dónde se guarda: se pide ANTES de empezar (el navegador solo deja abrir el selector justo después de un click)
@@ -589,13 +648,15 @@ async function run() {
       scene: sc,
       videoLayer: { active: null, draw() {} },
       globalParams: { bgColor: $("bg").value },
+      format: $("format").value,
+      quality: +$("quality").value,
       morph: true,
       morphTime: (i, frames) => progAt(frames > 1 ? (i / (frames - 1)) * total : 0),
       keepSpin: true,
       audioFile: null,
       width: W,
       height: H,
-      transparent: $("transparent").checked,
+      transparent: $("transparent").checked && $("format").value !== "jpg",
       includeVideo: false,
       seconds: total,
       fps,
@@ -658,13 +719,16 @@ $("h").value = prefs.h ?? 1080;
 $("scale").value = String(prefs.scale ?? 1);
 $("fps").value = String(prefs.fps ?? 30);
 $("transparent").checked = prefs.transparent ?? false;
+$("format").value = prefs.format ?? "png";
+$("quality").value = prefs.quality ?? 0.9;
 $("bgRow").hidden = $("transparent").checked;
 $("bg").value = prefs.bg ?? "#05050a";
 $("dest").value = prefs.dest ?? (canPickFile ? "zipfile" : "zip");
 if ($("dest").selectedOptions[0]?.disabled) $("dest").value = "zip";
-updateFinalSize();
-updateDestHint();
 updateTiming();
+updateFinalSize();
+updateFormat();
+updateDestHint();
 setPlayLabel();
 rebuild();
 requestAnimationFrame(liveLoop);

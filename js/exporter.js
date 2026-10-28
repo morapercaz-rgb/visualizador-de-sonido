@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028164334";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028164334";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028170255";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028170255";
 
 export { crc32 };
 
@@ -237,6 +237,12 @@ function seek(video, t) {
 const pad = (n, len = 5) => String(n).padStart(len, "0");
 const stampNow = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
+// cuántos píxeles por cada unidad del tamaño lógico: enteros desde 1 (más resolución) o fracciones (½, ¼) para achicar el archivo
+export const pixelScale = (s) => {
+  const k = +s || 1;
+  return k >= 1 ? Math.max(1, Math.round(k)) : Math.max(0.1, k);
+};
+
 // Dibuja la animación cuadro por cuadro con tiempo exacto (1/fps) y le entrega
 // cada cuadro a onFrame(canvas, i). Se ocupa de todo lo común: analizar el
 // audio, arrancar desde el principio, sacar manijas y gizmo de la imagen,
@@ -283,10 +289,10 @@ export async function renderAnimation(o, onFrame) {
 
   // calidad: con o.scale > 1 se dibuja a más resolución que el lienzo (W × H son el
   // tamaño "lógico": las posiciones y tamaños no cambian, solo hay más píxeles)
-  const K = Math.max(1, Math.round(o.scale ?? 1));
+  const K = pixelScale(o.scale); // (1, 2, 3… más píxeles que el tamaño; ½ o ¼: menos píxeles, para archivos más livianos)
   const canvas = document.createElement("canvas");
-  canvas.width = W * K;
-  canvas.height = H * K;
+  canvas.width = Math.max(1, Math.round(W * K));
+  canvas.height = Math.max(1, Math.round(H * K));
   const ctx = canvas.getContext("2d");
   scene.renderScale = K;
   // el video y sus efectos se dibujan siempre a tamaño lógico y después se agrandan
@@ -353,7 +359,9 @@ export async function renderAnimation(o, onFrame) {
 export async function exportPngSequence(o) {
   const name = `${o.seq ? "linea-de-tiempo" : o.morph ? "transformacion" : "secuencia-png"}-${stampNow()}`;
   const { width: W, height: H, seconds, fps, transparent } = o;
-  const K = Math.max(1, Math.round(o.scale ?? 1));
+  const K = pixelScale(o.scale);
+  const jpg = o.format === "jpg"; // JPG: sin transparencia pero mucho más liviano
+  const ext = jpg ? "jpg" : "png";
 
   // adónde va: una carpeta, un archivo ZIP que se escribe de a poco, o un ZIP en memoria que se descarga al final
   let sub = null;
@@ -371,12 +379,12 @@ export async function exportPngSequence(o) {
 
   const readme =
     `Secuencia de PNG exportada del Visualizador de sonido${o.seq ? " (línea de tiempo de etapas: conjuntos que se transforman uno en otro, de la primera etapa a la última)" : o.morph ? " (un conjunto que se transforma en otro: el primer cuadro es el conjunto de origen y el último el de destino)" : ""}.\n\n` +
-    `Tamaño: ${W * K} x ${H * K} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
+    `Formato: ${jpg ? "JPG (sin transparencia, con color de fondo)" : "PNG"}\nTamaño: ${Math.round(W * K)} x ${Math.round(H * K)} px\nCuadros por segundo: ${fps}\nCuadros: ${Math.round(seconds * fps)}\nDuración: ${seconds} s\n` +
     `Fondo: ${transparent ? "transparente (solo los colores)" : "con color de fondo"}\n` +
     `Video de fondo: ${o.includeVideo === false ? "no incluido" : "incluido"}\n\n` +
     `Esto es una carpeta con UNA IMAGEN POR CUADRO: al reproducirlas en orden se ven en movimiento.\n\n` +
     `Para abrirla en After Effects:\n` +
-    `  Archivo > Importar > Archivo... > elegí el primer PNG > marcá "PNG Sequence" > Importar.\n` +
+    `  Archivo > Importar > Archivo... > elegí el primer ${jpg ? "JPG" : "PNG"} > marcá "${jpg ? "JPEG" : "PNG"} Sequence" > Importar.\n` +
     `  Interpretar material (Cmd+Alt+C) > Velocidad de cuadro: ${fps} cuadros/seg.\n` +
     `El audio no va en las imágenes: importá el archivo de audio original aparte.\n`;
 
@@ -389,7 +397,7 @@ export async function exportPngSequence(o) {
   let writeChain = Promise.resolve();
   const pending = [];
   const writeOne = async (blob, i) => {
-    const file = `${name}_${pad(i + 1)}.png`;
+    const file = `${name}_${pad(i + 1)}.${ext}`;
     if (sub) {
       const fh = await sub.getFileHandle(file, { create: true });
       const w = await fh.createWritable();
@@ -408,7 +416,7 @@ export async function exportPngSequence(o) {
     await renderAnimation(o, async (canvas, i) => {
       if (failure) throw failure;
       if (memoryFull) throw new Error("__lleno__");
-      const blobPromise = new Promise((res) => canvas.toBlob(res, "image/png")); // (la foto se toma ya)
+      const blobPromise = new Promise((res) => (jpg ? canvas.toBlob(res, "image/jpeg", Math.min(1, Math.max(0.3, o.quality ?? 0.9))) : canvas.toBlob(res, "image/png"))); // (la foto se toma ya)
       const task = (async () => {
         const blob = await blobPromise;
         if (!blob) {
