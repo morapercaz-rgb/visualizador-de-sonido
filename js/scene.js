@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261027212221";
-import { createDefaultParams } from "./params.js?v=20261027212221";
-import { silentAudio } from "./audioEngine.js?v=20261027212221";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261027212221";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261027212221";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261027212221";
+import { VisualEngine } from "./visualEngine.js?v=20261027212921";
+import { createDefaultParams } from "./params.js?v=20261027212921";
+import { silentAudio } from "./audioEngine.js?v=20261027212921";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261027212921";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261027212921";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261027212921";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -42,7 +42,7 @@ export class Scene {
 
     // transformación de un conjunto en otro (ver morph.js). a y b son
     // "set:<id>" (un conjunto de la escena) o "lib:<nombre>" (uno guardado)
-    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, time: 0, playing: false };
+    this.morph = { on: false, a: "", b: "", seconds: 4, ease: "smooth", repeat: "once", only: true, stagger: 0.35, swirl: 0.18, scatter: 0.6, travel: 0, time: 0, playing: false };
     // línea de tiempo de varias etapas: cada etapa es un conjunto (de la escena o
     // guardado) con su posición; entre una etapa y la siguiente se transforma
     //   stops: [{ src, hold, trans, pos: { x, y, scale, rot, op } }]
@@ -588,19 +588,36 @@ export class Scene {
     const sB = smooth(Math.min(1, (1 - u) / EDGE));
     const m = capA.margin;
 
+    // El dibujo REAL de A y el REAL de B, mezclados sumando su luz (un fundido): el tamaño y el brillo van
+    // de A a B sin bajar nunca, porque no es una aproximación sino lo que cada conjunto dibuja de verdad.
+    // Encima se suman las formas que viajan (ver morphParticles.js), tanto como diga "viaje de las formas".
+    const mid = Math.min(sA, sB);
+    const tau = mid * Math.min(1, Math.max(0, this.morph.travel ?? 0)); // cuánto de lo que se ve son formas viajando
+    const cw = capA.canvas.width, ch = capA.canvas.height;
+    const fade = (this._fadeCv ??= document.createElement("canvas"));
+    if (fade.width !== cw || fade.height !== ch) {
+      fade.width = cw;
+      fade.height = ch;
+    }
+    const fx = fade.getContext("2d");
+    fx.setTransform(1, 0, 0, 1, 0, 0);
+    fx.globalCompositeOperation = "source-over";
+    fx.globalAlpha = 1;
+    fx.clearRect(0, 0, cw, ch);
+    fx.globalCompositeOperation = "lighter";
+    fx.globalAlpha = 1 - u;
+    fx.drawImage(capA.canvas, 0, 0);
+    fx.globalAlpha = u;
+    fx.drawImage(capB.canvas, 0, 0);
+    fx.globalCompositeOperation = "source-over";
+    fx.globalAlpha = 1;
+
     ctx.save();
     this._apply(ctx, A.xf);
-    if (sA < 1) {
-      ctx.globalAlpha = alpha * (1 - sA);
-      ctx.drawImage(capA.canvas, -m, -m, capA.canvas.width / capA.k, capA.canvas.height / capA.k);
-    }
-    if (sB < 1) {
-      ctx.globalAlpha = alpha * (1 - sB);
-      ctx.drawImage(capB.canvas, -capB.margin, -capB.margin, capB.canvas.width / capB.k, capB.canvas.height / capB.k);
-    }
-    const mid = Math.min(sA, sB);
-    if (mid > 0.001) {
-      ctx.globalAlpha = alpha * mid;
+    ctx.globalAlpha = alpha * (1 - tau);
+    ctx.drawImage(fade, -m, -m, cw / capA.k, ch / capA.k);
+    if (tau > 0.001) {
+      ctx.globalAlpha = alpha * tau;
       ctx.globalCompositeOperation = mixed.visualMode === "mix" ? mixed.mixBlend : mixed.shapeBlendMode; // la misma mezcla que usa el conjunto
       ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount * this.renderScale}px)` : "none";
       drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h) });
