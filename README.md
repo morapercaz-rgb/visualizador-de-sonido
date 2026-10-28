@@ -78,6 +78,21 @@ Carpeta **"Transformación (de un conjunto a otro)"** (debajo de "Mis conjuntos 
 - **escalonado** (0 = todas las piezas salen a la vez; más alto = salen una tras otra dando la vuelta, como una ola) y **curva del camino** (0 = recto; con valores positivos o negativos el camino se curva hacia un lado u otro, con aire de remolino).
 - **⬇ exportar la transformación (secuencia de PNG)**: una imagen por cuadro, desde el primero (todo A) hasta el último (todo B), con la duración que pusiste. Usa los cuadros/seg, el fondo transparente y el "guardar en" (ZIP o carpeta) de "Exportar animación". Se guarda como `transformacion-fecha`, con su `LEEME.txt`; se importa en After igual que cualquier secuencia. Si hay un audio activo, las formas reaccionan a él durante la transformación.
 
+## Pantalla infinita
+
+En "Transformar y mover" del panel (y en el **Transformador**) está el tilde **pantalla infinita**: todo lo que sale por un borde de la pantalla **vuelve a entrar por el borde opuesto**, como un espacio circular. Vale para la posición de cada conjunto (movido a mano, con órbita, deriva, línea de tiempo, transformación…): cuando el centro de la pieza se pasa del borde, aparece del otro lado. Cada conjunto se dibuja hasta 4 veces (las copias no hacen avanzar la animación otra vez), así que con muchos conjuntos grandes pesa más. Queda guardado aunque refresques. No cambia lo que se mueve por dentro de un conjunto (por ejemplo las luces de un aura): solo la pieza entera.
+
+## Transformador (programa aparte, liviano)
+
+Una página separada, **`transformador.html`**, para **ver y exportar transformaciones** sin el peso del programa principal (ahí un lienzo grande se traba). Usa los mismos archivos de dibujo, así que sale idéntico. No tiene audio: los conjuntos no reaccionan al sonido.
+
+1. **Qué se transforma:** elegís entre tus conjuntos guardados (💾, y los 🌐 de todos) el **Juego 1: A → B → C** (C es opcional: sin C son dos pasos) y, si querés, un **Juego 2 a la vez: A2 → B2 → C2**. Si un juego tiene tres pasos y el otro dos, el de dos se queda en su último paso. **Conjuntos fijos** (opcional): los que tildes se ven quietos debajo de la transformación.
+2. **El tiempo:** **tarda en pasar de un paso al siguiente (s)** y **se queda quieto en cada paso (s)**; abajo dice cuánto dura en total. **Curva** suave o constante, y los mismos ajustes de la transformación del programa principal (**viaje de las formas**, escalonado, curva del camino, dispersión). Tilde **pantalla infinita**.
+3. **Vista:** liviana (480 / 720 / 1080 px de ancho como mucho, a elegir) y fluida. ▶ / ⏸, **volver a empezar**, una barra **ir a** para pararte en cualquier momento, y **repetir** (siempre, una vez, ida y vuelta). Muestra lo mismo que va a salir: cada vuelta arranca de cero, igual que la exportación.
+4. **Exportar secuencia de PNG:** tamaño (hasta 8K), resolución ×1 a ×4, cuadros por segundo, fondo transparente o de color, y dónde guardar (ZIP escrito de a poco, ZIP en memoria o carpeta). Se dibuja cuadro por cuadro y deja respirar al navegador, así que **no se traba** aunque el lienzo sea grande. El primer cuadro es A y el último es el último paso.
+
+Los conjuntos salen **como los guardaste** (posición, tamaño, movimiento): para que viajen de un lugar a otro, guardalos en lugares distintos desde el programa principal. Las preferencias de la página (qué elegiste, tiempos, tamaño…) quedan guardadas en este navegador.
+
 ## Línea de tiempo de etapas: varios conjuntos y posiciones que se van transformando
 
 Carpeta **"Línea de tiempo (varias etapas)"** y una **barra abajo de la pantalla** (aparece cuando hay al menos una etapa). Cada **etapa** es un conjunto en una posición; la línea de tiempo recorre las etapas en orden y **entre una y la siguiente se transforma de forma gradual** (cada pieza viaja y se acomoda, como en "Transformación").

@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028151357";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028151357";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028155910";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028155910";
 
 export { crc32 };
 
@@ -271,7 +271,7 @@ export async function renderAnimation(o, onFrame) {
   scene.timeline.time = o.timelineStart ?? 0;
   scene.timeline.playing = true;
   scene.settings.gizmo = false;
-  // exportar la transformación: el avance va exacto de A (primer cuadro) a B (último)
+  // exportar la transformación: el avance va exacto de A (primer cuadro) a B (último), o hasta C si hay tres pasos
   if (o.morph) Object.assign(scene.morph, { on: true, playing: false, repeat: "once", time: 0 });
   if (o.seq) Object.assign(scene.seq, { on: true, playing: false, repeat: "once", time: 0 });
   for (const { c } of saved.conjuntos) {
@@ -305,7 +305,7 @@ export async function renderAnimation(o, onFrame) {
 
       // (opcional) antes de dibujar cada cuadro: por ejemplo, repetir lo que se movió con el mouse en ese momento
       await o.beforeFrame?.(i, i / fps, { scene, W, H, audio: audioFrames[i] });
-      if (o.morph) scene.morph.time = frames > 1 ? (i / (frames - 1)) * seconds : 0;
+      if (o.morph) scene.morph.time = o.morphTime ? o.morphTime(i, frames) : frames > 1 ? (i / (frames - 1)) * seconds : 0; // (o.morphTime: otro reloj para el avance, con pausas en cada paso)
       if (o.seq) scene.seq.time = frames > 1 ? (i / (frames - 1)) * seconds : 0;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);

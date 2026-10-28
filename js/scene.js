@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261028151357";
-import { createDefaultParams } from "./params.js?v=20261028151357";
-import { silentAudio } from "./audioEngine.js?v=20261028151357";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261028151357";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028151357";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028151357";
+import { VisualEngine } from "./visualEngine.js?v=20261028155910";
+import { createDefaultParams } from "./params.js?v=20261028155910";
+import { silentAudio } from "./audioEngine.js?v=20261028155910";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261028155910";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028155910";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028155910";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
@@ -55,7 +55,7 @@ export class Scene {
     this._libCache = new Map(); // conjuntos guardados convertidos en conjuntos dibujables
     this._nextLibId = -1;
 
-    this.settings = { gizmo: false }; // mostrar las manijas de transformación
+    this.settings = { gizmo: false, wrap: false }; // wrap: "pantalla infinita" (lo que sale por un borde entra por el opuesto) // mostrar las manijas de transformación
     this.gdrag = null; // arrastre de una manija del gizmo
     this.onParamsChanged = null; // se llama cuando el gizmo cambia parámetros (para refrescar el panel)
 
@@ -277,6 +277,29 @@ export class Scene {
   // pivote; la diferencia entre modos es si el desplazamiento (tx, ty) se
   // aplica después de rotar (el dibujo se corre sin cambiar su eje) o antes
   // (el dibujo queda corrido y la rotación lo hace orbitar: modo "canvas").
+  // "Pantalla infinita": el centro de la pieza se lleva a dentro de la pantalla (módulo w × h) y se le suman copias
+  // corridas un ancho / un alto hacia el lado que mira al borde más cercano, así lo que sale por un costado
+  // entra por el opuesto. Devuelve los corrimientos [dx, dy]; el primero es el dibujo "de verdad".
+  _wrapOffsets(xf, w, h) {
+    if (!this.settings.wrap || !(w > 0) || !(h > 0)) return [[0, 0]];
+    const c = this._map(xf, { x: xf.px, y: xf.py });
+    const sx = -Math.floor(c.x / w) * w, sy = -Math.floor(c.y / h) * h;
+    const ex = c.x + sx < w / 2 ? w : -w, ey = c.y + sy < h / 2 ? h : -h;
+    return [[sx, sy], [sx + ex, sy], [sx, sy + ey], [sx + ex, sy + ey]];
+  }
+
+  // corre fn(primero) una vez por cada copia de la pantalla infinita, con el contexto ya llevado a la transformación del conjunto.
+  // Las copias de un motor se dibujan con dt = 0: ven el mismo cuadro pero no hacen avanzar la animación otra vez.
+  _wrapped(ctx, xf, w, h, fn) {
+    this._wrapOffsets(xf, w, h).forEach(([dx, dy], i) => {
+      ctx.save();
+      ctx.translate(dx, dy);
+      this._apply(ctx, xf);
+      fn(i === 0);
+      ctx.restore();
+    });
+  }
+
   _apply(ctx, xf) {
     if (xf.mode === "canvas") {
       ctx.translate(xf.px, xf.py);
@@ -360,8 +383,7 @@ export class Scene {
       c.xf = this._transform(c, w, h, au, dt);
       ctx.save();
       ctx.globalAlpha = Math.min(1, Math.max(0, c.params.tOpacity));
-      this._apply(ctx, c.xf);
-      c.engine.draw(ctx, w, h, au, c.params, dt);
+      this._wrapped(ctx, c.xf, w, h, (first) => c.engine.draw(ctx, w, h, au, c.params, first ? dt : 0));
       ctx.restore();
 
       if (overlay) this._drawHandles(overlay, c);
@@ -504,8 +526,7 @@ export class Scene {
     c.xf = this._transform(c, w, h, au, dt);
     ctx.save();
     ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity));
-    this._apply(ctx, c.xf);
-    c.engine.draw(ctx, w, h, au, params, dt);
+    this._wrapped(ctx, c.xf, w, h, (first) => c.engine.draw(ctx, w, h, au, params, first ? dt : 0));
     ctx.restore();
     c.params = orig;
   }
@@ -532,10 +553,9 @@ export class Scene {
     c.xf = this._transform(c, w, h, au, dt);
     c.params = orig;
     ctx.save();
-    this._apply(ctx, c.xf);
     ctx.globalAlpha = Math.min(1, Math.max(0, params.tOpacity)) * Math.min(1, Math.max(0, f));
     const m = cap.margin;
-    ctx.drawImage(cap.canvas, -m, -m, cap.canvas.width / cap.k, cap.canvas.height / cap.k);
+    this._wrapped(ctx, c.xf, w, h, () => ctx.drawImage(cap.canvas, -m, -m, cap.canvas.width / cap.k, cap.canvas.height / cap.k));
     ctx.restore();
   }
 
@@ -672,15 +692,18 @@ export class Scene {
     fx.globalAlpha = 1;
 
     ctx.save();
-    this._apply(ctx, A.xf);
-    ctx.globalAlpha = alpha * (1 - tau);
-    ctx.drawImage(fade, -m, -m, cw / capA.k, ch / capA.k);
-    if (tau > 0.001) {
-      ctx.globalAlpha = alpha * tau;
-      ctx.globalCompositeOperation = mixed.visualMode === "mix" ? mixed.mixBlend : mixed.shapeBlendMode; // la misma mezcla que usa el conjunto
-      ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount * this.renderScale}px)` : "none";
-      drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h) });
-    }
+    this._wrapped(ctx, A.xf, w, h, () => {
+      ctx.save();
+      ctx.globalAlpha = alpha * (1 - tau);
+      ctx.drawImage(fade, -m, -m, cw / capA.k, ch / capA.k);
+      if (tau > 0.001) {
+        ctx.globalAlpha = alpha * tau;
+        ctx.globalCompositeOperation = mixed.visualMode === "mix" ? mixed.mixBlend : mixed.shapeBlendMode; // la misma mezcla que usa el conjunto
+        ctx.filter = mixed.glowAmount > 0 ? `blur(${mixed.glowAmount * this.renderScale}px)` : "none";
+        drawParticleMorph(ctx, capA.particles, capB.particles, u, { ...this.morph, size: Math.min(w, h) });
+      }
+      ctx.restore();
+    });
     ctx.restore();
   }
 

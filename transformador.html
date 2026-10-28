@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transformador</title>
+  <link rel="stylesheet" href="exportador.css?v=20261028155910" />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Transformador</h1>
+      <p class="sub">Un programa aparte, liviano, para ver y exportar una transformación de tus conjuntos guardados: de uno a otro y a un tercero (3 pasos), y hasta dos juegos a la vez. Sin audio: no hay reacción al sonido. La vista es chica y fluida, y la exportación (PNG) puede ser todo lo grande que quieras.</p>
+      <p class="sub"><a href="index.html">← programa principal</a> · <a href="exportador.html">exportador con audio</a></p>
+    </header>
+
+    <!-- 1 · qué se transforma -->
+    <section class="card">
+      <h2>1 · Qué se transforma (tus conjuntos guardados)</h2>
+      <p id="noPresets" class="aviso" hidden>
+        Todavía no hay conjuntos guardados en este navegador. Guardalos en el programa principal con <b>💾 guardar este conjunto</b>, o importá un archivo de conjuntos:
+        <input type="file" id="importFile" accept=".json,application/json" />
+      </p>
+      <h3>Juego 1</h3>
+      <label class="row"><span>desde (A)</span><select id="sa"></select></label>
+      <label class="row"><span>pasa a (B)</span><select id="sb"></select></label>
+      <label class="row"><span>y termina en (C) · opcional</span><select id="sc"></select></label>
+      <h3>Juego 2 · a la vez, opcional</h3>
+      <label class="row"><span>desde (A2)</span><select id="sa2"></select></label>
+      <label class="row"><span>pasa a (B2)</span><select id="sb2"></select></label>
+      <label class="row"><span>y termina en (C2) · opcional</span><select id="sc2"></select></label>
+      <p class="hint">Cada conjunto sale como lo guardaste (colores, tamaño, posición, movimiento). Si un juego tiene tres pasos y el otro dos, el que tiene dos se queda en su último paso. Si querés que se mueva de un lugar a otro, guardá los conjuntos en lugares distintos.</p>
+      <h3>Conjuntos fijos · opcional</h3>
+      <p class="hint">Tildá los que quieras que se vean quietos (sin transformarse) debajo de la transformación. Sin tildar ninguno, solo se ve la transformación.</p>
+      <div id="fixList"></div>
+    </section>
+
+    <!-- 2 · tiempo -->
+    <section class="card">
+      <h2>2 · El tiempo</h2>
+      <label class="row"><span>tarda en pasar de un paso al siguiente (s)</span><input type="range" id="trans" min="0.5" max="60" step="0.5" /><output id="transOut"></output></label>
+      <label class="row"><span>se queda quieto en cada paso (s)</span><input type="range" id="hold" min="0" max="30" step="0.5" /><output id="holdOut"></output></label>
+      <label class="row"><span>curva</span>
+        <select id="ease"><option value="smooth">suave (arranca y frena)</option><option value="linear">constante</option></select>
+      </label>
+      <p class="status" id="totalInfo"></p>
+      <h3>Cómo se transforma</h3>
+      <label class="row"><span>viaje de las formas (0 = fundido)</span><input type="range" id="travel" min="0" max="1" step="0.05" /><output id="travelOut"></output></label>
+      <label class="row"><span>escalonado</span><input type="range" id="stagger" min="0" max="0.9" step="0.05" /><output id="staggerOut"></output></label>
+      <label class="row"><span>curva del camino</span><input type="range" id="swirl" min="-0.6" max="0.6" step="0.02" /><output id="swirlOut"></output></label>
+      <label class="row"><span>dispersión</span><input type="range" id="scatter" min="0" max="1.5" step="0.05" /><output id="scatterOut"></output></label>
+      <p class="hint">Con el viaje en 0 es un fundido exacto: no cambia el tamaño ni el brillo. Más viaje hace que las formas se muevan de un lado a otro, pero puede bajar un poco el brillo a mitad de camino.</p>
+      <h3>Pantalla infinita</h3>
+      <label class="row"><span>lo que sale por un lado entra por el otro</span><input type="checkbox" id="wrap" /></label>
+    </section>
+
+    <!-- 3 · vista -->
+    <section class="card">
+      <h2>3 · Vista</h2>
+      <div class="livebox"><canvas id="live" width="640" height="360"></canvas></div>
+      <div class="actions small">
+        <button id="playBtn">▶ reproducir</button>
+        <button id="restart">⏮ volver a empezar</button>
+        <label class="inl">repetir <select id="repeat"><option value="loop">siempre</option><option value="once">una vez</option><option value="pingpong">ida y vuelta</option></select></label>
+        <label class="inl">tamaño de la vista <select id="vsize"><option value="480">chica</option><option value="720">media</option><option value="1080">grande</option></select></label>
+      </div>
+      <label class="row"><span>ir a</span><input type="range" id="scrub" min="0" max="1" step="0.01" value="0" /><output id="scrubOut"></output></label>
+      <p class="status" id="liveInfo"></p>
+      <p class="hint">La vista es liviana (como mucho el tamaño que elijas) pero muestra lo mismo que va a salir: la misma composición y los mismos tiempos. Lo que se exporta se dibuja cuadro por cuadro en el tamaño que pongas abajo, así que no se traba.</p>
+    </section>
+
+    <!-- 4 · exportar -->
+    <section class="card">
+      <h2>4 · Exportar secuencia de PNG</h2>
+      <label class="row"><span>tamaño</span>
+        <select id="preset">
+          <option value="1920x1080">Full HD 1920 × 1080</option>
+          <option value="1280x720">HD 1280 × 720</option>
+          <option value="3840x2160">4K 3840 × 2160</option>
+          <option value="7680x4320">8K 7680 × 4320</option>
+          <option value="1080x1920">vertical 1080 × 1920</option>
+          <option value="1080x1080">cuadrado 1080 × 1080</option>
+          <option value="custom">personalizado</option>
+        </select>
+      </label>
+      <label class="row"><span>ancho (px)</span><input type="number" id="w" min="64" max="32000" step="2" /></label>
+      <label class="row"><span>alto (px)</span><input type="number" id="h" min="64" max="16000" step="2" /></label>
+      <label class="row"><span>resolución</span>
+        <select id="scale"><option value="1">×1 (ese tamaño)</option><option value="2">×2 (el doble)</option><option value="3">×3</option><option value="4">×4 (muy pesado)</option></select>
+      </label>
+      <p class="hint" id="finalSize"></p>
+      <label class="row"><span>cuadros/seg</span>
+        <select id="fps"><option value="24">24</option><option value="30">30</option><option value="60">60</option></select>
+      </label>
+      <label class="row"><span>sin fondo (transparente)</span><input type="checkbox" id="transparent" /></label>
+      <label class="row" id="bgRow"><span>color de fondo</span><input type="color" id="bg" /></label>
+      <label class="row"><span>guardar en</span>
+        <select id="dest">
+          <option value="zipfile">un archivo ZIP que elijo (se escribe de a poco; lo mejor)</option>
+          <option value="zip">un ZIP que se descarga solo (se arma en memoria)</option>
+          <option value="folder">una carpeta que elijo</option>
+        </select>
+      </label>
+      <p class="hint" id="destHint"></p>
+      <div class="actions">
+        <button id="go" class="primary">▶ Exportar la transformación</button>
+        <button id="cancel" disabled>■ Cancelar (se guarda lo hecho)</button>
+      </div>
+      <progress id="bar" value="0" max="1"></progress>
+      <p id="status" class="status">Listo para exportar.</p>
+      <p class="hint">Sale igual a la vista: del primer paso al último, con las pausas y la duración de arriba. El primer cuadro es A y el último es el último paso (B, o C si lo elegiste).</p>
+      <canvas id="preview" width="320" height="180"></canvas>
+    </section>
+  </main>
+  <script type="module" src="js/transformador.js?v=20261028155910"></script>
+</body>
+</html>

@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261028151357";
-import { defaultMixColor } from "./colorUtils.js?v=20261028151357";
+import { listPresets } from "./presets.js?v=20261028155910";
+import { defaultMixColor } from "./colorUtils.js?v=20261028155910";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261028151357";
+import { createDefaultParams } from "./params.js?v=20261028155910";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -212,6 +212,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   // ---- transformar, mover y animar el conjunto seleccionado ----
   const xfF = pane.addFolder({ title: "Transformar y mover" });
   xfF.addInput(scene.settings, "gizmo", { label: "manijas en pantalla" });
+  xfF.addInput(scene.settings, "wrap", { label: "pantalla infinita (lo que sale por un lado entra por el otro)" });
   xfF.addInput(params, "posX", { min: -1500, max: 1500, step: 1, label: "posición X" });
   xfF.addInput(params, "posY", { min: -1000, max: 1000, step: 1, label: "posición Y" });
   xfF.addInput(params, "rotation", { min: -720, max: 720, step: 0.5, label: "rotación (°)" });
