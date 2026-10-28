@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261028151038";
-import { defaultMixColor } from "./colorUtils.js?v=20261028151038";
+import { listPresets } from "./presets.js?v=20261028151357";
+import { defaultMixColor } from "./colorUtils.js?v=20261028151357";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261028151038";
+import { createDefaultParams } from "./params.js?v=20261028151357";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -129,13 +129,14 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   if (!validKeys.includes(m.a)) m.a = validKeys[0] ?? "";
   if (!validKeys.includes(m.b)) m.b = validKeys[1] ?? validKeys[0] ?? "";
   mf.addInput(m, "a", { options: endOpts, label: "desde (A)" });
-  mf.addInput(m, "b", { options: endOpts, label: "hasta (B)" });
-  // un segundo par que se transforma al mismo tiempo (opcional)
+  mf.addInput(m, "b", { options: endOpts, label: "pasa a (B)" });
+  // un 3.er paso opcional (A → B → C) y un segundo par que se transforma al mismo tiempo (opcional)
   const endOpts2 = { "— ninguno —": "", ...endOpts };
-  if (m.a2 && !validKeys.includes(m.a2)) m.a2 = "";
-  if (m.b2 && !validKeys.includes(m.b2)) m.b2 = "";
+  for (const k of ["c", "a2", "b2", "c2"]) if (m[k] && !validKeys.includes(m[k])) m[k] = "";
+  mf.addInput(m, "c", { options: endOpts2, label: "y termina en (C) (opcional)" });
   mf.addInput(m, "a2", { options: endOpts2, label: "2.º par: desde (A2)" });
-  mf.addInput(m, "b2", { options: endOpts2, label: "2.º par: hasta (B2)" });
+  mf.addInput(m, "b2", { options: endOpts2, label: "2.º par: pasa a (B2)" });
+  mf.addInput(m, "c2", { options: endOpts2, label: "2.º par: termina en (C2)" });
   mf.addInput(m, "seconds", { min: 0.5, max: 60, step: 0.5, label: "duración (s)" });
   mf.addInput(m, "ease", { options: { "suave (arranca y frena)": "smooth", "constante": "linear" }, label: "curva" });
   mf.addInput(m, "repeat", { options: { "una vez": "once", "repetir": "loop", "ida y vuelta": "pingpong" }, label: "al terminar" });
@@ -150,7 +151,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   const morphView = { get avance() { return scene.morphProgress(); } };
   mf.addMonitor(morphView, "avance", { label: "avance", interval: 100, format: (v) => `${Math.round(v * 100)} %` });
   const seek = { v: 0 };
-  mf.addInput(seek, "v", { min: 0, max: 1, label: "ir a (0 = A, 1 = B)" }).on("change", (ev) => actions.morphSeek?.(ev.value));
+  mf.addInput(seek, "v", { min: 0, max: 1, label: "ir a (0 = A, 1 = el final)" }).on("change", (ev) => actions.morphSeek?.(ev.value));
   mf.addButton({ title: "⬇ exportar la transformación (secuencia de PNG)" }).on("click", () => actions.exportMorph?.());
   mf.addMonitor({ txt: "usa cuadros/seg y fondo de 'Exportar animación'" }, "txt", { label: "nota" });
 
