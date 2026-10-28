@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Transformador</title>
-  <link rel="stylesheet" href="exportador.css?v=20261028172342" />
+  <link rel="stylesheet" href="exportador.css?v=20261028173051" />
 </head>
 <body>
   <main>
@@ -43,6 +43,8 @@
       <label class="row"><span>curva</span>
         <select id="ease"><option value="smooth">suave (arranca y frena)</option><option value="linear">constante</option></select>
       </label>
+      <label class="row"><span>usar los keyframes de cada conjunto</span><input type="checkbox" id="keysOn" /></label>
+      <p class="hint">Los conjuntos guardados desde el programa principal pueden traer <b>keyframes</b> (posición, giro, tamaño y opacidad que van cambiando en una línea de tiempo de 8 segundos que se repite). Apagado (lo normal), los conjuntos salen fijos como los guardaste y solo manda la transformación. Prendido, se animan con sus keyframes, repitiéndolos cada 8 s: si alguno termina en opacidad 0 o muy chico, a esa altura desaparece todo un rato.</p>
       <p class="status" id="totalInfo"></p>
       <h3>Cómo se transforma</h3>
       <label class="row"><span>viaje de las formas (0 = fundido)</span><input type="range" id="travel" min="0" max="1" step="0.05" /><output id="travelOut"></output></label>
@@ -131,6 +133,6 @@
       <canvas id="preview" width="320" height="180"></canvas>
     </section>
   </main>
-  <script type="module" src="js/transformador.js?v=20261028172342"></script>
+  <script type="module" src="js/transformador.js?v=20261028173051"></script>
 </body>
 </html>

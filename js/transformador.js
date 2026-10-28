@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028172342";
-import { silentAudio } from "./audioEngine.js?v=20261028172342";
-import { exportPngSequence, renderAnimation, pixelScale } from "./exporter.js?v=20261028172342";
-import { progressAt } from "./morph.js?v=20261028172342";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028172342";
+import { Scene } from "./scene.js?v=20261028173051";
+import { silentAudio } from "./audioEngine.js?v=20261028173051";
+import { exportPngSequence, renderAnimation, pixelScale } from "./exporter.js?v=20261028173051";
+import { progressAt } from "./morph.js?v=20261028173051";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028173051";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";
@@ -121,6 +121,7 @@ function updateTiming() {
 
 // Lo que moviste con el mouse (por conjunto de cada juego), para que la vista y la exportación lo repitan
 let moves = prefs.moves ?? {};
+let keysOn = false;
 
 function buildScene() {
   if (!$("sa").value || !$("sb").value) throw friendly("elegí al menos el conjunto de partida (A) y el que sigue (B)");
@@ -179,6 +180,10 @@ function buildScene() {
   }
   Object.assign(sc.morph, { a, b, c, a2, b2, c2, on: true, playing: false, repeat: "once", seconds: 1, time: 0, only: fixed.length === 0 });
   applyLive(sc);
+  // Los keyframes de cada conjunto (línea de tiempo de 8 s que se repite) se aplican solo si lo pedís: si no, se sacan, así
+  // los conjuntos salen fijos como los guardaste (y como los acomodás acá) y no se pisan en cada vuelta de la línea de tiempo.
+  keysOn = $("keysOn").checked;
+  for (const cj of sc.conjuntos) if (!keysOn) cj.keys = [];
   for (const cj of sc.conjuntos) {
     cj.params.reactAudio = false; // sin audio
     cj.params.mixHandles = $("handles").checked;
@@ -330,6 +335,10 @@ function liveLoop(now) {
   }
   const eff = rep === "once" ? Math.min(T, total) : progressAt(T, total, rep) * total;
   scene.morph.time = progAt(eff);
+  if (keysOn) {
+    scene.timeline.playing = false; // (la línea de tiempo de keyframes va al compás de lo que se ve: igual que lo exportado)
+    scene.timeline.time = eff % scene.timeline.duration;
+  }
 
   liveCtx.setTransform(s, 0, 0, s, 0, 0);
   ovCtx.setTransform(s, 0, 0, s, 0, 0);
@@ -498,7 +507,7 @@ async function weigh() {
     const sizes = [];
     const probe = [0.25, 0.5, 0.75].map((f) => progAt(f * total));
     await renderAnimation(
-      { scene: sc, videoLayer: { active: null, draw() {} }, globalParams: { bgColor: $("bg").value }, morph: true, morphTime: (i) => probe[i] ?? 1, keepSpin: true, audioFile: null, width: W, height: H, transparent: $("transparent").checked && !jpg, includeVideo: false, seconds: 3 / fps, fps, scale: k, isCancelled: () => cancelFlag },
+      { scene: sc, videoLayer: { active: null, draw() {} }, globalParams: { bgColor: $("bg").value }, morph: true, morphTime: (i) => probe[i] ?? 1, keepSpin: true, audioFile: null, width: W, height: H, transparent: $("transparent").checked && !jpg, includeVideo: false, timelinePlay: $("keysOn").checked, seconds: 3 / fps, fps, scale: k, isCancelled: () => cancelFlag },
       async (canvas) => {
         const blob = await new Promise((res) => (jpg ? canvas.toBlob(res, "image/jpeg", +$("quality").value) : canvas.toBlob(res, "image/png")));
         if (!blob) throw friendly("el navegador no pudo armar la imagen de este tamaño: bajá el tamaño o la resolución");
@@ -507,7 +516,7 @@ async function weigh() {
     );
     const avg = sizes.reduce((t, v) => t + v, 0) / Math.max(1, sizes.length);
     const gb = (avg * frames) / 1e9;
-    const txt = gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(gb * 1000)} MB`;
+    const txt = gb >= 1 ? `${gb.toFixed(1)} GB` : gb >= 0.001 ? `${Math.round(gb * 1000)} MB` : `${Math.round(gb * 1e6)} KB`;
     $("status").textContent = `⚖ ${frames} imágenes de ${Math.round(W * k)} × ${Math.round(H * k)} px en ${jpg ? "JPG" : "PNG"}: unos ${avg >= 1e6 ? (avg / 1e6).toFixed(1) + " MB" : Math.round(avg / 1e3) + " KB"} cada una, ${txt} en total (aproximado: depende del cuadro).`;
   } catch (e) {
     $("status").textContent = e.message === "cancelado" ? "cancelado" : e.friendly ? `⚠ ${e.message}` : `error: ${e.message}`;
@@ -520,6 +529,7 @@ $("weigh").addEventListener("click", weigh);
 
 // los que cambian qué se arma, y los que se aplican en vivo
 for (const id of SELECTS) $(id).addEventListener("change", () => (save(), rebuild()));
+$("keysOn").addEventListener("change", () => (save(), rebuild()));
 for (const id of ["trans", "hold"]) $(id).addEventListener("input", () => (updateTiming(), save()));
 for (const id of ["ease", "travel", "stagger", "swirl", "scatter", "scatterDir", "still", "wrap"]) {
   $(id).addEventListener("input", () => {
@@ -549,6 +559,7 @@ function save() {
         scatter: num("scatter"),
         scatterDir: $("scatterDir").value,
         still: $("still").checked,
+        keysOn: $("keysOn").checked,
         wrap: $("wrap").checked,
         repeat: $("repeat").value,
         vsize: $("vsize").value,
@@ -650,6 +661,7 @@ async function run() {
       globalParams: { bgColor: $("bg").value },
       format: $("format").value,
       quality: +$("quality").value,
+      timelinePlay: $("keysOn").checked,
       morph: true,
       morphTime: (i, frames) => progAt(frames > 1 ? (i / (frames - 1)) * total : 0),
       keepSpin: true,
@@ -708,6 +720,7 @@ $("swirl").value = prefs.swirl ?? 0.18;
 $("scatter").value = prefs.scatter ?? 0.6;
 $("scatterDir").value = prefs.scatterDir ?? "horizontal";
 $("still").checked = prefs.still ?? false;
+$("keysOn").checked = prefs.keysOn ?? false;
 $("wrap").checked = prefs.wrap ?? false;
 $("handles").checked = prefs.handles ?? true;
 $("gizmoOn").checked = prefs.gizmoOn ?? true;

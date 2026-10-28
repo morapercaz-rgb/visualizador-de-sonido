@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028172342";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028172342";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028173051";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028173051";
 
 export { crc32 };
 
@@ -308,7 +308,7 @@ export async function renderAnimation(o, onFrame) {
   // arranca desde el principio de la animación, sin manijas ni gizmo en la imagen
   scene.clock = o.clockStart ?? 0; // (para repetir algo grabado en vivo: desde dónde corría el reloj de los movimientos)
   scene.timeline.time = o.timelineStart ?? 0;
-  scene.timeline.playing = true;
+  scene.timeline.playing = o.timelinePlay !== false; // (o.timelinePlay = false: no se animan los keyframes de los conjuntos)
   scene.settings.gizmo = false;
   // exportar la transformación: el avance va exacto de A (primer cuadro) a B (último), o hasta C si hay tres pasos
   if (o.morph) Object.assign(scene.morph, { on: true, playing: false, repeat: "once", time: 0 });
