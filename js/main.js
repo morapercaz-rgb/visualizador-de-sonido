@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028214830";
-import { VideoLayer } from "./videoLayer.js?v=20261028214830";
-import { Scene } from "./scene.js?v=20261028214830";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028214830";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028214830";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028214830";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028214830";
+import { AudioEngine } from "./audioEngine.js?v=20261028222034";
+import { VideoLayer } from "./videoLayer.js?v=20261028222034";
+import { Scene } from "./scene.js?v=20261028222034";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028222034";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028222034";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028222034";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028222034";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -363,7 +363,9 @@ function applyCanvasSize() {
   H -= H % 2;
   logicalW = W;
   logicalH = H;
-  viewScale = fullRes ? (pngRecFull ? 1 : Math.min(1, Math.max(0.1, Number(g.recScale) || 1))) : g.previewScale === "auto" ? autoScale : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
+  // (vista previa automática: nunca se dibujan más de ~4 millones de píxeles en pantalla; con un lienzo enorme dibujarlo entero en cada cuadro dejaba la página sin responder. Al grabar o exportar sí sale completo)
+  const previewCap = Math.min(1, Math.sqrt(4_000_000 / (W * H)));
+  viewScale = fullRes ? (pngRecFull ? 1 : Math.min(1, Math.max(0.1, Number(g.recScale) || 1))) : g.previewScale === "auto" ? Math.min(autoScale, previewCap) : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
   const PW = Math.max(2, Math.round((W * viewScale) / 2) * 2); // píxeles que realmente se dibujan
   const PH = Math.max(2, Math.round((H * viewScale) / 2) * 2);
   if (canvas.width !== PW || canvas.height !== PH) {
