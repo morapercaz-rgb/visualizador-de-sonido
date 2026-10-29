@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028211324";
-import { VideoLayer } from "./videoLayer.js?v=20261028211324";
-import { Scene } from "./scene.js?v=20261028211324";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028211324";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028211324";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028211324";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028211324";
+import { AudioEngine } from "./audioEngine.js?v=20261028211742";
+import { VideoLayer } from "./videoLayer.js?v=20261028211742";
+import { Scene } from "./scene.js?v=20261028211742";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028211742";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028211742";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028211742";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028211742";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -363,7 +363,7 @@ function applyCanvasSize() {
   H -= H % 2;
   logicalW = W;
   logicalH = H;
-  viewScale = fullRes ? Math.min(1, Math.max(0.1, Number(g.recScale) || 1)) : g.previewScale === "auto" ? autoScale : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
+  viewScale = fullRes ? (pngRecFull ? 1 : Math.min(1, Math.max(0.1, Number(g.recScale) || 1))) : g.previewScale === "auto" ? autoScale : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
   const PW = Math.max(2, Math.round((W * viewScale) / 2) * 2); // píxeles que realmente se dibujan
   const PH = Math.max(2, Math.round((H * viewScale) / 2) * 2);
   if (canvas.width !== PW || canvas.height !== PH) {
@@ -542,11 +542,15 @@ async function askSaveTarget() {
 }
 
 // ---- grabar PNG en vivo ----
+// la secuencia de PNG en vivo siempre sale al tamaño completo del lienzo (la "resolución al grabar en vivo" es solo para video)
+let pngRecFull = false;
+let morphRepeatBefore = null; // cómo estaba "al terminar" antes de grabar, para devolverlo
 async function startPngRecording() {
   if (pngRec.active || recorder.isRecording || exporting) return;
   const target = await askSaveTarget();
   if (!target) return;
   fullRes = true; // al grabar, siempre a resolución completa
+  pngRecFull = true;
   applyCanvasSize();
   const opts = {
     canvas,
@@ -565,6 +569,7 @@ async function startPngRecording() {
     } catch (e2) {
       recInfo.textContent = `error: ${e2.message}`;
       fullRes = false;
+      pngRecFull = false;
       applyCanvasSize();
       return;
     }
@@ -573,8 +578,12 @@ async function startPngRecording() {
   // si ya elegiste de qué conjunto a cuál se transforma, la transformación arranca sola, desde el principio, junto con la grabación
   if (scene.morphEnds()) {
     scene.seq.on = false;
+    morphRepeatBefore = scene.morph.repeat;
+    scene.morph.repeat = "pingpong"; // ida y vuelta: de A a B y de B otra vez a A
     scene.morphPlay();
-    note += ` · la transformación arrancó sola y dura ${scene.morph.seconds} s (seguís grabando hasta que toques Detener)`;
+    pngRec.locked = true;
+    autoStopAt = 2 * scene.morph.seconds;
+    note += ` · la transformación arrancó sola (ida y vuelta, ${autoStopAt} s) y la grabación se corta sola al terminar`;
   }
   // con fondo transparente se ve un damero detrás del lienzo
   canvas.classList.toggle("transparent", globalParams.pngTransparent);
@@ -585,6 +594,10 @@ async function startPngRecording() {
     recPngBtn.textContent = "■ Detener PNG";
   }
   recTimer = setInterval(() => {
+    if (autoStopAt && scene.morph.time >= autoStopAt) {
+      stopPngRecording();
+      return;
+    }
     const s = Math.floor((performance.now() - pngRec.t0) / 1000);
     const bad = pngRec.nullBlobs > 0 ? " · ⚠ al navegador le cuesta guardar imágenes de este tamaño" : "";
     recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.saved}/${pngRec.frames} cuadros guardados · ${canvas.width}×${canvas.height}${note}${bad}${slowNote()}`;
@@ -593,6 +606,13 @@ async function startPngRecording() {
 
 async function stopPngRecording() {
   clearInterval(recTimer);
+  autoStopAt = 0;
+  if (morphRepeatBefore !== null) {
+    scene.morph.repeat = morphRepeatBefore;
+    morphRepeatBefore = null;
+    scene.morph.playing = false; // (queda en el cuadro donde terminó; "■ salir" la apaga)
+    setTimeout(() => pane.refresh(), 0);
+  }
   recBtn.textContent = "guardando…";
   if (recPngBtn) recPngBtn.textContent = "guardando…";
   try {
@@ -612,9 +632,11 @@ async function stopPngRecording() {
   canvas.classList.remove("transparent");
   pendingResize = false;
   fullRes = false; // se vuelve a la vista previa liviana
+  pngRecFull = false;
   applyCanvasSize();
 }
 let pngFullHandled = false;
+let autoStopAt = 0; // segundos de transformación a los que la grabación se corta sola (0 = no se corta)
 
 // el botón de al lado de "Grabar": graba PNG directo, sin tocar el panel
 recPngBtn?.addEventListener("click", () => {
@@ -1163,6 +1185,7 @@ function perfTick(now, rawMs) {
 function slowNote() {
   const fpsNow = Math.round(1000 / Math.max(1, emaMs));
   if (fpsNow >= globalParams.recFps * 0.8 || document.hidden) return "";
+  if (pngRec.active && pngRec.locked) return ` · la compu dibuja ~${fpsNow} cuadros/seg: tarda más en grabar, pero no se repite ningún cuadro y la transformación sale pareja`;
   return ` · ⚠ la compu va a ~${fpsNow} cuadros/seg (pediste ${globalParams.recFps}): para que no se trabe, bajá "resolución al grabar en vivo" en Grabación, o grabá con Exportar → Secuencia de PNG, que arma los cuadros uno por uno`;
 }
 
@@ -1228,7 +1251,8 @@ function loop(now = performance.now()) {
   // segundos reales desde el cuadro anterior. Se limita a 50 ms: si la
   // pestaña estuvo en segundo plano y vuelve, no se salta de golpe un rato largo.
   const rawMs = now - lastTime;
-  const dt = Math.min(0.05, Math.max(0.001, rawMs / 1000));
+  // (grabando PNG con la transformación, cada cuadro dibujado es un cuadro guardado y el tiempo avanza justo 1/fps: si la compu va lenta tarda más pero no se repite nada)
+  const dt = pngRec.active && pngRec.locked ? (pngRec.canTake() ? 1 / pngRec.fps : 0) : Math.min(0.05, Math.max(0.001, rawMs / 1000));
   lastTime = now;
   perfTick(now, rawMs);
 

@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter, ZipStream } from "./exporter.js?v=20261028211324";
+import { ZipWriter, ZipStream } from "./exporter.js?v=20261028211742";
 
 export class ScreenRecorder {
   constructor() {
@@ -168,6 +168,12 @@ export class PngSequenceRecorder {
   constructor() {
     this.active = false;
     this.full = false;
+    this.locked = false; // true = un cuadro guardado por cada cuadro dibujado, con el tiempo avanzando justo 1/fps (nada se repite aunque la compu vaya lenta)
+  }
+
+  // en modo "locked": ¿hay lugar para guardar otro cuadro? Si no, el dibujo espera sin avanzar el tiempo
+  canTake() {
+    return this.inflight < 6 && !this.error && !this.full && !this.broken;
   }
 
   get frames() {
@@ -193,6 +199,7 @@ export class PngSequenceRecorder {
     this.chain = Promise.resolve();
     this.error = null;
     this.full = false;
+    this.locked = false;
     this.encoder = new PngEncoder();
     this.t0 = performance.now();
     this.active = true;
@@ -200,7 +207,7 @@ export class PngSequenceRecorder {
 
   tick(now) {
     if (!this.active || this.error || this.full) return;
-    const due = Math.floor(((now - this.t0) / 1000) * this.fps) + 1; // cuántos cuadros tendrían que existir ya
+    const due = this.locked ? this.slots + 1 : Math.floor(((now - this.t0) / 1000) * this.fps) + 1; // cuántos cuadros tendrían que existir ya
     if (due <= this.slots || this.inflight >= 6) return; // todavía no toca, o la compu está atrasada: se junta con el próximo
 
     const first = this.slots + 1;
