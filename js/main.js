@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028211742";
-import { VideoLayer } from "./videoLayer.js?v=20261028211742";
-import { Scene } from "./scene.js?v=20261028211742";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028211742";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028211742";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028211742";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028211742";
+import { AudioEngine } from "./audioEngine.js?v=20261028212752";
+import { VideoLayer } from "./videoLayer.js?v=20261028212752";
+import { Scene } from "./scene.js?v=20261028212752";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028212752";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028212752";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028212752";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028212752";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -544,6 +544,7 @@ async function askSaveTarget() {
 // ---- grabar PNG en vivo ----
 // la secuencia de PNG en vivo siempre sale al tamaño completo del lienzo (la "resolución al grabar en vivo" es solo para video)
 let pngRecFull = false;
+let morphSecondsBefore = null;
 let morphRepeatBefore = null; // cómo estaba "al terminar" antes de grabar, para devolverlo
 async function startPngRecording() {
   if (pngRec.active || recorder.isRecording || exporting) return;
@@ -579,11 +580,13 @@ async function startPngRecording() {
   if (scene.morphEnds()) {
     scene.seq.on = false;
     morphRepeatBefore = scene.morph.repeat;
-    scene.morph.repeat = "pingpong"; // ida y vuelta: de A a B y de B otra vez a A
+    morphSecondsBefore = scene.morph.seconds;
+    autoStopAt = scene.morph.seconds; // la duración elegida es el TOTAL: la mitad va de A a B y la otra mitad vuelve
+    scene.morph.repeat = "pingpong";
+    scene.morph.seconds = autoStopAt / 2;
     scene.morphPlay();
     pngRec.locked = true;
-    autoStopAt = 2 * scene.morph.seconds;
-    note += ` · la transformación arrancó sola (ida y vuelta, ${autoStopAt} s) y la grabación se corta sola al terminar`;
+    note += ` · la transformación arrancó sola (${autoStopAt / 2} s de ida y ${autoStopAt / 2} s de vuelta) y la grabación se corta sola al terminar`;
   }
   // con fondo transparente se ve un damero detrás del lienzo
   canvas.classList.toggle("transparent", globalParams.pngTransparent);
@@ -609,6 +612,7 @@ async function stopPngRecording() {
   autoStopAt = 0;
   if (morphRepeatBefore !== null) {
     scene.morph.repeat = morphRepeatBefore;
+    scene.morph.seconds = morphSecondsBefore;
     morphRepeatBefore = null;
     scene.morph.playing = false; // (queda en el cuadro donde terminó; "■ salir" la apaga)
     setTimeout(() => pane.refresh(), 0);
