@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028212752";
-import { VideoLayer } from "./videoLayer.js?v=20261028212752";
-import { Scene } from "./scene.js?v=20261028212752";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028212752";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028212752";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028212752";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028212752";
+import { AudioEngine } from "./audioEngine.js?v=20261028213101";
+import { VideoLayer } from "./videoLayer.js?v=20261028213101";
+import { Scene } from "./scene.js?v=20261028213101";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028213101";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028213101";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028213101";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028213101";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -581,12 +581,13 @@ async function startPngRecording() {
     scene.seq.on = false;
     morphRepeatBefore = scene.morph.repeat;
     morphSecondsBefore = scene.morph.seconds;
-    autoStopAt = scene.morph.seconds; // la duración elegida es el TOTAL: la mitad va de A a B y la otra mitad vuelve
+    autoStopAt = scene.morph.seconds; // la duración elegida es el TOTAL: la mitad es la ida (A → B → C, y A2 → B2 → C2 a la vez) y la otra mitad la vuelta
     scene.morph.repeat = "pingpong";
     scene.morph.seconds = autoStopAt / 2;
     scene.morphPlay();
     pngRec.locked = true;
-    note += ` · la transformación arrancó sola (${autoStopAt / 2} s de ida y ${autoStopAt / 2} s de vuelta) y la grabación se corta sola al terminar`;
+    const pasos = scene.morphEnds().some((p) => p.c) ? "A → B → C y de vuelta" : "A → B y de vuelta";
+    note += ` · la transformación (${pasos}) arrancó sola: ${autoStopAt / 2} s de ida y ${autoStopAt / 2} s de vuelta, y la grabación se corta sola al terminar`;
   }
   // con fondo transparente se ve un damero detrás del lienzo
   canvas.classList.toggle("transparent", globalParams.pngTransparent);
