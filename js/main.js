@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028204613";
-import { VideoLayer } from "./videoLayer.js?v=20261028204613";
-import { Scene } from "./scene.js?v=20261028204613";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028204613";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028204613";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028204613";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028204613";
+import { AudioEngine } from "./audioEngine.js?v=20261028211324";
+import { VideoLayer } from "./videoLayer.js?v=20261028211324";
+import { Scene } from "./scene.js?v=20261028211324";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028211324";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028211324";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028211324";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028211324";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -570,6 +570,12 @@ async function startPngRecording() {
     }
   }
   pngFullHandled = false;
+  // si ya elegiste de qué conjunto a cuál se transforma, la transformación arranca sola, desde el principio, junto con la grabación
+  if (scene.morphEnds()) {
+    scene.seq.on = false;
+    scene.morphPlay();
+    note += ` · la transformación arrancó sola y dura ${scene.morph.seconds} s (seguís grabando hasta que toques Detener)`;
+  }
   // con fondo transparente se ve un damero detrás del lienzo
   canvas.classList.toggle("transparent", globalParams.pngTransparent);
   recBtn.classList.add("recording");

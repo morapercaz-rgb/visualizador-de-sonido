@@ -10,12 +10,12 @@
 //
 // El orden de la lista es el orden de dibujo: el último queda arriba de todo.
 
-import { VisualEngine } from "./visualEngine.js?v=20261028204613";
-import { createDefaultParams } from "./params.js?v=20261028204613";
-import { silentAudio } from "./audioEngine.js?v=20261028204613";
-import { getPreset, paramsFromPreset } from "./presets.js?v=20261028204613";
-import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028204613";
-import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028204613";
+import { VisualEngine } from "./visualEngine.js?v=20261028211324";
+import { createDefaultParams } from "./params.js?v=20261028211324";
+import { silentAudio } from "./audioEngine.js?v=20261028211324";
+import { getPreset, paramsFromPreset } from "./presets.js?v=20261028211324";
+import { mixParams, easeMorph, progressAt } from "./morph.js?v=20261028211324";
+import { Capture, drawParticleMorph } from "./morphParticles.js?v=20261028211324";
 
 const TAU = Math.PI * 2;
 const SILENT = silentAudio(128); // lo que "oye" un conjunto que no reacciona al sonido
