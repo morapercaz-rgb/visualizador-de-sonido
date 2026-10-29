@@ -5,7 +5,7 @@
 // y la estantería de archivos nunca aparecen en el video — solo la imagen
 // final. Podés mover todo lo que quieras mientras grabás.
 
-import { ZipWriter, ZipStream } from "./exporter.js?v=20261028222034";
+import { ZipWriter, ZipStream } from "./exporter.js?v=20261028231357";
 
 export class ScreenRecorder {
   constructor() {
@@ -95,10 +95,15 @@ export class ScreenRecorder {
 // no frena el dibujo. Si el navegador no puede, se usa canvas.toBlob como siempre.
 const ENCODER_SRC = `
 self.onmessage = async (e) => {
-  const { id, bitmap } = e.data;
+  const { id, bitmap, outW, outH } = e.data;
   try {
-    const c = new OffscreenCanvas(bitmap.width, bitmap.height);
-    c.getContext("2d").drawImage(bitmap, 0, 0);
+    // (si se dibujó más chico para ir más rápido, acá se agranda al tamaño final; las auras son degradados suaves, así que casi no se nota)
+    const c = new OffscreenCanvas(outW || bitmap.width, outH || bitmap.height);
+    const g = c.getContext("2d");
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = "high";
+    if (outW && outH) g.drawImage(bitmap, 0, 0, outW, outH);
+    else g.drawImage(bitmap, 0, 0);
     bitmap.close();
     const blob = await c.convertToBlob({ type: "image/png" });
     self.postMessage({ id, blob });
@@ -136,18 +141,27 @@ class PngEncoder {
   }
 
   // devuelve una promesa con el Blob PNG del canvas tal como está AHORA
-  encode(canvas) {
-    if (!this.workers.length || this.broken) {
-      return new Promise((res) => canvas.toBlob(res, "image/png"));
-    }
+  encode(canvas, outW = 0, outH = 0) {
+    const scaled = outW && outH && (outW !== canvas.width || outH !== canvas.height);
+    const direct = () => {
+      if (!scaled) return new Promise((res) => canvas.toBlob(res, "image/png"));
+      const t = document.createElement("canvas");
+      t.width = outW;
+      t.height = outH;
+      const g = t.getContext("2d");
+      g.imageSmoothingQuality = "high";
+      g.drawImage(canvas, 0, 0, outW, outH);
+      return new Promise((res) => t.toBlob(res, "image/png"));
+    };
+    if (!this.workers.length || this.broken) return direct();
     return createImageBitmap(canvas).then(
       (bitmap) =>
         new Promise((res) => {
           const id = ++this.seq;
           this.waiting.set(id, res);
-          this.workers[this.next++ % this.workers.length].postMessage({ id, bitmap }, [bitmap]);
+          this.workers[this.next++ % this.workers.length].postMessage({ id, bitmap, outW: scaled ? outW : 0, outH: scaled ? outH : 0 }, [bitmap]);
         }),
-      () => new Promise((res) => canvas.toBlob(res, "image/png"))
+      () => direct()
     );
   }
 
@@ -181,8 +195,10 @@ export class PngSequenceRecorder {
   }
 
   // opciones: canvas, fps, dirHandle (o null para ZIP), transparent, includeVideo
-  async start({ canvas, fps, dirHandle = null, fileHandle = null, transparent = true, includeVideo = false }) {
+  async start({ canvas, fps, dirHandle = null, fileHandle = null, transparent = true, includeVideo = false, outW = 0, outH = 0 }) {
     this.canvas = canvas;
+    this.outW = outW; // tamaño final de cada PNG (0 = el del lienzo tal cual)
+    this.outH = outH;
     this.fps = fps;
     this.transparent = transparent;
     this.includeVideo = includeVideo;
@@ -200,7 +216,7 @@ export class PngSequenceRecorder {
     this.error = null;
     this.full = false;
     this.locked = false;
-    this.maxInflight = canvas.width * canvas.height > 6_000_000 ? 2 : 6; // cuadros esperando a guardarse (con lienzos enormes, cada uno ocupa cientos de MB)
+    this.maxInflight = (outW || canvas.width) * (outH || canvas.height) > 6_000_000 ? 2 : 6; // cuadros esperando a guardarse (con lienzos enormes, cada uno ocupa cientos de MB)
     this.encoder = new PngEncoder();
     this.t0 = performance.now();
     this.active = true;
@@ -217,7 +233,7 @@ export class PngSequenceRecorder {
     if (count > 1) this.repeated += count - 1;
     this.inflight++;
     // toBlob toma la foto del canvas JUSTO ahora y codifica después
-    this.encoder.encode(this.canvas).then((blob) => {
+    this.encoder.encode(this.canvas, this.outW, this.outH).then((blob) => {
       if (!blob) {
         // el navegador no pudo codificar este PNG (suele pasar con lienzos enormes o poca memoria)
         this.nullBlobs++;

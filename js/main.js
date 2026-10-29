@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028222034";
-import { VideoLayer } from "./videoLayer.js?v=20261028222034";
-import { Scene } from "./scene.js?v=20261028222034";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028222034";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028222034";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028222034";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028222034";
+import { AudioEngine } from "./audioEngine.js?v=20261028231357";
+import { VideoLayer } from "./videoLayer.js?v=20261028231357";
+import { Scene } from "./scene.js?v=20261028231357";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028231357";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028231357";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028231357";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028231357";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -32,7 +32,7 @@ const globalParams = createDefaultParams();
 const PREFS_KEY = "visualizador-de-sonido.preferencias.v1";
 const PREF_KEYS = [
   "canvasPreset", "canvasW", "canvasH", "previewScale", "showFps",
-  "recFormat", "recFps", "recScale", "recBitrate", "pngSaveTo", "pngSeconds", "pngScale", "pngFps", "pngTransparent", "pngIncludeVideo",
+  "recFormat", "recFps", "recScale", "recBitrate", "pngSaveTo", "pngSeconds", "pngScale", "pngFps", "pngTransparent", "pngDrawFull", "pngIncludeVideo",
   "animSeconds", "animFps", "animWidth", "gifTransparent",
 ];
 try {
@@ -365,7 +365,7 @@ function applyCanvasSize() {
   logicalH = H;
   // (vista previa automática: nunca se dibujan más de ~4 millones de píxeles en pantalla; con un lienzo enorme dibujarlo entero en cada cuadro dejaba la página sin responder. Al grabar o exportar sí sale completo)
   const previewCap = Math.min(1, Math.sqrt(4_000_000 / (W * H)));
-  viewScale = fullRes ? (pngRecFull ? 1 : Math.min(1, Math.max(0.1, Number(g.recScale) || 1))) : g.previewScale === "auto" ? Math.min(autoScale, previewCap) : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
+  viewScale = fullRes ? (pngDrawScale ?? Math.min(1, Math.max(0.1, Number(g.recScale) || 1))) : g.previewScale === "auto" ? Math.min(autoScale, previewCap) : Math.min(1, Math.max(0.1, Number(g.previewScale) || 1));
   const PW = Math.max(2, Math.round((W * viewScale) / 2) * 2); // píxeles que realmente se dibujan
   const PH = Math.max(2, Math.round((H * viewScale) / 2) * 2);
   if (canvas.width !== PW || canvas.height !== PH) {
@@ -545,7 +545,7 @@ async function askSaveTarget(mode = globalParams.pngSaveTo) {
 
 // ---- grabar PNG en vivo ----
 // la secuencia de PNG en vivo siempre sale al tamaño completo del lienzo (la "resolución al grabar en vivo" es solo para video)
-let pngRecFull = false;
+let pngDrawScale = null; // con qué fracción de los píxeles se dibuja mientras se graba PNG (null = no se está grabando PNG)
 let morphSecondsBefore = null;
 let morphRepeatBefore = null; // cómo estaba "al terminar" antes de grabar, para devolverlo
 async function startPngRecording() {
@@ -557,15 +557,20 @@ async function startPngRecording() {
   if (!target) return;
   if (autoFile) target.note = " · lienzo grande: se guarda directo en el ZIP que elegiste, así no se llena la memoria" + target.note;
   fullRes = true; // al grabar, siempre a resolución completa
-  pngRecFull = true;
+  // lienzo enorme: se dibuja a la mitad y se agranda al guardar, así el archivo sale del tamaño completo pero la compu hace 4 veces menos trabajo
+  const wantScale = Math.min(1, Math.max(0.1, Number(globalParams.recScale) || 1));
+  pngDrawScale = globalParams.pngDrawFull ? 1 : Math.min(wantScale, bigCanvas ? 0.5 : 1);
   applyCanvasSize();
   const opts = {
+    outW: logicalW,
+    outH: logicalH,
     canvas,
     fps: globalParams.recFps,
     transparent: globalParams.pngTransparent,
     includeVideo: !globalParams.pngTransparent || globalParams.pngIncludeVideo,
   };
   let note = target.note;
+  if (pngDrawScale < 1) note += ` · se dibuja a ${Math.round(pngDrawScale * 100)} % y se agranda al guardar: cada PNG sale de ${logicalW}×${logicalH} (cuatro veces menos trabajo para la compu)`;
   try {
     await pngRec.start({ ...opts, dirHandle: target.dirHandle, fileHandle: target.fileHandle ?? null });
   } catch (e) {
@@ -576,7 +581,7 @@ async function startPngRecording() {
     } catch (e2) {
       recInfo.textContent = `error: ${e2.message}`;
       fullRes = false;
-      pngRecFull = false;
+      pngDrawScale = null;
       applyCanvasSize();
       return;
     }
@@ -610,7 +615,7 @@ async function startPngRecording() {
     }
     const s = Math.floor((performance.now() - pngRec.t0) / 1000);
     const bad = pngRec.nullBlobs > 0 ? " · ⚠ al navegador le cuesta guardar imágenes de este tamaño" : "";
-    recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.saved}/${pngRec.frames} cuadros guardados · ${canvas.width}×${canvas.height}${note}${bad}${slowNote()}`;
+    recInfo.textContent = `grabando PNG ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${pngRec.saved}/${pngRec.frames} cuadros guardados · ${pngRec.outW || canvas.width}×${pngRec.outH || canvas.height}${note}${bad}${slowNote()}`;
   }, 250);
 }
 
@@ -643,7 +648,7 @@ async function stopPngRecording() {
   canvas.classList.remove("transparent");
   pendingResize = false;
   fullRes = false; // se vuelve a la vista previa liviana
-  pngRecFull = false;
+  pngDrawScale = null;
   applyCanvasSize();
 }
 let pngFullHandled = false;

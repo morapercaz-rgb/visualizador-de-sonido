@@ -13,8 +13,8 @@
 // movimiento continuo y el audio. Lo que se mueve en vivo con el mouse no
 // se graba (no hay forma de repetirlo cuadro a cuadro).
 
-import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028222034";
-import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028222034";
+import { analyzeBytes, silentAudio } from "./audioEngine.js?v=20261028231357";
+import { crc32, buildApng, buildGif } from "./animEncoders.js?v=20261028231357";
 
 export { crc32 };
 
