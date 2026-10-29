@@ -7,11 +7,11 @@
 //   - vista chica y fluida; la exportación (secuencia de PNG) se dibuja cuadro por cuadro en el tamaño que se elija
 // Usa los mismos archivos de dibujo que el programa principal (scene.js, exporter.js), así que el resultado es idéntico.
 
-import { Scene } from "./scene.js?v=20261028214302";
-import { silentAudio } from "./audioEngine.js?v=20261028214302";
-import { exportPngSequence, renderAnimation, pixelScale, frameClock, fmtDur } from "./exporter.js?v=20261028214302";
-import { progressAt } from "./morph.js?v=20261028214302";
-import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028214302";
+import { Scene } from "./scene.js?v=20261028214830";
+import { silentAudio } from "./audioEngine.js?v=20261028214830";
+import { exportPngSequence, renderAnimation, pixelScale, frameClock, fmtDur } from "./exporter.js?v=20261028214830";
+import { progressAt } from "./morph.js?v=20261028214830";
+import { listPresets, loadShared, getPreset, importPresetsText } from "./presets.js?v=20261028214830";
 
 const $ = (id) => document.getElementById(id);
 const PREFS_KEY = "visualizador-de-sonido.transformador.v1";

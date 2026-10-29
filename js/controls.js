@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261028214302";
-import { defaultMixColor } from "./colorUtils.js?v=20261028214302";
+import { listPresets } from "./presets.js?v=20261028214830";
+import { defaultMixColor } from "./colorUtils.js?v=20261028214830";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261028214302";
+import { createDefaultParams } from "./params.js?v=20261028214830";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
