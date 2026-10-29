@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261028213414";
-import { VideoLayer } from "./videoLayer.js?v=20261028213414";
-import { Scene } from "./scene.js?v=20261028213414";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028213414";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028213414";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028213414";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028213414";
+import { AudioEngine } from "./audioEngine.js?v=20261028214302";
+import { VideoLayer } from "./videoLayer.js?v=20261028214302";
+import { Scene } from "./scene.js?v=20261028214302";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261028214302";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261028214302";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261028214302";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261028214302";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -508,9 +508,9 @@ const FOLDER_TIP =
 //   null               → el usuario canceló: no se hace nada (y se le dice por qué)
 // Tiene que llamarse JUSTO después de un click: el navegador solo deja abrir
 // el selector de carpetas en ese momento.
-async function askSaveTarget() {
+async function askSaveTarget(mode = globalParams.pngSaveTo) {
   // un ZIP que se escribe de a poco en un archivo que elegís (lo mejor para muchos cuadros o lienzos grandes)
-  if (globalParams.pngSaveTo === "zipfile") {
+  if (mode === "zipfile") {
     if (!window.showSaveFilePicker) return { dirHandle: null, note: " · este navegador no puede guardar de a poco: va a un ZIP en memoria" };
     try {
       const fileHandle = await window.showSaveFilePicker({
@@ -526,7 +526,7 @@ async function askSaveTarget() {
       return { dirHandle: null, note: ` · no se pudo usar ese archivo (${e.message}): va a un ZIP en memoria` };
     }
   }
-  if (globalParams.pngSaveTo !== "folder") return { dirHandle: null, note: "" };
+  if (mode !== "folder") return { dirHandle: null, note: "" };
   if (!window.showDirectoryPicker) {
     return { dirHandle: null, note: " · este navegador no puede guardar en carpetas: va a un ZIP" };
   }
@@ -548,8 +548,12 @@ let morphSecondsBefore = null;
 let morphRepeatBefore = null; // cómo estaba "al terminar" antes de grabar, para devolverlo
 async function startPngRecording() {
   if (pngRec.active || recorder.isRecording || exporting) return;
-  const target = await askSaveTarget();
+  // con un lienzo grande el ZIP en memoria se llena (tope 1,5 GB) y la grabación se cortaría a medias: se guarda directo en un archivo
+  const bigCanvas = logicalW * logicalH > 6_000_000;
+  const autoFile = globalParams.pngSaveTo === "zip" && bigCanvas && !!window.showSaveFilePicker;
+  const target = await askSaveTarget(autoFile ? "zipfile" : globalParams.pngSaveTo);
   if (!target) return;
+  if (autoFile) target.note = " · lienzo grande: se guarda directo en el ZIP que elegiste, así no se llena la memoria" + target.note;
   fullRes = true; // al grabar, siempre a resolución completa
   pngRecFull = true;
   applyCanvasSize();
