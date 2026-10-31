@@ -248,6 +248,7 @@ export function createDefaultParams() {
     pngScale: 1, // resolución de la secuencia de PNG: 1 = el tamaño del lienzo; 2, 3 o 4 = más píxeles (más calidad)
     pngFps: 30,
     pngTransparent: true, // fondo transparente (sin color de fondo)
+    pngAutoMorph: false, // al grabar PNG, arrancar sola la transformación de un conjunto a otro (ida y vuelta) y cortar al terminar; apagado: se graba lo que ves
     pngDrawFull: false, // grabar PNG en vivo con un lienzo enorme: false = se dibuja a la mitad y se agranda al guardar (4 veces más rápido, mismo tamaño de archivo); true = se dibuja a tamaño completo (más lento)
     pngIncludeVideo: false, // con fondo transparente: ¿incluir también el video cargado?
   };

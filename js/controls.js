@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261031011001";
-import { defaultMixColor } from "./colorUtils.js?v=20261031011001";
+import { listPresets } from "./presets.js?v=20261031012505";
+import { defaultMixColor } from "./colorUtils.js?v=20261031012505";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261031011001";
+import { createDefaultParams } from "./params.js?v=20261031012505";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -638,6 +638,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
     options: { "completa (100 %)": 1, "75 %": 0.75, "mitad (50 %)": 0.5, "35 %": 0.35 },
     label: "resolución al grabar en vivo",
   });
+  recF.addInput(gp, "pngAutoMorph", { label: "al grabar PNG, hacer sola la transformación de un conjunto a otro (ida y vuelta) y cortar al terminar (apagado: se graba lo que ves y vas cambiando)" });
   recF.addInput(gp, "pngDrawFull", { label: "PNG en vivo con lienzo enorme: dibujar a tamaño completo (si no, se dibuja a la mitad y se agranda al guardar: 4 veces más rápido, mismo tamaño de archivo)" });
   recF.addInput(gp, "recFps", { options: { "24 cuadros/seg (cine)": 24, "30 cuadros/seg": 30, "60 cuadros/seg": 60 }, label: "cuadros/seg" });
   recF.addInput(gp, "recBitrate", { min: 2, max: 200, step: 1, label: "calidad (Mbps, solo video)" });

@@ -2,13 +2,13 @@
 // arma el panel de control, y corre el loop de dibujo (requestAnimationFrame),
 // que es lo que hace que esto se vea "vivo" a 60 cuadros por segundo.
 
-import { AudioEngine } from "./audioEngine.js?v=20261031011001";
-import { VideoLayer } from "./videoLayer.js?v=20261031011001";
-import { Scene } from "./scene.js?v=20261031011001";
-import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261031011001";
-import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261031011001";
-import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261031011001";
-import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261031011001";
+import { AudioEngine } from "./audioEngine.js?v=20261031012505";
+import { VideoLayer } from "./videoLayer.js?v=20261031012505";
+import { Scene } from "./scene.js?v=20261031012505";
+import { createControls, createDefaultParams, getOpenState } from "./controls.js?v=20261031012505";
+import { ScreenRecorder, PngSequenceRecorder } from "./recorder.js?v=20261031012505";
+import { LEGACY_PARAMS, listPresets, savePreset, deletePreset, getPreset, exportPresetsText, importPresetsText, importPresets, loadShared, encodePresets, decodePresets } from "./presets.js?v=20261031012505";
+import { exportPngSequence, exportApng, exportGif, convertAnimationToSequence } from "./exporter.js?v=20261031012505";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -32,7 +32,7 @@ const globalParams = createDefaultParams();
 const PREFS_KEY = "visualizador-de-sonido.preferencias.v1";
 const PREF_KEYS = [
   "canvasPreset", "canvasW", "canvasH", "previewScale", "showFps",
-  "recFormat", "recFps", "recScale", "recBitrate", "pngSaveTo", "pngSeconds", "pngScale", "pngFps", "pngTransparent", "pngDrawFull", "pngIncludeVideo",
+  "recFormat", "recFps", "recScale", "recBitrate", "pngSaveTo", "pngSeconds", "pngScale", "pngFps", "pngTransparent", "pngDrawFull", "pngAutoMorph", "pngIncludeVideo",
   "animSeconds", "animFps", "animWidth", "gifTransparent",
 ];
 try {
@@ -587,8 +587,9 @@ async function startPngRecording() {
     }
   }
   pngFullHandled = false;
-  // si ya elegiste de qué conjunto a cuál se transforma, la transformación arranca sola, desde el principio, junto con la grabación
-  if (scene.morphEnds()) {
+  // solo si lo pediste (casillero en "Grabación"): la transformación arranca sola, desde el principio, junto con la grabación.
+  // Si no, se graba lo que ves y vas cambiando vos, sin tocar nada
+  if (globalParams.pngAutoMorph && scene.morphEnds()) {
     scene.seq.on = false;
     morphRepeatBefore = scene.morph.repeat;
     morphSecondsBefore = scene.morph.seconds;
