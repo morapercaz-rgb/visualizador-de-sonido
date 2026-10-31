@@ -9,12 +9,12 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261028231357";
-import { defaultMixColor } from "./colorUtils.js?v=20261028231357";
+import { listPresets } from "./presets.js?v=20261031011001";
+import { defaultMixColor } from "./colorUtils.js?v=20261031011001";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261028231357";
+import { createDefaultParams } from "./params.js?v=20261031011001";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -445,7 +445,8 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   });
   mixF.addInput(params, "mixPull", { min: 0, max: 1, label: "atracción al centro" });
   mixF.addInput(params, "mixDrift", { min: 0, max: 1, label: "flotar" });
-  mixF.addInput(params, "mixSpeed", { min: 0, max: 800, step: 5, label: "velocidad (rebotan en las paredes)" });
+  mixF.addInput(params, "mixSpeed", { min: 0, max: 800, step: 5, label: "velocidad (recorren la pantalla)" });
+  mixF.addInput(params, "mixSoftWalls", { label: "flotar sin chocar (giran suave antes de llegar a los costados; si no, rebotan)" });
   mixF.addInput(params, "mixHandles", { label: "mostrar manijas" });
   mixF.addInput(params, "deformMix", { label: "aplicar deformación" });
 

@@ -8,7 +8,7 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261028231357";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261031011001";
 
 const TAU = Math.PI * 2;
 
@@ -428,14 +428,15 @@ export class VisualEngine {
         }
         const dt = this.k / 60;
         const v = speed * (0.85 + 0.3 * ((i * 0.618) % 1)); // un poco distinta cada una
-        l.x += l.hx * v * dt;
-        l.y += l.hy * v * dt;
-        l.vx = 0;
-        l.vy = 0;
         // la pared está donde llega el cuerpo del aura, no el centro
         const size = params.mixSize * (params.mixSizeMul ?? 1) * (this.groupBlob ?? 1);
         const mx = Math.min(size * 0.5, w * 0.3); // (con auras enormes, que igual recorran la pantalla)
         const my = Math.min(size * 0.5, h * 0.3);
+        if (params.mixSoftWalls) this._steerSoft(l, i, w, h, mx, my, size, v, dt);
+        l.x += l.hx * v * dt;
+        l.y += l.hy * v * dt;
+        l.vx = 0;
+        l.vy = 0;
         if (l.x < mx) { l.x = mx; l.hx = Math.abs(l.hx); }
         else if (l.x > w - mx) { l.x = w - mx; l.hx = -Math.abs(l.hx); }
         if (l.y < my) { l.y = my; l.hy = Math.abs(l.hy); }
@@ -482,6 +483,31 @@ export class VisualEngine {
         color: `rgb(${Math.round(rgb.r)},${Math.round(rgb.g)},${Math.round(rgb.b)})`,
       });
     }
+  }
+
+  // "flotar sin chocar": en vez de ir derecho y rebotar, la luz va ondulando su
+  // rumbo y, al acercarse a una pared, gira de a poco para volver hacia adentro.
+  // Empieza a girar antes de que el aura llegue al borde (una zona de ~2 tamaños),
+  // y el rebote seco de abajo queda solo como red de seguridad.
+  _steerSoft(l, i, w, h, mx, my, size, v, dt) {
+    const tau = Math.PI * 2;
+    let a = Math.atan2(l.hy, l.hx);
+    a += Math.sin(this.time * 0.35 + l.seed * 2.1) * 0.5 * dt; // ondula: cada luz curva distinto
+    const zx = Math.max(1, Math.min(size * 1.8, w * 0.45 - mx));
+    const zy = Math.max(1, Math.min(size * 1.8, h * 0.45 - my));
+    const ramp = (d, z) => (d < z ? Math.pow(1 - Math.max(0, d) / z, 1.5) : 0); // 0 lejos, 1 pegada a la pared
+    const px = ramp(l.x - mx, zx) - ramp(w - mx - l.x, zx);
+    const py = ramp(l.y - my, zy) - ramp(h - my - l.y, zy);
+    const push = Math.hypot(px, py);
+    if (push > 0.001) {
+      let d = Math.atan2(py, px) - a;
+      d -= tau * Math.round(d / tau); // el giro más corto hacia "adentro" (-π..π)
+      if (Math.abs(d) > Math.PI - 0.05) d = (Math.sin(l.seed * 12.9) < 0 ? -1 : 1) * (Math.PI - 0.05); // de frente: gira hacia el lado que le toca a cada luz
+      const rate = Math.min(1, Math.min(push, 1) * 3 * (v / Math.min(zx, zy)) * dt); // cuanto más cerca de la pared, más cierra la curva
+      a += d * rate;
+    }
+    l.hx = Math.cos(a);
+    l.hy = Math.sin(a);
   }
 
   // dibuja la estela (de más vieja a más nueva) y la cabeza de cada círculo.

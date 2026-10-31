@@ -95,6 +95,7 @@ export function createDefaultParams() {
     mixPull: 0, // atracción hacia el centro del grupo (0 = cada luz se queda donde la soltás)
     mixDrift: 0.4, // flotar solas
     mixSpeed: 120, // velocidad (px/seg) con la que recorren la pantalla y rebotan en las paredes (0 = quietas)
+    mixSoftWalls: true, // flotar sin chocar: giran de a poco antes de llegar a los costados, en vez de rebotar
     mixHandles: true, // mostrar las manijas para agarrar cada luz
     deformMix: true,
     mixColor1: "#ff3b6b",
