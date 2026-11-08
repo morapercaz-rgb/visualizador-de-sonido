@@ -23,10 +23,13 @@ export function createDefaultParams() {
     ringMotionMove: 0.5, // qué parte de cada paso se pasa en movimiento (el resto queda quieto)
     ringMotionStagger: 0.6, // 0 = todos los círculos se mueven a la vez · 1 = uno detrás de otro
     ringShowPath: false, // dibujar el recorrido de los círculos que se cambian de lugar
-    colorMode: "reactive",
+    colorMode: "reactive", // reactive | fixed | gradient | frequency | twocolor
     colorA: "#33aaff",
     colorB: "#ff3399",
     hueSpread: 1,
+    twoColorSplit: "alternate", // modo "dos colores": cómo se reparten A y B: alternate | halves | random
+    twoColorMix: 0.5, // qué parte de las piezas es del color B (0 = todas A · 1 = todas B)
+    twoColorUsePanel: false, // false = los colores salen tal cual se eligieron; true = con la saturación/luminosidad del panel
 
     // qué tan lejos llega el halo de las auras (1 = normal): con más alcance, dos auras se funden a más distancia
     auraReach: 1,

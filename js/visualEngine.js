@@ -8,8 +8,8 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261108184446";
-import { ringPiece, ringTravel, drawRingGuide } from "./ringMotion.js?v=20261108184446";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261108195850";
+import { ringPiece, ringTravel, drawRingGuide } from "./ringMotion.js?v=20261108195850";
 
 const TAU = Math.PI * 2;
 
@@ -678,6 +678,7 @@ function activePalette(params) {
 //   (grave → un extremo de la paleta, agudo → el otro)
 // - "fixed": usa colorA fijo, con un arcoíris opcional (hueSpread) alrededor
 function hueForIndex(i, total, audioData, params) {
+  if (params.colorMode === "twocolor") return twoColorFor(i, total, params);
   const hueA = hexToHsl(params.colorA).h;
 
   if (params.colorMode === "gradient") {
@@ -699,12 +700,37 @@ function hueForIndex(i, total, audioData, params) {
   return (base + i * ((360 / total) * params.hueSpread)) % 360;
 }
 
+// modo "dos colores": cada pieza es del color A o del color B, sin degradado.
+// params.twoColorMix = qué parte es del color B (0 a 1) y twoColorSplit cómo se
+// reparten: "alternate" (uno y uno, o parejo si no es la mitad), "halves"
+// (un bloque de cada color) o "random" (al azar, siempre el mismo reparto).
+// Devuelve el tono como un "número con saturación y luminosidad pegadas", para
+// que el color salga EXACTAMENTE como el que se eligió (ver colorStr); si
+// twoColorUsePanel está prendido, en cambio manda la saturación/luminosidad del panel.
+function twoColorFor(i, total, params) {
+  const f = Math.min(1, Math.max(0, params.twoColorMix ?? 0.5));
+  let isB;
+  if (!Number.isInteger(i) || params.twoColorSplit === "halves") {
+    isB = total > 0 && i >= total * (1 - f) - 1e-9 && f > 0;
+  } else if (params.twoColorSplit === "random") {
+    const r = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+    isB = r - Math.floor(r) < f;
+  } else {
+    isB = Math.floor((i + 1) * f + 1e-9) > Math.floor(i * f + 1e-9);
+  }
+  const c = hexToHsl(isB ? params.colorB : params.colorA);
+  if (params.twoColorUsePanel) return c.h;
+  return Object.assign(new Number(c.h), { s: c.s, l: c.l });
+}
+
 // arma un color "hsla(...)" con la saturación y luminosidad del panel.
 // lightAdd permite aclarar u oscurecer ese color puntual (sin tocar el slider).
+// Si el tono trae su propia saturación y luminosidad (modo "dos colores"), usa esas.
 function colorStr(hue, params, alpha, lightAdd = 0) {
   const h = ((hue % 360) + 360) % 360;
-  const l = Math.min(100, Math.max(0, params.lightness + lightAdd));
-  return `hsla(${h}, ${params.saturation}%, ${l}%, ${alpha})`;
+  const own = hue !== null && typeof hue === "object" && hue.s !== undefined;
+  const l = Math.min(100, Math.max(0, (own ? hue.l : params.lightness) + lightAdd));
+  return `hsla(${h}, ${own ? hue.s : params.saturation}%, ${l}%, ${alpha})`;
 }
 
 function fillFor(hue, params) {

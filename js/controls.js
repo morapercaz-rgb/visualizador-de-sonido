@@ -9,13 +9,13 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261108184446";
-import { defaultMixColor } from "./colorUtils.js?v=20261108184446";
+import { listPresets } from "./presets.js?v=20261108195850";
+import { defaultMixColor } from "./colorUtils.js?v=20261108195850";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261108184446";
-import { RING_MOTIONS } from "./ringMotion.js?v=20261108184446";
+import { createDefaultParams } from "./params.js?v=20261108195850";
+import { RING_MOTIONS } from "./ringMotion.js?v=20261108195850";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -308,11 +308,17 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   shapesF.addInput(params, "shapeSize", { min: 1, max: 60, label: "tamaño" });
   shapesF.addInput(params, "rotationSpeed", { min: -2, max: 2, label: "rotación" });
   shapesF.addInput(params, "colorMode", {
-    options: { reactivo: "reactive", fijo: "fixed", degradado: "gradient", "según frecuencia": "frequency" },
+    options: { reactivo: "reactive", fijo: "fixed", degradado: "gradient", "según frecuencia": "frequency", "dos colores (A y B, sin degradado)": "twocolor" },
     label: "modo color",
   });
   shapesF.addInput(params, "colorA", { label: "color A" });
-  shapesF.addInput(params, "colorB", { label: "color B (degradado)" });
+  shapesF.addInput(params, "colorB", { label: "color B (degradado / dos colores)" });
+  shapesF.addInput(params, "twoColorSplit", {
+    options: { "alternados (A, B, A, B…)": "alternate", "mitades (un bloque de cada color)": "halves", "al azar": "random" },
+    label: "dos colores: reparto",
+  });
+  shapesF.addInput(params, "twoColorMix", { min: 0, max: 1, label: "dos colores: cuánto del B (0 = todo A)" });
+  shapesF.addInput(params, "twoColorUsePanel", { label: "dos colores: usar saturación/luminosidad del panel" });
   shapesF.addInput(params, "hueSpread", { min: 0, max: 3, label: "dispersión arcoíris" });
   shapesF.addInput(params, "saturation", { min: 0, max: 100, label: "saturación" });
   shapesF.addInput(params, "lightness", { min: 0, max: 100, label: "luminosidad" });

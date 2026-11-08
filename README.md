@@ -228,6 +228,7 @@ En "Formas generativas" hay dos selectores de color (**color A** y **color B**) 
 - **reactivo**: usa color A, pero el tono se corre solo con los agudos de la música.
 - **fijo**: usa color A quieto. "Dispersión arcoíris" controla si todas las formas comparten el mismo color o se reparten como un arcoíris alrededor de A.
 - **degradado**: interpola de color A a color B a lo largo de las formas (por ejemplo, en el anillo, un lado es A y el opuesto es B).
+- **dos colores (A y B, sin degradado)**: cada forma es del color A o del color B, tal cual los elegiste (sin degradado ni arcoíris). "dos colores: reparto" decide cómo se reparten: **alternados** (A, B, A, B…), **mitades** (un bloque de cada color) o **al azar**; "cuánto del B" va de 0 (todo A) a 1 (todo B) y con 0,5 es mitad y mitad. En este modo la saturación y la luminosidad del panel **no se aplican** (para que el color sea exactamente el elegido); si querés que sí, prendé "usar saturación/luminosidad del panel".
 - **según frecuencia**: el color de toda la visualización se mueve solo, en vivo, a lo largo de la paleta de la carpeta "Paleta" — cuando el sonido está más cargado de graves se acerca a un extremo de la paleta, cuando está más cargado de agudos se acerca al otro.
 
 Saturación y luminosidad son sliders aparte que se aplican siempre, sea cual sea el modo — así podés mantener tu paleta pero subir/bajar qué tan "pastel" o "saturado" se ve.
