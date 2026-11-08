@@ -14,6 +14,15 @@ export function createDefaultParams() {
     baseRadius: 100,
     shapeSize: 8,
     rotationSpeed: 0.2,
+
+    // --- movimientos del anillo (ver ringMotion.js): además de girar, los círculos
+    // pueden cambiarse de lugar, deformarse, o el anillo entero puede viajar ---
+    ringMotion: "none", // none | swapCenter | swapArc | neighbors | shuffle | wave | breathe | counter | ellipse | travelSide | travelEight | travelJump
+    ringMotionPeriod: 3, // segundos por paso (o por ciclo)
+    ringMotionAmount: 0.6, // cuánto (ola, respiración, recorrido del viaje…)
+    ringMotionMove: 0.5, // qué parte de cada paso se pasa en movimiento (el resto queda quieto)
+    ringMotionStagger: 0.6, // 0 = todos los círculos se mueven a la vez · 1 = uno detrás de otro
+    ringShowPath: false, // dibujar el recorrido de los círculos que se cambian de lugar
     colorMode: "reactive",
     colorA: "#33aaff",
     colorB: "#ff3399",

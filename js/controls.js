@@ -9,12 +9,13 @@
 // los conjuntos usan la parte generativa y los globales la de video y fondo.
 
 import { Pane } from "https://esm.sh/tweakpane@3.1.10";
-import { listPresets } from "./presets.js?v=20261031012505";
-import { defaultMixColor } from "./colorUtils.js?v=20261031012505";
+import { listPresets } from "./presets.js?v=20261108184446";
+import { defaultMixColor } from "./colorUtils.js?v=20261108184446";
 
 let mixRebuildTimer = 0;
 
-import { createDefaultParams } from "./params.js?v=20261031012505";
+import { createDefaultParams } from "./params.js?v=20261108184446";
+import { RING_MOTIONS } from "./ringMotion.js?v=20261108184446";
 export { createDefaultParams }; // (sigue exportándose desde acá para no tocar los demás archivos)
 
 // Arma el panel para el conjunto seleccionado.
@@ -322,6 +323,16 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   });
   shapesF.addInput(params, "glowAmount", { min: 0, max: 40, label: "resplandor (blur)" });
 
+  // anillo: además de girar, que los círculos cambien de lugar, se deformen o el anillo viaje
+  const ringF = pane.addFolder({ title: "Anillo: movimientos (cambios de lugar)" });
+  ringF.addMonitor({ txt: 'Con el modo "anillo". Elegí un movimiento y se suma al giro. Para que se note quién cambia de lugar, usá colores distintos por círculo ("modo color": reactivo, degradado o según frecuencia)' }, "txt", { label: "cómo" });
+  ringF.addInput(params, "ringMotion", { options: Object.fromEntries(RING_MOTIONS), label: "movimiento" });
+  ringF.addInput(params, "ringMotionPeriod", { min: 0.5, max: 20, step: 0.1, label: "segundos por paso" });
+  ringF.addInput(params, "ringMotionMove", { min: 0.1, max: 1, label: "cuánto del paso se mueve (el resto, quieto)" });
+  ringF.addInput(params, "ringMotionStagger", { min: 0, max: 1, label: "escalonado (0 = todos a la vez · 1 = uno tras otro)" });
+  ringF.addInput(params, "ringMotionAmount", { min: 0, max: 1.5, label: "cuánto (ola, respiración, viaje…)" });
+  ringF.addInput(params, "ringShowPath", { label: "mostrar el recorrido de los que cambian de lugar" });
+
   // barras: en qué parte reaccionan más al sonido
   const barsF = pane.addFolder({ title: "Barras: reacción y degradado" });
   barsF.addMonitor({ txt: 'Con el modo "barras": lo más fuerte del sonido queda en el foco (por defecto, el centro). Movelo acá o con click / arrastre sobre el lienzo' }, "txt", { label: "cómo" });
@@ -342,6 +353,7 @@ export function createControls({ scene, conjunto, conjuntos, globalParams, actio
   // al elegir el modo barras, esta carpeta se abre sola
   shapesModeInput.on("change", (ev) => {
     if (ev.value === "bars") barsF.expanded = true;
+    if (ev.value === "ring") ringF.expanded = true;
   });
 
   // degradado de tono y forma de los ecos

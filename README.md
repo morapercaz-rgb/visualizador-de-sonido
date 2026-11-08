@@ -143,6 +143,27 @@ Cada conjunto tiene su propia transformación (carpetas "Transformar y mover", "
 - **Keyframes** al estilo After: "+ keyframe" guarda posición, rotación, escala y opacidad en el momento actual; al reproducir o mover "ir a (s)" se interpola entre ellos ("suave" arranca y frena despacio, "lineal" va parejo). Mientras está en pausa podés editar libremente; los valores solo se pisan cuando el tiempo cambia.
 - Toda la animación usa **tiempo real**: dura lo mismo en una pantalla de 60 Hz que en una de 120 Hz.
 
+## Anillo: movimientos (cambios de lugar)
+
+En el modo **anillo**, además de girar (la "rotación" de siempre, que se sigue sumando), los círculos pueden **cambiarse de lugar**, deformarse, o el anillo entero puede **viajar** a otro lado. Está en la carpeta **"Anillo: movimientos (cambios de lugar)"** (se abre sola al elegir el modo anillo). Elegís un **movimiento**:
+
+- **enfrentadas: se cruzan por el centro** — cada círculo se cambia de lugar con el que tiene enfrente, yendo en línea recta por el medio del anillo; en el paso siguiente vuelven.
+- **enfrentadas: se cruzan por el borde** — lo mismo pero cada pareja da media vuelta por el borde (una pareja para un lado y la siguiente para el otro).
+- **vecinos: se intercambian** — los pares avanzan un lugar para un lado y los impares para el otro; al cruzarse uno pasa por afuera y el otro por adentro.
+- **todos cambian de lugar al azar** — en cada paso todos los círculos se reacomodan en otro orden (siempre el mismo orden para el mismo paso), viajando en línea recta.
+- **ola que recorre el anillo**, **respiración alternada** (unos entran y otros salen), **contra-giro** (pares e impares giran al revés, a radios apenas distintos) y **elipse que respira y gira**.
+- **el anillo viaja de lado a lado**, **en ocho** o **salta a otros lugares** (lleva el anillo entero; el pivote "gira sobre su propio eje" lo sigue).
+
+Los controles:
+
+- **segundos por paso**: cada cuánto hay un cambio (o cuánto dura un ciclo en la ola, la respiración, etc.).
+- **cuánto del paso se mueve**: dentro de cada paso, qué parte se pasa en movimiento (con arranque y frenada suaves); el resto queda quieto.
+- **escalonado**: 0 = todos los círculos se mueven a la vez; 1 = uno detrás de otro.
+- **cuánto**: la fuerza de la ola, de la respiración, del contra-giro, de la elipse y del recorrido del viaje.
+- **mostrar el recorrido**: dibuja una línea fina punteada por donde va cada círculo que se está cambiando de lugar.
+
+Para que se vea *quién* cambia de lugar, los círculos tienen que tener colores distintos ("modo color": reactivo, degradado o según frecuencia); con color fijo se cambian de lugar pero parecen iguales. Todo esto se guarda con el conjunto y el código está en `js/ringMotion.js`.
+
 ## Ecos de aura: la cola sigue el movimiento
 
 **La copia grande está anclada a tu mouse:** el punto que agarrás es siempre el centro del movimiento y no se corre aunque la cola gire; la cola gira *alrededor* de la copia grande, no al revés.
@@ -194,6 +215,7 @@ Y abrís `http://localhost:8000` en el navegador. Para cortar el servidor:
 - `index.html` / `style.css` — el wireframe y el estilo de la interfaz (botones, panel de archivos).
 - `js/audioEngine.js` — escucha el audio y en cada frame devuelve graves/medios/agudos promediados, más el espectro completo repartido en franjas (para los modos tipo ecualizador).
 - `js/visualEngine.js` — dibuja la visualización generativa. Tiene **6 modos** intercambiables desde el panel ("modo" en la carpeta "Formas generativas"): anillo, grilla, picos radiales, barras, espiral y auras/gotas. Agregar un modo nuevo es escribir una función acá y sumarla al `switch` de `VisualEngine.draw()` — el resto del sistema (audio, color, controles) no cambia.
+- `js/ringMotion.js` — los movimientos del modo anillo (cambios de lugar, ola, elipse, viajes); `visualEngine.drawRing()` le pregunta dónde va cada círculo.
 - `js/colorUtils.js` — convierte los colores hex que elegís en el panel a HSL, para poder interpolarlos en el modo degradado.
 - `js/videoLayer.js` — carga y dibuja los videos de fondo, con opacidad/blend y los efectos (espejo, pixelado, separación RGB, glitch, flash).
 - `js/controls.js` — arma el panel de sliders (Tweakpane) y los valores por defecto de cada parámetro.

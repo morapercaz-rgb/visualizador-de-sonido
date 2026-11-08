@@ -8,7 +8,8 @@
 // drawDot(), que lo puede hacer sólido, como aura (degradado radial que se
 // funde con el fondo) o como aro hueco, según params.dotStyle.
 
-import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261031012505";
+import { hexToHsl, hexToRgb, lerpHue, paletteColorRgb, rgbToHsl, defaultMixColor } from "./colorUtils.js?v=20261108184446";
+import { ringPiece, ringTravel, drawRingGuide } from "./ringMotion.js?v=20261108184446";
 
 const TAU = Math.PI * 2;
 
@@ -43,6 +44,7 @@ export class VisualEngine {
     this.centerOffset = { x: 0, y: 0, vx: 0, vy: 0 }; // cuánto se corrió la pieza entera
     this.coreOffsets = { a: newMover(), b: newMover() }; // cuánto se corrió cada núcleo
     this._off = { x: 0, y: 0 };
+    this.ringShift = { x: 0, y: 0 }; // cuánto se corrió el anillo por sus movimientos (ver ringMotion.js)
 
     // círculos libres: los suma el usuario, se arrastran, y dejan una estela
     // con degradado que se va borrando
@@ -66,6 +68,9 @@ export class VisualEngine {
       // en los ecos el "centro" es la copia grande
       const b = echoHeadBase(w, h, params);
       return { x: b.x + this.centerOffset.x, y: b.y + this.centerOffset.y };
+    }
+    if (params.visualMode === "ring") {
+      return { x: w / 2 + this.centerOffset.x + this.ringShift.x, y: h / 2 + this.centerOffset.y + this.ringShift.y };
     }
     return MOVABLE_MODES.has(params.visualMode)
       ? { x: w / 2 + this.centerOffset.x, y: h / 2 + this.centerOffset.y }
@@ -101,6 +106,10 @@ export class VisualEngine {
 
     const movable = MOVABLE_MODES.has(params.visualMode);
     this._off = movable ? this.centerOffset : { x: 0, y: 0 };
+    // movimientos del anillo que lo llevan entero a otro lugar (viaja de lado a lado, en ocho, salta)
+    const trav = params.visualMode === "ring" ? ringTravel(this.time, params, w, h) : null;
+    this.ringShift = trav ?? { x: 0, y: 0 };
+    if (trav) this._off = { x: this.centerOffset.x + trav.x, y: this.centerOffset.y + trav.y };
 
     ctx.save();
     ctx.globalCompositeOperation = params.shapeBlendMode;
@@ -1070,18 +1079,30 @@ function drawDot(ctx, x, y, r, hue, params, alpha = 1, seed = 0) {
 function drawRing(ctx, w, h, audioData, params, time) {
   const cx = w / 2, cy = h / 2;
   const count = params.dotCount;
+  const rot = time * params.rotationSpeed;
+  const radiusBase = params.baseRadius + audioData.bass * params.bassReactivity * 300;
+  const wobbleAmp = params.midReactivity * audioData.mid * 50;
+  const size = params.shapeSize * (1 + audioData.overall * params.overallReactivity);
+  const moving = params.ringMotion && params.ringMotion !== "none";
+
+  // dónde va cada círculo: sin movimiento es el anillo de siempre; con
+  // movimiento, ringMotion.js decide (ver ese archivo)
+  const env = { rot, cx, cy, size, radiusAt: (s) => radiusBase + Math.sin(time * 2 + s) * wobbleAmp };
+  const pieces = [];
+  for (let i = 0; i < count; i++) {
+    pieces.push(moving ? ringPiece(i, count, time, params, env) : { x: cx + Math.cos((i / count) * TAU + rot) * env.radiusAt(i), y: cy + Math.sin((i / count) * TAU + rot) * env.radiusAt(i), guide: null });
+  }
+
+  // recorrido de los que se están cambiando de lugar (se dibuja debajo de los círculos)
+  if (moving && params.ringShowPath) {
+    for (let i = 0; i < count; i++) {
+      const g = pieces[i].guide;
+      if (g) drawRingGuide(ctx, g, colorStr(hueForIndex(i, count, audioData, params), params, 0.45 * params.shapeOpacity));
+    }
+  }
 
   for (let i = 0; i < count; i++) {
-    const angle = (i / count) * TAU + time * params.rotationSpeed;
-    const radiusBase = params.baseRadius + audioData.bass * params.bassReactivity * 300;
-    const wobble = Math.sin(time * 2 + i) * params.midReactivity * audioData.mid * 50;
-    const r = radiusBase + wobble;
-
-    const x = cx + Math.cos(angle) * r;
-    const y = cy + Math.sin(angle) * r;
-    const size = params.shapeSize * (1 + audioData.overall * params.overallReactivity);
-
-    drawDot(ctx, x, y, size, hueForIndex(i, count, audioData, params), params, 1, i);
+    drawDot(ctx, pieces[i].x, pieces[i].y, size, hueForIndex(i, count, audioData, params), params, 1, i);
   }
 }
 
